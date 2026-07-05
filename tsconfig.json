@@ -22,6 +22,8 @@
       "@app": ["src/app"],
       "@app/*": ["src/app/*"],
       "@core/*": ["src/core/*"],
+      "@ui": ["src/ui"],
+      "@ui/*": ["src/ui/*"],
       "@modules/*": ["src/modules/*"],
       "@config": ["src/config"],
       "@config/*": ["src/config/*"],

@@ -1,0 +1,22 @@
+{
+  "id": "auth.signin",
+  "type": "page",
+  "title": "auth.signin.title",
+  "subtitle": "auth.signin.subtitle",
+  "layout": "auth",
+  "children": [
+    {
+      "type": "form",
+      "submit": { "label": "auth.signin.submit" },
+      "children": [
+        {
+          "type": "field.text",
+          "name": "user_login",
+          "label": "auth.field.login",
+          "props": { "autoComplete": "username", "autoFocus": true },
+          "validation": { "required": true, "min": 7, "max": 64, "format": "login" }
+        }
+      ]
+    }
+  ]
+}

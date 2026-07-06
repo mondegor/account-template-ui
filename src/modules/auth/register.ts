@@ -1,23 +1,11 @@
-import {
-  registerComponent,
-  registerHandler,
-  registerSchema,
-  type AsyncValidator,
-  type SchemaHandler,
-} from '@core/schema';
-import { addTranslations } from '@core/i18n';
+import { registerHandler, type AsyncValidator, type SchemaHandler } from '@core/schema';
 import { ApiFieldError } from '@core/api';
-import { authTranslations } from './i18n';
-import { ConfirmOperationNode } from './ui/ConfirmOperationNode';
 import { checkLogin, signin, signup } from './api/authApi';
-import signupSchema from './schemas/signup.json';
-import signinSchema from './schemas/signin.json';
-import confirmSchema from './schemas/confirm.json';
 
 /**
- * Регистрация модуля auth в ядре: переводы, тип узла confirmOperation, локальные схемы и обработчики
- * (связь «схема → логика»). realm обработчики берут внутри authApi (из realmProvider), в форме его нет.
- * Позже это переедет в ModuleDefinition реестра модулей (шаг 7) — интерфейс регистрации не меняется.
+ * Обработчики схем auth (связь «схема → логика») — императивная часть модуля, вызывается из
+ * onInit его ModuleDefinition (module.tsx). realm обработчики берут внутри authApi (из
+ * realmProvider), в форме его нет. Декларативные поля (схемы/переводы/типы узлов) — в module.tsx.
  */
 
 const signupHandler: SchemaHandler = async (values, ctx) => {
@@ -50,14 +38,10 @@ const emailAvailable: AsyncValidator = async (value) => {
 
 let registered = false;
 
-export function registerAuthModule(): void {
+/** Регистрирует обработчики схем auth (идемпотентно). Вызывается из authModule.onInit. */
+export function registerAuthHandlers(): void {
   if (registered) return;
   registered = true;
-  addTranslations(authTranslations);
-  registerComponent('confirmOperation', ConfirmOperationNode);
-  registerSchema('auth.signup', signupSchema);
-  registerSchema('auth.signin', signinSchema);
-  registerSchema('auth.confirm', confirmSchema);
   registerHandler('auth.signup', {
     handler: signupHandler,
     asyncValidators: { user_email: emailAvailable },

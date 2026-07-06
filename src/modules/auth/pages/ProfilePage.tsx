@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import { forceLogout } from '@core/auth';
+import { moduleQueryKey } from '@core/module-registry';
 import { getUserInfo } from '../api/authApi';
 import type { UserAuth2fa, UserInfo, UserStatus } from '../api/types';
 
@@ -136,7 +137,7 @@ function ProfileView({ user }: { user: UserInfo }) {
 
 export function ProfilePage() {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['auth', 'user'],
+    queryKey: moduleQueryKey('auth', 'user'),
     queryFn: getUserInfo,
   });
 

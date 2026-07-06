@@ -1,5 +1,8 @@
 {
   "auth": {
+    "nav": {
+      "profile": "Профиль"
+    },
     "field": {
       "email": "Email",
       "login": "Email или телефон",

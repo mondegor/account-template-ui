@@ -5,8 +5,7 @@ import { authStore, refresh } from '@core/auth';
 import { useOperationStore } from '@core/operation';
 import { initI18n } from '@core/i18n';
 import { registerBaseComponents } from '@core/renderer';
-import { registerAuthModule } from '@modules/auth';
-import { App } from '@app';
+import { App, registerAllModules } from '@app';
 
 /**
  * Bootstrap: (1) поднять MSW при VITE_ENABLE_MOCKS; (2) возобновить активную операцию из
@@ -14,10 +13,10 @@ import { App } from '@app';
  * status переходит из 'unknown' в authenticated/anonymous до первого рендера защищённых роутов.
  */
 async function bootstrap() {
-  // i18n + реестры схем/компонентов/обработчиков — до первого рендера.
+  // i18n + базовые типы узлов + реестр модулей (схемы/типы/переводы/обработчики) — до рендера.
   initI18n();
   registerBaseComponents();
-  registerAuthModule();
+  registerAllModules();
 
   if (config.enableMocks) {
     const { worker } = await import('@mocks/browser');

@@ -7,7 +7,7 @@ import { limits } from './index';
  * Тест-сверка констант ограничений с openapi.yaml (как требует plan.txt).
  * Если бэкенд поменяет длины — тест упадёт и заставит синхронизировать limits.
  */
-const spec = readFileSync(resolve(__dirname, '../../docs/api/auth/openapi.yaml'), 'utf8');
+const spec = readFileSync(resolve(__dirname, '../../contracts/auth/openapi.yaml'), 'utf8');
 
 /** Грубая проверка: в спеке присутствует блок min/max для соответствующего поля. */
 function hasMinMax(min: number, max: number): boolean {

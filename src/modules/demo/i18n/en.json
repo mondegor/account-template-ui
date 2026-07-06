@@ -1,0 +1,10 @@
+{
+  "demo": {
+    "nav": { "home": "Demo" },
+    "home": {
+      "title": "Demo module",
+      "subtitle": "Example of plugging in a module without touching the core.",
+      "body": "This page is assembled from the demo.home JSON schema."
+    }
+  }
+}

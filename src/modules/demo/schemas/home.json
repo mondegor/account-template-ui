@@ -1,0 +1,7 @@
+{
+  "id": "demo.home",
+  "type": "page",
+  "title": "demo.home.title",
+  "subtitle": "demo.home.subtitle",
+  "children": [{ "type": "text", "text": "demo.home.body" }]
+}

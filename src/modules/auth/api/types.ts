@@ -1,4 +1,4 @@
-/** Auth-домен DTO (из docs/api/auth/openapi.yaml). */
+/** Auth-домен DTO (из contracts/auth/openapi.yaml). */
 
 export type ConfirmMethod = 'EMAIL' | 'PHONE' | 'PASSWORD' | 'TOTP';
 export type UserAuth2fa = 'NONE' | 'PASSWORD' | 'TOTP';

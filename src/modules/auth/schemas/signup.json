@@ -1,0 +1,23 @@
+{
+  "id": "auth.signup",
+  "type": "page",
+  "title": "auth.signup.title",
+  "subtitle": "auth.signup.subtitle",
+  "layout": "auth",
+  "children": [
+    {
+      "type": "form",
+      "submitOnly": true,
+      "submit": { "label": "auth.signup.submit" },
+      "children": [
+        {
+          "type": "auth.emailField",
+          "name": "user_email",
+          "label": "auth.field.email",
+          "props": { "autoComplete": "email", "placeholder": "user@example.com" },
+          "validation": { "required": true, "min": 7, "max": 64, "format": "email" }
+        }
+      ]
+    }
+  ]
+}

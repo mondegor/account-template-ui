@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from './authStore';
 import { onForcedLogout } from './refresh';
+import { getUserRoles, rolesEnforced } from './roles';
 
 /** Пока идёт стартовый silent-refresh (status='unknown') — ничего не решаем. */
 function Splash() {
@@ -25,5 +26,24 @@ export function GuestOnly({ children }: { children: ReactNode }) {
   const status = useAuthStore((s) => s.status);
   if (status === 'unknown') return <Splash />;
   if (status === 'authenticated') return <Navigate to="/profile" replace />;
+  return <>{children}</>;
+}
+
+/**
+ * Второй рубеж по ролям (поверх ProtectedRoute). Пропускает, если роли ещё не применяются
+ * (rolesEnforced=false), requiredRoles пуст ИЛИ есть пересечение с ролями пользователя; иначе — в
+ * кабинет. Пока источника ролей нет — фактически ничего не отсекает (см. rolesEnforced).
+ */
+export function RoleGuard({
+  requiredRoles,
+  children,
+}: {
+  requiredRoles?: string[];
+  children: ReactNode;
+}) {
+  if (rolesEnforced() && requiredRoles && requiredRoles.length > 0) {
+    const roles = getUserRoles();
+    if (!requiredRoles.some((r) => roles.includes(r))) return <Navigate to="/profile" replace />;
+  }
   return <>{children}</>;
 }

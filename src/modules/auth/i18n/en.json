@@ -1,0 +1,77 @@
+{
+  "auth": {
+    "nav": {
+      "profile": "Profile"
+    },
+    "field": {
+      "email": "Email",
+      "login": "Email or phone",
+      "code": "Confirmation code",
+      "emailChecking": "Checking availability…",
+      "emailFree": "Email is available",
+      "emailTaken": "This email is already registered"
+    },
+    "signup": {
+      "title": "Create account",
+      "subtitle": "Enter your email — we'll send a code to confirm registration.",
+      "submit": "Sign up",
+      "haveAccount": "Already have an account?",
+      "signinLink": "Sign in"
+    },
+    "signin": {
+      "title": "Sign in",
+      "subtitle": "Enter your email or phone — we'll send a code to sign in.",
+      "submit": "Sign in",
+      "noAccount": "No account?",
+      "signupLink": "Sign up"
+    },
+    "confirm": {
+      "title": "Confirmation",
+      "hint": {
+        "EMAIL": "We sent a code to your email. Enter it to continue.",
+        "PHONE": "We sent a code to your phone. Enter it to continue.",
+        "PASSWORD": "Enter your password to confirm.",
+        "TOTP": "Enter the code from your authenticator app."
+      },
+      "submit": "Confirm",
+      "attemptsLeft": "Attempts left: {{n}}",
+      "expiresIn": "Code valid for {{time}}",
+      "expired": "Code expired",
+      "resendLink": "Resend",
+      "resendTimer": "Resend · {{time}}",
+      "requestNewCode": "Request a new code",
+      "requestNewCodeTimer": "Request a new code · {{time}}",
+      "revoke": "Cancel",
+      "lastResend": "Note: that was the last resend of the code.",
+      "exhaustedAttempts": "Wrong code, no attempts left. Request a new code.",
+      "exhaustedExpired": "The code has expired. Request a new code.",
+      "deadEnd": "You've run out of entry attempts and resends. Start signing in again."
+    },
+    "profile": {
+      "title": "Profile",
+      "account": "Account",
+      "email": "Email",
+      "phone": "Phone",
+      "lang": "Language",
+      "security": "Security",
+      "activity": "Activity",
+      "lastLogin": "Last login",
+      "lastLoginJustNow": "just now",
+      "lastLoginIp": "Last login IP",
+      "registeredAt": "Registered",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "realms": "Realms",
+      "realmName": "Realm",
+      "realmKind": "Type",
+      "loadError": "Failed to load profile: {{message}}",
+      "twoFa": { "NONE": "2FA: off", "PASSWORD": "2FA: password", "TOTP": "2FA: TOTP" }
+    },
+    "errors": {
+      "signup": "Sign up failed. Please try again later.",
+      "signin": "Sign in failed. Please try again later.",
+      "confirm": "Could not confirm the code. Please try again.",
+      "resend": "Could not resend the code."
+    }
+  }
+}

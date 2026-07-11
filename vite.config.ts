@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
       '@core': fileURLToPath(new URL('./src/core', import.meta.url)),
+      '@ui': fileURLToPath(new URL('./src/ui', import.meta.url)),
       '@modules': fileURLToPath(new URL('./src/modules', import.meta.url)),
       '@config': fileURLToPath(new URL('./src/config', import.meta.url)),
       '@mocks': fileURLToPath(new URL('./src/mocks', import.meta.url)),

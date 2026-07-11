@@ -114,6 +114,21 @@ export default tseslint.config(
     },
   },
 
+  // Слой рендеринга: запрет dangerouslySetInnerHTML (инвариант безопасности схем, plan.txt).
+  {
+    files: ['src/core/renderer/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message:
+            'dangerouslySetInnerHTML запрещён в слое рендеринга (инвариант безопасности схем).',
+        },
+      ],
+    },
+  },
+
   // Тесты + setup — vitest globals в node-среде.
   {
     files: ['**/*.test.{ts,tsx}', 'src/test/**'],

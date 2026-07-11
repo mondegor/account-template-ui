@@ -63,15 +63,16 @@ describe('module-registry', () => {
     expect(inited).toBe(true);
   });
 
-  it('buildNav возвращает пункты доступных модулей; requiredRoles (роли пусты) отсекает', () => {
+  it('buildNav: пока роли не применяются (rolesEnforced=false), requiredRoles никого не отсекает', () => {
     registerModule(mod({ id: 'a', nav: [{ id: 'n', label: 'l', route: '/a' }] }), ctx);
     registerModule(
       mod({ id: 'b', requiredRoles: ['admin'], nav: [{ id: 'n2', label: 'l2', route: '/b' }] }),
       ctx,
     );
     const nav = buildNav();
-    expect(nav.map((i) => i.id)).toEqual(['n']); // b отфильтрован (нет роли admin)
-    // но роут b остаётся (обёрнут RoleGuard) — доступ решается на роуте.
+    // Источника ролей ещё нет (rolesEnforced=false) → requiredRoles не блокирует: видны оба пункта.
+    expect(nav.map((i) => i.id)).toEqual(['n', 'n2']);
+    // Роут b тоже присутствует (обёрнут RoleGuard) — доступ решится на роуте, когда роли включат.
     expect(buildRoutes().some((r) => r.path === '/b')).toBe(true);
   });
 

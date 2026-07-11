@@ -23,9 +23,12 @@ function isEmailOrPhone(v: string): boolean {
 
 function stringField(v: FieldValidation, t: TFunction): z.ZodTypeAny {
   if (v.enum && v.enum.length > 0) {
-    return z.enum(v.enum as [string, ...string[]], {
+    const base = z.enum(v.enum as [string, ...string[]], {
       message: t('common.validation.pattern'),
     });
+    // required: сначала непустота (дефолт селекта — '') → «обязательное поле», затем принадлежность
+    // enum → «неверный формат». Без этого пустое значение падало бы сразу на enum с «неверный формат».
+    return v.required ? z.string().min(1, t('common.validation.required')).pipe(base) : base;
   }
   let s = z.string();
   // required — первым в цепочке, чтобы для пустого значения показать «обязательное», а не «min N».

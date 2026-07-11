@@ -9,4 +9,4 @@ export {
 export { realmProvider } from './realm';
 export { tokenStorage, type TokenStorage } from './tokenStorage';
 export { ProtectedRoute, GuestOnly, RoleGuard } from './Guards';
-export { getUserRoles } from './roles';
+export { getUserRoles, rolesEnforced } from './roles';

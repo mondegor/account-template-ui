@@ -32,10 +32,6 @@ export const FIELD_TYPES = [
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
-export function isFieldType(type: string): type is FieldType {
-  return (FIELD_TYPES as readonly string[]).includes(type);
-}
-
 /** Синхронные правила валидации поля (из openapi-ограничений). Собираются в zod в FormRenderer. */
 export interface FieldValidation {
   required?: boolean;
@@ -73,7 +69,9 @@ export interface NodeProps {
  * набора полей под конкретный `type` обеспечивает validate.ts (zod), рендерер работает по `type`.
  */
 export interface SchemaNode {
-  type: NodeType;
+  // Встроенные типы (NodeType) + типы, которые модули регистрируют через registerFieldType
+  // (напр. `auth.emailField`). `string & {}` сохраняет автодополнение по литералам NodeType.
+  type: NodeType | (string & {});
   children?: SchemaNode[];
   // page
   id?: string;
@@ -82,6 +80,9 @@ export interface SchemaNode {
   layout?: string;
   // form
   submit?: { label: string };
+  /** Только для узла `form`: валидация/ошибки только по сабмиту + блок кнопки, пока пусто
+   *  обязательное поле (UX обособленных auth-форм). По умолчанию — стандартная валидация. */
+  submitOnly?: boolean;
   // field
   name?: string;
   label?: string;
@@ -90,6 +91,11 @@ export interface SchemaNode {
   // grid
   cols?: ResponsiveCols;
   spacing?: number;
+  // button
+  /** Тип кнопки узла `button`. По умолчанию `button` (инертна без обработчика) — submit формы
+   *  рисует сам FormRenderer из `form.submit`, поэтому декларативная кнопка НЕ сабмитит по умолчанию
+   *  (иначе `button` вне формы молча отправлял бы её). Явный submit-триггер: buttonType: 'submit'. */
+  buttonType?: 'submit' | 'button';
   // text / alert
   text?: string;
   severity?: 'error' | 'warning' | 'info' | 'success';

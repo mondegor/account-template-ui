@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components --
    Приватные адаптеры узлов + функция регистрации в одном модуле (не fast-refresh-граница). */
-import { useController } from 'react-hook-form';
+import { useContext } from 'react';
+import { useController, useFormContext } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import {
   UiAlert,
@@ -14,6 +15,7 @@ import {
   UiTextField,
 } from '@ui';
 import { hasComponent, registerComponent, type NodeComponentProps } from '@core/schema';
+import { FormErrorContext, SubmitOnlyContext } from './formContext';
 
 /**
  * Базовые schema-aware адаптеры: мапят узел (SchemaNode) на презентационный ui-атом и, для полей,
@@ -30,6 +32,9 @@ const INPUT_TYPE: Record<string, 'text' | 'email' | 'password' | 'tel'> = {
 
 function TextFieldNode({ node }: NodeComponentProps) {
   const { t } = useTranslation();
+  const { clearErrors } = useFormContext();
+  const submitOnly = useContext(SubmitOnlyContext);
+  const { clear: clearFormError } = useContext(FormErrorContext);
   const { field, fieldState } = useController({ name: node.name ?? '' });
   return (
     <UiTextField
@@ -37,7 +42,14 @@ function TextFieldNode({ node }: NodeComponentProps) {
       type={INPUT_TYPE[node.type] ?? 'text'}
       name={field.name}
       value={(field.value as string) ?? ''}
-      onChange={field.onChange}
+      // submitOnly: редактирование гасит показанную ошибку (снова покажется на след. сабмите). Без
+      // флага ре-валидация onChange пересчитывает ошибку сама — гасить вручную не нужно. Форменный
+      // алерт прошлой попытки убираем всегда (как в старом SignupPage).
+      onChange={(value) => {
+        field.onChange(value);
+        if (submitOnly && fieldState.error) clearErrors(field.name);
+        clearFormError();
+      }}
       onBlur={field.onBlur}
       inputRef={field.ref}
       error={!!fieldState.error}
@@ -53,6 +65,7 @@ function TextFieldNode({ node }: NodeComponentProps) {
 
 function SelectNode({ node }: NodeComponentProps) {
   const { t } = useTranslation();
+  const { clear: clearFormError } = useContext(FormErrorContext);
   const { field, fieldState } = useController({ name: node.name ?? '' });
   const options = (node.options ?? []).map((o) => ({ value: o.value, label: t(o.label) }));
   return (
@@ -61,7 +74,10 @@ function SelectNode({ node }: NodeComponentProps) {
       name={field.name}
       value={(field.value as string) ?? ''}
       options={options}
-      onChange={field.onChange}
+      onChange={(value) => {
+        field.onChange(value);
+        clearFormError();
+      }}
       onBlur={field.onBlur}
       error={!!fieldState.error}
       helperText={fieldState.error?.message}
@@ -71,13 +87,17 @@ function SelectNode({ node }: NodeComponentProps) {
 
 function CheckboxNode({ node }: NodeComponentProps) {
   const { t } = useTranslation();
+  const { clear: clearFormError } = useContext(FormErrorContext);
   const { field, fieldState } = useController({ name: node.name ?? '' });
   return (
     <UiCheckbox
       label={node.label ? t(node.label) : undefined}
       name={field.name}
       checked={!!field.value}
-      onChange={field.onChange}
+      onChange={(checked) => {
+        field.onChange(checked);
+        clearFormError();
+      }}
       onBlur={field.onBlur}
       error={!!fieldState.error}
       helperText={fieldState.error?.message}
@@ -124,7 +144,9 @@ function ButtonNode({ node }: NodeComponentProps) {
   const variant = node.props?.variant;
   return (
     <UiButton
-      type="submit"
+      // submit-кнопку формы рисует FormRenderer из form.submit; декларативный узел `button` по
+      // умолчанию инертен (type='button'), submit — только при явном buttonType: 'submit'.
+      type={node.buttonType ?? 'button'}
       label={node.label ? t(node.label) : ''}
       variant={variant === 'outlined' || variant === 'text' ? variant : 'contained'}
       color={node.props?.color}

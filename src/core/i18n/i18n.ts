@@ -26,6 +26,11 @@ const commonRu = {
   error: {
     generic: 'Что-то пошло не так. Попробуйте позже.',
   },
+  shell: {
+    menu: 'Меню',
+    logout: 'Выйти',
+    theme: { system: 'Тема: авто', light: 'Тема: светлая', dark: 'Тема: тёмная' },
+  },
 };
 
 const commonEn = {
@@ -40,6 +45,11 @@ const commonEn = {
   },
   error: {
     generic: 'Something went wrong. Please try again later.',
+  },
+  shell: {
+    menu: 'Menu',
+    logout: 'Log out',
+    theme: { system: 'Theme: auto', light: 'Theme: light', dark: 'Theme: dark' },
   },
 };
 

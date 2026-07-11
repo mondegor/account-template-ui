@@ -6,7 +6,10 @@
     "field": {
       "email": "Email",
       "login": "Email или телефон",
-      "code": "Код подтверждения"
+      "code": "Код подтверждения",
+      "emailChecking": "Проверяем доступность…",
+      "emailFree": "Email свободен",
+      "emailTaken": "Этот email уже зарегистрирован"
     },
     "signup": {
       "title": "Создание аккаунта",
@@ -43,6 +46,26 @@
       "exhaustedAttempts": "Неверный код, попытки закончились. Запросите новый код.",
       "exhaustedExpired": "Срок действия кода истёк. Запросите новый код.",
       "deadEnd": "Превышено число попыток ввода и повторных отправок кода. Начните вход заново."
+    },
+    "profile": {
+      "title": "Профиль",
+      "account": "Учётная запись",
+      "email": "Email",
+      "phone": "Телефон",
+      "lang": "Язык",
+      "security": "Безопасность",
+      "activity": "Активность",
+      "lastLogin": "Последний вход",
+      "lastLoginJustNow": "только что",
+      "lastLoginIp": "IP последнего входа",
+      "registeredAt": "Зарегистрирован",
+      "createdAt": "Создан",
+      "updatedAt": "Обновлён",
+      "realms": "Realms",
+      "realmName": "Realm",
+      "realmKind": "Тип",
+      "loadError": "Не удалось загрузить профиль: {{message}}",
+      "twoFa": { "NONE": "2FA: выкл.", "PASSWORD": "2FA: пароль", "TOTP": "2FA: TOTP" }
     },
     "errors": {
       "signup": "Не удалось зарегистрироваться. Попробуйте позже.",

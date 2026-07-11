@@ -64,4 +64,16 @@ describe('validateSchema', () => {
       validateSchema({ type: 'field.text', name: 'x', validation: { format: 'ipv4' } }),
     ).toThrow(SchemaValidationError);
   });
+
+  it('buttonType: принимает submit/button, отклоняет прочее', () => {
+    expect(validateSchema({ type: 'button', label: 'x', buttonType: 'submit' }).buttonType).toBe(
+      'submit',
+    );
+    expect(validateSchema({ type: 'button', label: 'x', buttonType: 'button' }).buttonType).toBe(
+      'button',
+    );
+    expect(() => validateSchema({ type: 'button', label: 'x', buttonType: 'reset' })).toThrow(
+      SchemaValidationError,
+    );
+  });
 });

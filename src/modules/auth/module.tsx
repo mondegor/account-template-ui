@@ -5,6 +5,7 @@ import { SignupPage } from './pages/SignupPage';
 import { ConfirmPage } from './pages/ConfirmPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ConfirmOperationNode } from './ui/ConfirmOperationNode';
+import { EmailFieldNode } from './ui/EmailFieldNode';
 import { authTranslations } from './i18n';
 import { registerAuthHandlers } from './register';
 import signupSchema from './schemas/signup.json';
@@ -52,7 +53,11 @@ export const authModule: ModuleDefinition = {
     'auth.signin': signinSchema,
     'auth.confirm': confirmSchema,
   },
-  componentTypes: { confirmOperation: ConfirmOperationNode },
+  fieldTypes: ['auth.emailField'],
+  componentTypes: {
+    confirmOperation: ConfirmOperationNode,
+    'auth.emailField': EmailFieldNode,
+  },
   i18n: authTranslations,
   onInit: () => registerAuthHandlers(),
 };

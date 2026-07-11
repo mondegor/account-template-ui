@@ -1,6 +1,8 @@
 import { registerHandler, type AsyncValidator, type SchemaHandler } from '@core/schema';
-import { ApiFieldError } from '@core/api';
-import { checkLogin, signin, signup } from './api/authApi';
+import { i18next } from '@core/i18n';
+import { signin, signup } from './api/authApi';
+import { checkEmailAvailability } from './lib/emailAvailability';
+import { saveConfirmReturn } from './lib/confirmReturn';
 
 /**
  * Обработчики схем auth (связь «схема → логика») — императивная часть модуля, вызывается из
@@ -11,29 +13,27 @@ import { checkLogin, signin, signup } from './api/authApi';
 const signupHandler: SchemaHandler = async (values, ctx) => {
   const op = await signup(String(values.user_email ?? '').trim());
   ctx.dispatchOperation({ type: 'START', parts: op, now: Date.now() });
+  // Экран /confirm общий для signup/signin — запоминаем, куда вернуть по «Отменить».
+  saveConfirmReturn('/signup');
   ctx.navigate('/confirm');
 };
 
 const signinHandler: SchemaHandler = async (values, ctx) => {
   const op = await signin(String(values.user_login ?? '').trim());
   ctx.dispatchOperation({ type: 'START', parts: op, now: Date.now() });
+  saveConfirmReturn('/signin');
   ctx.navigate('/confirm');
 };
 
 /**
- * Асинк-проверка доступности email на регистрации (на submit). Занят (400) → текст ошибки под поле.
+ * Асинк-проверка доступности email на регистрации (на submit). Занят (400) → текст ошибки под поле;
+ * если сервер не прислал detail — общий фолбэк-текст (иначе занятый email проскочил бы гейт).
  * 5xx/сеть — остаёмся нейтральны: не подтверждаем доступность, но и не блокируем ввод (реальный
  * гейт — сам signup), поэтому под полем ничего не показываем.
  */
 const emailAvailable: AsyncValidator = async (value) => {
-  const email = String(value ?? '').trim();
-  try {
-    await checkLogin(email);
-    return null;
-  } catch (e) {
-    if (e instanceof ApiFieldError) return e.fields[0]?.detail ?? null;
-    return null;
-  }
+  const result = await checkEmailAvailability(String(value ?? ''));
+  return result.state === 'taken' ? (result.message ?? i18next.t('auth.field.emailTaken')) : null;
 };
 
 let registered = false;

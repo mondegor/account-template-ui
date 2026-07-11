@@ -23,7 +23,10 @@ export function SchemaRenderer({ schema }: { schema: SchemaNode }) {
 
 function RenderNode({ node }: { node: SchemaNode }) {
   const schemaId = useContext(SchemaIdContext);
-  const children = node.children?.map((child, i) => <RenderNode key={i} node={child} />);
+  // Ключ: стабильный id/name узла, иначе — индекс (устойчиво при условном рендере соседей).
+  const children = node.children?.map((child, i) => (
+    <RenderNode key={child.id ?? child.name ?? i} node={child} />
+  ));
 
   if (node.type === 'form') {
     return (

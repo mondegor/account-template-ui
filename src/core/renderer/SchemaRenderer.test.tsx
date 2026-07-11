@@ -26,6 +26,21 @@ describe('SchemaRenderer', () => {
     expect(screen.getByTestId('ui-text')).toHaveTextContent('Обязательное поле');
   });
 
+  it('узел button по умолчанию инертен (type=button), submit — только по buttonType', () => {
+    const schema: SchemaNode = {
+      id: 'demo',
+      type: 'page',
+      children: [
+        { type: 'button', label: 'auth.signup.submit' },
+        { type: 'button', label: 'auth.signin.submit', buttonType: 'submit' },
+      ],
+    };
+    render(<SchemaRenderer schema={schema} />);
+    const buttons = screen.getAllByTestId('ui-button');
+    expect(buttons[0]).toHaveAttribute('type', 'button');
+    expect(buttons[1]).toHaveAttribute('type', 'submit');
+  });
+
   it('fail-closed: незарегистрированный тип не рушит рендер, соседний узел рисуется', () => {
     // confirmOperation валиден в схеме, но в этом тесте не зарегистрирован (модуль auth не поднят).
     const schema: SchemaNode = {

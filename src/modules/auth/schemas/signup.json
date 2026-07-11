@@ -7,13 +7,14 @@
   "children": [
     {
       "type": "form",
+      "submitOnly": true,
       "submit": { "label": "auth.signup.submit" },
       "children": [
         {
-          "type": "field.email",
+          "type": "auth.emailField",
           "name": "user_email",
           "label": "auth.field.email",
-          "props": { "autoComplete": "email", "placeholder": "user@example.com", "autoFocus": true },
+          "props": { "autoComplete": "email", "placeholder": "user@example.com" },
           "validation": { "required": true, "min": 7, "max": 64, "format": "email" }
         }
       ]

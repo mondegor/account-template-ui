@@ -5,6 +5,7 @@ import { Alert, Box, Button, Link, Stack, TextField, Typography } from '@mui/mat
 import { limits } from '@config';
 import type { NodeComponentProps } from '@core/schema';
 import { useConfirmFlow } from '../hooks/useConfirmFlow';
+import { clearConfirmReturn, loadConfirmReturn } from '../lib/confirmReturn';
 
 /**
  * Узел схемы `confirmOperation` (регистрируется модулем auth). Обёртка над generic-движком:
@@ -23,9 +24,16 @@ function mmss(total: number): string {
 export function ConfirmOperationNode(_props: NodeComponentProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  // Экран /confirm общий для signup/signin — «Отменить» возвращает на исходный экран, запомненный
+  // обработчиком потока в sessionStorage (переживает reload; дефолт — вход). НЕ чистим здесь до
+  // навигации: revoke() сначала делает reset() снапшота, из-за чего ConfirmPage (подписан на
+  // снапшот) успевает сам редиректнуть по loadConfirmReturn() — оба выхода должны вести в одно место.
   const flow = useConfirmFlow({
-    onAccess: () => navigate('/profile', { replace: true }),
-    onRevoked: () => navigate('/signin', { replace: true }),
+    onAccess: () => {
+      clearConfirmReturn();
+      navigate('/profile', { replace: true });
+    },
+    onRevoked: () => navigate(loadConfirmReturn(), { replace: true }),
   });
   const [code, setCode] = useState('');
 
@@ -90,7 +98,7 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
             slotProps={{
               htmlInput: {
                 inputMode: 'numeric',
-                autoComplete: 'one-time-code',
+                autoComplete: 'off',
                 minLength: limits.secret.min,
                 maxLength: limits.secret.max,
               },

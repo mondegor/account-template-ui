@@ -1,8 +1,8 @@
 import { createElement } from 'react';
 import { Navigate, type RouteObject } from 'react-router-dom';
-import { registerComponent, registerSchema } from '@core/schema';
+import { registerComponent, registerFieldType, registerSchema } from '@core/schema';
 import { addTranslations } from '@core/i18n';
-import { RoleGuard, getUserRoles } from '@core/auth';
+import { RoleGuard, getUserRoles, rolesEnforced } from '@core/auth';
 import type { ModuleDefinition, ModuleInitContext, NavItem } from './types';
 
 /**
@@ -18,6 +18,8 @@ export function registerModule(def: ModuleDefinition, ctx: ModuleInitContext): v
     throw new Error(`module-registry: модуль "${def.id}" уже зарегистрирован`);
   }
   if (def.i18n) addTranslations(def.i18n);
+  // Кастомные типы-поля — ДО схем: registerSchema валидирует дерево и отклонил бы неизвестный тип.
+  if (def.fieldTypes) def.fieldTypes.forEach(registerFieldType);
   if (def.schemas) {
     for (const [id, source] of Object.entries(def.schemas)) registerSchema(id, source);
   }
@@ -34,8 +36,9 @@ export function getModules(): readonly ModuleDefinition[] {
   return modules;
 }
 
-/** Есть ли доступ к модулю по ролям (requiredRoles пуст → да). */
+/** Есть ли доступ к модулю по ролям (роли не применяются ИЛИ requiredRoles пуст → да). */
 function isAllowed(def: ModuleDefinition): boolean {
+  if (!rolesEnforced()) return true;
   if (!def.requiredRoles || def.requiredRoles.length === 0) return true;
   const roles = getUserRoles();
   return def.requiredRoles.some((r) => roles.includes(r));

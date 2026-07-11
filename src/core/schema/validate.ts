@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { NODE_TYPES, type SchemaNode } from './types';
+import type { SchemaNode } from './types';
+import { isKnownNodeType } from './nodeTypes';
 
 /**
  * Валидация самой JSON-схемы (fail-fast при загрузке). Инварианты plan.txt:
@@ -45,13 +46,16 @@ const fieldValidation = z.strictObject({
 
 const nodeSchema: z.ZodType<SchemaNode> = z.lazy(() =>
   z.strictObject({
-    type: z.enum(NODE_TYPES),
+    // Встроенные типы + зарегистрированные модулями (registerFieldType); чужой тип — fail-closed.
+    type: z.string().refine(isKnownNodeType, { message: 'неизвестный тип узла' }),
     children: z.array(nodeSchema).optional(),
     id: z.string().optional(),
     title: z.string().optional(),
     subtitle: z.string().optional(),
     layout: z.string().optional(),
     submit: z.strictObject({ label: z.string() }).optional(),
+    submitOnly: z.boolean().optional(),
+    buttonType: z.enum(['submit', 'button']).optional(),
     name: z.string().optional(),
     label: z.string().optional(),
     validation: fieldValidation.optional(),

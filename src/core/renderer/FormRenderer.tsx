@@ -1,7 +1,8 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   FormProvider,
   useForm,
+  useWatch,
   type Resolver,
   type UseFormSetError,
 } from 'react-hook-form';
@@ -14,6 +15,7 @@ import { getHandler, type SchemaNode } from '@core/schema';
 import { UiAlert, UiButton } from '@ui';
 import { useHandlerContext } from './bindings';
 import { buildDefaults, buildFormSchema, collectFields } from './validationToZod';
+import { FormErrorContext, SubmitOnlyContext } from './formContext';
 
 type FormValues = Record<string, unknown>;
 
@@ -36,6 +38,13 @@ export function FormRenderer({
   const { t } = useTranslation();
   const ctx = useHandlerContext();
   const [formError, setFormError] = useState<string | null>(null);
+  // Правка любого поля убирает форменный алерт прошлой попытки (как в старом SignupPage). setState
+  // с тем же null React пропускает, так что вызов на каждый keystroke безвреден.
+  const clearFormError = useCallback(() => setFormError(null), []);
+  const formErrorCtx = useMemo(
+    () => ({ hasError: formError !== null, clear: clearFormError }),
+    [formError, clearFormError],
+  );
 
   const fields = useMemo(() => collectFields(node), [node]);
   const fieldNames = useMemo(
@@ -48,9 +57,35 @@ export function FormRenderer({
   );
   const defaults = useMemo(() => buildDefaults(fields) as FormValues, [fields]);
 
-  const form = useForm<FormValues>({ resolver, defaultValues: defaults, mode: 'onTouched' });
+  // submitOnly (узел form) — UX обособленных auth-форм: валидация только по сабмиту (пустое/невалидное
+  // поле не краснеет при фокусе/blur/вводе; формат-ошибки — по кнопке), reValidateMode='onSubmit' —
+  // показанная ошибка держится и снимается фактом редактирования (clearErrors в onChange поля, см.
+  // baseNodes/EmailFieldNode), shouldFocusError:false. Без флага — стандартная валидация onTouched +
+  // ре-валидация onChange (все типы полей ведут себя ровно), гейта пустой кнопки нет.
+  const submitOnly = node.submitOnly === true;
+  const form = useForm<FormValues>({
+    resolver,
+    defaultValues: defaults,
+    mode: submitOnly ? 'onSubmit' : 'onTouched',
+    reValidateMode: submitOnly ? 'onSubmit' : 'onChange',
+    shouldFocusError: !submitOnly,
+  });
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  // submitOnly: кнопка неактивна, пока пусто хоть одно обязательное поле; пустой сабмит блокируется —
+  // поэтому ошибка «обязательное поле» не показывается вовсе (формат-ошибки работают по сабмиту).
+  const requiredNames = useMemo(
+    () => fields.filter((f) => f.validation?.required && f.name).map((f) => f.name as string),
+    [fields],
+  );
+  const watched = useWatch({ control: form.control }) as FormValues;
+  const requiredEmpty =
+    submitOnly &&
+    requiredNames.some((name) => {
+      const v = watched?.[name];
+      return v === '' || v == null || v === false;
+    });
+
+  const submitValid = form.handleSubmit(async (values) => {
     setFormError(null);
     const entry = schemaId ? getHandler(schemaId) : undefined;
     if (!entry) {
@@ -73,25 +108,40 @@ export function FormRenderer({
     } catch (e) {
       mapSubmitError(e, form.setError, fieldNames, setFormError, t);
     } finally {
+      // Чувствительные поля (password) чистим после сабмита, но keepError сохраняет только что
+      // выставленную серверную ошибку поля (иначе resetField затёр бы её вместе со значением).
       fields
         .filter((f) => f.type === 'field.password' && f.name)
-        .forEach((f) => form.resetField(f.name as string));
+        .forEach((f) => form.resetField(f.name as string, { keepError: true }));
     }
   });
 
+  // Пустую форму не отправляем (в т.ч. по Enter) — валидация required не запускается.
+  const onSubmit = (e: FormEvent) => {
+    if (requiredEmpty) {
+      e.preventDefault();
+      return;
+    }
+    void submitValid(e);
+  };
+
   return (
     <FormProvider {...form}>
-      {formError && <UiAlert severity="error">{formError}</UiAlert>}
-      <Box component="form" onSubmit={onSubmit} noValidate>
-        {children}
-        {node.submit && (
-          <UiButton
-            type="submit"
-            label={t(node.submit.label)}
-            disabled={form.formState.isSubmitting}
-          />
-        )}
-      </Box>
+      <SubmitOnlyContext.Provider value={submitOnly}>
+        <FormErrorContext.Provider value={formErrorCtx}>
+          {formError && <UiAlert severity="error">{formError}</UiAlert>}
+          <Box component="form" onSubmit={onSubmit} noValidate>
+            {children}
+            {node.submit && (
+              <UiButton
+                type="submit"
+                label={t(node.submit.label)}
+                disabled={form.formState.isSubmitting || requiredEmpty}
+              />
+            )}
+          </Box>
+        </FormErrorContext.Provider>
+      </SubmitOnlyContext.Provider>
     </FormProvider>
   );
 }
@@ -109,7 +159,7 @@ function mapSubmitError(
       if (fieldNames.has(f.code)) setError(f.code, { message: f.detail });
       else globals.push(f.detail);
     }
-    if (globals.length) setFormError(globals[0]);
+    if (globals.length) setFormError(globals.join(' '));
     return;
   }
   if (e instanceof ApiProblemError) {

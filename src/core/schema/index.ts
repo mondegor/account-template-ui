@@ -1,7 +1,6 @@
 export {
   NODE_TYPES,
   FIELD_TYPES,
-  isFieldType,
   type NodeType,
   type FieldType,
   type FieldValidation,
@@ -10,6 +9,12 @@ export {
   type SchemaNode,
   type SchemaSource,
 } from './types';
+export {
+  isFieldType,
+  isKnownNodeType,
+  registerFieldType,
+  resetNodeTypes,
+} from './nodeTypes';
 export { validateSchema, SchemaValidationError } from './validate';
 export {
   registerComponent,

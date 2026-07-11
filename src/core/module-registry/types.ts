@@ -21,6 +21,8 @@ export interface ModuleDefinition {
   schemas?: Record<string, unknown>;
   /** доп. типы узлов рендерера: componentType → компонент. */
   componentTypes?: Record<string, NodeComponent>;
+  /** кастомные типы-поля (registerFieldType) — участвуют в валидации/дефолтах формы. */
+  fieldTypes?: string[];
   /** переводы модуля: { ru, en } (ветка своего namespace) → addTranslations. */
   i18n?: Record<string, Record<string, unknown>>;
   onInit?: (ctx: ModuleInitContext) => void;

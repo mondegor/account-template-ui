@@ -1,8 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -16,16 +17,11 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import { forceLogout } from '@core/auth';
+import { AppShell, LangFlag } from '@core/shell';
+import { formatRelativeTime } from '@core/i18n';
 import { moduleQueryKey } from '@core/module-registry';
 import { getUserInfo } from '../api/authApi';
-import type { UserAuth2fa, UserInfo, UserStatus } from '../api/types';
-
-const TWO_FA_LABEL: Record<UserAuth2fa, string> = {
-  NONE: '2FA: выкл.',
-  PASSWORD: '2FA: пароль',
-  TOTP: '2FA: TOTP',
-};
+import type { UserInfo, UserStatus } from '../api/types';
 
 const STATUS_COLOR: Record<UserStatus, 'default' | 'success' | 'warning' | 'error'> = {
   DRAFT: 'default',
@@ -34,19 +30,37 @@ const STATUS_COLOR: Record<UserStatus, 'default' | 'success' | 'warning' | 'erro
   BLOCKED: 'error',
 };
 
-function fmt(dt: string | undefined): string {
+/** Дата в локали активного языка (en → en-US, иначе ru-RU); пустое/битое значение — как есть. */
+function fmt(dt: string | undefined, locale: string): string {
   if (!dt) return '—';
   const d = new Date(dt);
-  return Number.isNaN(d.getTime()) ? dt : d.toLocaleString('ru-RU');
+  return Number.isNaN(d.getTime()) ? dt : d.toLocaleString(locale);
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/** Только дата в локали активного языка; пустое/битое значение — как есть. */
+function fmtDate(dt: string | undefined, locale: string): string {
+  if (!dt) return '—';
+  const d = new Date(dt);
+  return Number.isNaN(d.getTime()) ? dt : d.toLocaleDateString(locale);
+}
+
+/** Тик раз в `intervalMs` — чтобы относительное время («N назад») само пересчитывалось. */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+function Row({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
     <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ py: 0.75 }}>
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body2" sx={{ overflowWrap: 'anywhere', textAlign: 'right' }}>
+      <Typography variant="body2" title={title} sx={{ overflowWrap: 'anywhere', textAlign: 'right' }}>
         {value}
       </Typography>
     </Stack>
@@ -54,38 +68,49 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 function ProfileView({ user }: { user: UserInfo }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language.startsWith('en') ? 'en-US' : 'ru-RU';
+  const p = (key: string) => t(`auth.profile.${key}`);
+  const now = useNow(60_000);
+  const lastLogin = formatRelativeTime(user.last_logged_at, {
+    locale,
+    now,
+    justNow: p('lastLoginJustNow'),
+  });
   return (
     <Stack spacing={2} sx={{ maxWidth: 880, mx: 'auto' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Профиль
-        </Typography>
-        {/* TODO: настоящий выход должен вызывать DELETE /v1/session (серверная инвалидация +
-            сброс cookie RTID); сейчас forceLogout — только клиентская очистка. См. refresh.ts. */}
-        <Button size="small" variant="outlined" onClick={() => forceLogout()}>
-          Выйти
-        </Button>
-      </Stack>
+      <Typography variant="h5" sx={{ fontWeight: 600 }}>
+        {p('title')}
+      </Typography>
 
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Учётная запись
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+            {p('account')}
           </Typography>
           <Divider />
-          <Row label="Email" value={user.email} />
-          <Row label="Телефон" value={user.phone ?? '—'} />
-          <Row label="Язык" value={user.lang} />
+          <Row label={p('email')} value={user.email} />
+          <Row label={p('phone')} value={user.phone ?? '—'} />
+          <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ py: 0.75 }}>
+            <Typography variant="body2" color="text.secondary">
+              {p('lang')}
+            </Typography>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <LangFlag lang={user.lang.startsWith('en') ? 'en' : 'ru'} />
+              <Typography variant="body2">{user.lang}</Typography>
+            </Stack>
+          </Stack>
+          <Row label={p('registeredAt')} value={fmtDate(user.created_at, locale)} />
         </CardContent>
       </Card>
 
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-            Безопасность
+          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
+            {p('security')}
           </Typography>
           <Stack direction="row" spacing={1}>
-            <Chip size="small" label={TWO_FA_LABEL[user.auth_2fa_type]} />
+            <Chip size="small" label={p(`twoFa.${user.auth_2fa_type}`)} />
             <Chip size="small" color={STATUS_COLOR[user.status]} label={user.status} />
           </Stack>
         </CardContent>
@@ -93,29 +118,32 @@ function ProfileView({ user }: { user: UserInfo }) {
 
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Активность
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+            {p('activity')}
           </Typography>
           <Divider />
-          <Row label="Последний вход" value={fmt(user.last_logged_at)} />
-          <Row label="IP последнего входа" value={user.last_login_ip} />
-          <Row label="Создан" value={fmt(user.created_at)} />
-          <Row label="Обновлён" value={fmt(user.updated_at)} />
+          {lastLogin ? (
+            <Row label={p('lastLogin')} value={lastLogin.label} title={lastLogin.title} />
+          ) : (
+            <Row label={p('lastLogin')} value={fmt(user.last_logged_at, locale)} />
+          )}
+          <Row label={p('lastLoginIp')} value={user.last_login_ip} />
+          <Row label={p('updatedAt')} value={fmt(user.updated_at, locale)} />
         </CardContent>
       </Card>
 
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-            Realms
+          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
+            {p('realms')}
           </Typography>
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Realm</TableCell>
-                <TableCell>Тип</TableCell>
-                <TableCell>Создан</TableCell>
-                <TableCell>Обновлён</TableCell>
+                <TableCell>{p('realmName')}</TableCell>
+                <TableCell>{p('realmKind')}</TableCell>
+                <TableCell>{p('createdAt')}</TableCell>
+                <TableCell>{p('updatedAt')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -123,8 +151,8 @@ function ProfileView({ user }: { user: UserInfo }) {
                 <TableRow key={r.name}>
                   <TableCell>{r.name}</TableCell>
                   <TableCell>{r.user_kind}</TableCell>
-                  <TableCell>{fmt(r.created_at)}</TableCell>
-                  <TableCell>{fmt(r.updated_at)}</TableCell>
+                  <TableCell>{fmt(r.created_at, locale)}</TableCell>
+                  <TableCell>{fmt(r.updated_at, locale)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -136,13 +164,14 @@ function ProfileView({ user }: { user: UserInfo }) {
 }
 
 export function ProfilePage() {
+  const { t } = useTranslation();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: moduleQueryKey('auth', 'user'),
     queryFn: getUserInfo,
   });
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
+    <AppShell>
       {isLoading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
           <CircularProgress />
@@ -150,10 +179,10 @@ export function ProfilePage() {
       )}
       {isError && (
         <Alert severity="error" sx={{ maxWidth: 880, mx: 'auto' }}>
-          Не удалось загрузить профиль: {(error as Error).message}
+          {t('auth.profile.loadError', { message: (error as Error).message })}
         </Alert>
       )}
       {data && <ProfileView user={data} />}
-    </Box>
+    </AppShell>
   );
 }

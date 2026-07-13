@@ -7,6 +7,7 @@ import type {
   OperationTokenRequest,
   SuccessAccess,
   UserInfo,
+  UserSession,
   WaitingConfirmOperation,
 } from './types';
 
@@ -87,4 +88,17 @@ export async function openSession(req: LoginByTokenRequest): Promise<OpenSession
 export async function getUserInfo(): Promise<UserInfo> {
   const res = await authClient.get<UserInfo>('/v1/user');
   return res.data;
+}
+
+/** Открытые сессии реалма. Без realm — реалм текущей сессии (здесь его выбирает пользователь). */
+export async function getUserSessions(realm?: string): Promise<UserSession[]> {
+  const res = await authClient.get<UserSession[]>('/v1/sessions', {
+    params: realm ? { realm } : undefined,
+  });
+  return res.data;
+}
+
+/** Закрытие перечисленных сессий (204). Единственный способ убрать сессию из списка — в т.ч. одну. */
+export async function closeUserSessions(sessionIds: string[]): Promise<void> {
+  await authClient.post('/v1/sessions/close', { session_ids: sessionIds });
 }

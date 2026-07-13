@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -18,9 +17,12 @@ import {
   Typography,
 } from '@mui/material';
 import { AppShell, LangFlag } from '@core/shell';
-import { formatRelativeTime } from '@core/i18n';
+import { formatRelativeTime, isEnglish } from '@core/i18n';
 import { moduleQueryKey } from '@core/module-registry';
 import { getUserInfo } from '../api/authApi';
+import { fmt, fmtDate, useLocale, useNow } from '../lib/format';
+import { realmLabel, userKindLabel } from '../lib/realmLabel';
+import { Row } from '../ui/Row';
 import type { UserInfo, UserStatus } from '../api/types';
 
 const STATUS_COLOR: Record<UserStatus, 'default' | 'success' | 'warning' | 'error'> = {
@@ -30,46 +32,9 @@ const STATUS_COLOR: Record<UserStatus, 'default' | 'success' | 'warning' | 'erro
   BLOCKED: 'error',
 };
 
-/** Дата в локали активного языка (en → en-US, иначе ru-RU); пустое/битое значение — как есть. */
-function fmt(dt: string | undefined, locale: string): string {
-  if (!dt) return '—';
-  const d = new Date(dt);
-  return Number.isNaN(d.getTime()) ? dt : d.toLocaleString(locale);
-}
-
-/** Только дата в локали активного языка; пустое/битое значение — как есть. */
-function fmtDate(dt: string | undefined, locale: string): string {
-  if (!dt) return '—';
-  const d = new Date(dt);
-  return Number.isNaN(d.getTime()) ? dt : d.toLocaleDateString(locale);
-}
-
-/** Тик раз в `intervalMs` — чтобы относительное время («N назад») само пересчитывалось. */
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
-
-function Row({ label, value, title }: { label: string; value: string; title?: string }) {
-  return (
-    <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ py: 0.75 }}>
-      <Typography variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography variant="body2" title={title} sx={{ overflowWrap: 'anywhere', textAlign: 'right' }}>
-        {value}
-      </Typography>
-    </Stack>
-  );
-}
-
 function ProfileView({ user }: { user: UserInfo }) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.language.startsWith('en') ? 'en-US' : 'ru-RU';
+  const { t } = useTranslation();
+  const locale = useLocale();
   const p = (key: string) => t(`auth.profile.${key}`);
   const now = useNow(60_000);
   const lastLogin = formatRelativeTime(user.last_logged_at, {
@@ -77,6 +42,14 @@ function ProfileView({ user }: { user: UserInfo }) {
     now,
     justNow: p('lastLoginJustNow'),
   });
+  // Инвариант деплоя: у пользователя всегда есть минимум один реалм — случая «нуль кабинетов» не
+  // бывает. Поэтому один кабинет — выбирать не из чего: показываем его данные строками в «Учётной
+  // записи» (soleRealm заведомо определён, его created_at/user_kind — законный источник строк
+  // «Зарегистрирован» и «Тип аккаунта») и слова «кабинет» не вводим вовсе. Несколько — отдельная
+  // карточка со сравнительной таблицей.
+  const multiRealm = user.realms.length > 1;
+  const soleRealm = multiRealm ? undefined : user.realms[0];
+
   return (
     <Stack spacing={2} sx={{ maxWidth: 880, mx: 'auto' }}>
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
@@ -89,6 +62,9 @@ function ProfileView({ user }: { user: UserInfo }) {
             {p('account')}
           </Typography>
           <Divider />
+          {soleRealm && (
+            <Row label={p('accountKind')} value={userKindLabel(t, soleRealm.user_kind)} />
+          )}
           <Row label={p('email')} value={user.email} />
           <Row label={p('phone')} value={user.phone ?? '—'} />
           <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ py: 0.75 }}>
@@ -96,13 +72,43 @@ function ProfileView({ user }: { user: UserInfo }) {
               {p('lang')}
             </Typography>
             <Stack direction="row" alignItems="center" spacing={1}>
-              <LangFlag lang={user.lang.startsWith('en') ? 'en' : 'ru'} />
+              <LangFlag lang={isEnglish(user.lang) ? 'en' : 'ru'} />
               <Typography variant="body2">{user.lang}</Typography>
             </Stack>
           </Stack>
-          <Row label={p('registeredAt')} value={fmtDate(user.created_at, locale)} />
+          {soleRealm && (
+            <Row label={p('registeredAt')} value={fmtDate(soleRealm.created_at, locale)} />
+          )}
         </CardContent>
       </Card>
+
+      {multiRealm && (
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
+              {p('realms')}
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>{p('realmName')}</TableCell>
+                  <TableCell>{p('accountKind')}</TableCell>
+                  <TableCell>{p('registeredAt')}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {user.realms.map((r) => (
+                  <TableRow key={r.name}>
+                    <TableCell>{realmLabel(t, r.name)}</TableCell>
+                    <TableCell>{userKindLabel(t, r.user_kind)}</TableCell>
+                    <TableCell>{fmtDate(r.created_at, locale)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card variant="outlined">
         <CardContent>
@@ -129,34 +135,6 @@ function ProfileView({ user }: { user: UserInfo }) {
           )}
           <Row label={p('lastLoginIp')} value={user.last_login_ip} />
           <Row label={p('updatedAt')} value={fmt(user.updated_at, locale)} />
-        </CardContent>
-      </Card>
-
-      <Card variant="outlined">
-        <CardContent>
-          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
-            {p('realms')}
-          </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{p('realmName')}</TableCell>
-                <TableCell>{p('realmKind')}</TableCell>
-                <TableCell>{p('createdAt')}</TableCell>
-                <TableCell>{p('updatedAt')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {user.realms.map((r) => (
-                <TableRow key={r.name}>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell>{r.user_kind}</TableCell>
-                  <TableCell>{fmt(r.created_at, locale)}</TableCell>
-                  <TableCell>{fmt(r.updated_at, locale)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
         </CardContent>
       </Card>
     </Stack>

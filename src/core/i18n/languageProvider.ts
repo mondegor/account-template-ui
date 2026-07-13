@@ -16,6 +16,14 @@ function isSupported(lang: string): lang is Lang {
   return (SUPPORTED_LANGS as readonly string[]).includes(lang);
 }
 
+/**
+ * Английское ли семейство языка (en, en-US, …). Единственное место правила «что считаем англ.»:
+ * его спрашивают и переключатель языка, и флаг в профиле, и локаль дат.
+ */
+export function isEnglish(lang: string): boolean {
+  return lang.startsWith('en');
+}
+
 export function setLanguage(lang: string): void {
   explicitLang = lang;
   try {

@@ -1,14 +1,16 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { i18next, initI18n, setLanguage } from '@core/i18n';
+import { addTranslations, i18next, initI18n, setLanguage } from '@core/i18n';
+import { deployTranslations } from '@app';
 import { registerBaseComponents } from '@core/renderer';
 import { registerModule, resetRegistry } from '@core/module-registry';
 import { resetComponents, resetSchemas } from '@core/schema';
 import { realmProvider, useAuthStore } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
+import { getUserInfo } from '../api/authApi';
 import { ProfilePage } from './ProfilePage';
 
 /**
@@ -47,6 +49,8 @@ vi.mock('../api/authApi', () => ({
 beforeAll(() => {
   setLanguage('ru');
   initI18n();
+  // Подписи кабинетов живут в deploy-слое (в проде их ставит registerAllModules).
+  addTranslations(deployTranslations);
   resetRegistry();
   resetComponents();
   resetSchemas();
@@ -118,5 +122,61 @@ describe('ProfilePage (i18n)', () => {
     expect(await screen.findByText('Account')).toBeInTheDocument();
     expect(screen.getByText('Phone')).toBeInTheDocument();
     expect(screen.getByText('Security')).toBeInTheDocument();
+  });
+});
+
+describe('ProfilePage (кабинеты)', () => {
+  const REALMS = [
+    {
+      name: 'print-shop/standard',
+      user_kind: 'standard',
+      created_at: '2025-01-10T09:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'print-shop/admin',
+      user_kind: 'staff',
+      created_at: '2025-03-02T14:30:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+  ];
+
+  const accountCard = () =>
+    screen.getByText('Учётная запись').closest('.MuiCard-root') as HTMLElement;
+
+  it('один кабинет: тип аккаунта в «Учётной записи», карточки «Кабинеты» нет', async () => {
+    await i18next.changeLanguage('ru');
+    renderProfile();
+    await screen.findByText('Учётная запись');
+
+    // Единственный кабинет — выбирать не из чего, слова «кабинет» на экране быть не должно.
+    expect(screen.queryByText('Кабинеты')).toBeNull();
+    expect(within(accountCard()).getByText('Тип аккаунта')).toBeInTheDocument();
+    expect(within(accountCard()).getByText('Зарегистрирован')).toBeInTheDocument();
+    // user_kind 'customer' не переведён — показываем как есть, а не ключом auth.userKind.customer.
+    expect(within(accountCard()).getByText('customer')).toBeInTheDocument();
+  });
+
+  it('несколько кабинетов: карточка «Кабинеты» сразу после «Учётной записи», строки из неё убраны', async () => {
+    await i18next.changeLanguage('ru');
+    const info = await vi.mocked(getUserInfo)();
+    vi.mocked(getUserInfo).mockResolvedValueOnce({ ...info, realms: REALMS });
+
+    const { container } = renderProfile();
+    await screen.findByText('Кабинеты');
+
+    // Эти строки переехали в таблицу кабинетов — в «Учётной записи» их больше нет.
+    expect(within(accountCard()).queryByText('Тип аккаунта')).toBeNull();
+    expect(within(accountCard()).queryByText('Зарегистрирован')).toBeNull();
+
+    const titles = [...container.querySelectorAll('.MuiCard-root')].map(
+      (card) => card.querySelector('.MuiTypography-subtitle2')?.textContent,
+    );
+    expect(titles).toEqual(['Учётная запись', 'Кабинеты', 'Безопасность', 'Активность']);
+
+    expect(screen.getByText('Клиентский')).toBeInTheDocument();
+    expect(screen.getByText('Служебный')).toBeInTheDocument();
+    expect(screen.getByText('Сотрудник')).toBeInTheDocument();
+    expect(screen.queryByText('print-shop/admin')).toBeNull();
   });
 });

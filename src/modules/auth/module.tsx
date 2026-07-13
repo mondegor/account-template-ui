@@ -4,6 +4,7 @@ import { SigninPage } from './pages/SigninPage';
 import { SignupPage } from './pages/SignupPage';
 import { ConfirmPage } from './pages/ConfirmPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SessionsPage } from './pages/SessionsPage';
 import { ConfirmOperationNode } from './ui/ConfirmOperationNode';
 import { EmailFieldNode } from './ui/EmailFieldNode';
 import { authTranslations } from './i18n';
@@ -46,8 +47,19 @@ export const authModule: ModuleDefinition = {
         </ProtectedRoute>
       ),
     },
+    {
+      path: '/sessions',
+      element: (
+        <ProtectedRoute>
+          <SessionsPage />
+        </ProtectedRoute>
+      ),
+    },
   ],
-  nav: [{ id: 'auth.profile', label: 'auth.nav.profile', route: '/profile' }],
+  nav: [
+    { id: 'auth.profile', label: 'auth.nav.profile', route: '/profile' },
+    { id: 'auth.sessions', label: 'auth.nav.sessions', route: '/sessions' },
+  ],
   schemas: {
     'auth.signup': signupSchema,
     'auth.signin': signinSchema,

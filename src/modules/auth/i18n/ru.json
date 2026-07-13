@@ -1,7 +1,8 @@
 {
   "auth": {
     "nav": {
-      "profile": "Профиль"
+      "profile": "Профиль",
+      "sessions": "Сессии"
     },
     "field": {
       "email": "Email",
@@ -59,13 +60,36 @@
       "lastLoginJustNow": "только что",
       "lastLoginIp": "IP последнего входа",
       "registeredAt": "Зарегистрирован",
-      "createdAt": "Создан",
+      "accountKind": "Тип аккаунта",
       "updatedAt": "Обновлён",
-      "realms": "Realms",
-      "realmName": "Realm",
-      "realmKind": "Тип",
+      "realms": "Кабинеты",
+      "realmName": "Кабинет",
       "loadError": "Не удалось загрузить профиль: {{message}}",
       "twoFa": { "NONE": "2FA: выкл.", "PASSWORD": "2FA: пароль", "TOTP": "2FA: TOTP" }
+    },
+    "sessions": {
+      "title": "Сессии",
+      "realmTitle": "Сессии кабинета:",
+      "realm": "Кабинет",
+      "current": "Текущая",
+      "otherSessions": "Другие сессии ({{n}})",
+      "allSessions": "Сессии ({{n}})",
+      "terminateOthers": "Завершить все другие сессии",
+      "terminateAll": "Завершить все сессии этого кабинета",
+      "closeOne": "Завершить сессию",
+      "confirmTitle": "Завершить сессии?",
+      "confirmText": "Будут закрыты все перечисленные сессии на других устройствах ({{n}} шт.)",
+      "cancel": "Отмена",
+      "confirm": "Завершить",
+      "empty": "Других активных сессий нет.",
+      "noRealms": "У вас нет ни одного кабинета — показывать нечего.",
+      "ip": "IP-адрес",
+      "location": "Местоположение",
+      "createdAt": "Создана",
+      "lastSeenAt": "Активность",
+      "justNow": "только что",
+      "loadError": "Не удалось загрузить сессии: {{message}}",
+      "closeError": "Не удалось закрыть сессии. Попробуйте ещё раз."
     },
     "errors": {
       "signup": "Не удалось зарегистрироваться. Попробуйте позже.",

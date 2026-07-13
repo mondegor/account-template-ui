@@ -65,6 +65,18 @@ export interface UserInfo {
   updated_at: string;
 }
 
+/** Открытая сессия пользователя. session_id — 8 символов (в запросах длина фиксирована). */
+export interface UserSession {
+  session_id: string;
+  app_name: string;
+  device_name: string;
+  last_ip: string;
+  location: string;
+  created_at: string;
+  last_seen_at: string;
+  is_current: boolean;
+}
+
 /** Результат открытия сессии: либо ещё одно подтверждение (200), либо токены (201). */
 export type OpenSessionResult =
   | { kind: 'waiting'; operation: WaitingConfirmOperation }

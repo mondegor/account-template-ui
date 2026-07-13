@@ -1,7 +1,10 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient } from '@tanstack/react-query';
+import { delay, http, HttpResponse } from 'msw';
+import { config } from '@config';
+import { server } from '@mocks/server';
 import { initI18n, setLanguage } from '@core/i18n';
 import { registerBaseComponents } from '@core/renderer';
 import { registerModule, resetRegistry } from '@core/module-registry';
@@ -63,5 +66,48 @@ describe('AppShell', () => {
     useAuthStore.setState({ status: 'authenticated' });
     renderShell();
     expect(screen.getByRole('button', { name: 'Выйти' })).toBeInTheDocument();
+  });
+
+  it('«Выйти» инвалидирует серверную сессию (DELETE /v1/session) и делает вкладку анонимной', async () => {
+    const calls: (string | null)[] = [];
+    server.use(
+      http.delete(`${config.authApiBaseUrl}/v1/session`, ({ request }) => {
+        calls.push(request.headers.get('Authorization'));
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'access', expiresAt: null });
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }));
+
+    // Серверная часть обязательна: без неё silent-refresh вернул бы пользователя после reload.
+    // DELETE /v1/session требует bearer (openapi: security bearerAuth) — без него был бы 401,
+    // тихо проглоченный catch-ом в logout(): вкладка чистая, серверная сессия жива.
+    await waitFor(() => expect(calls).toEqual(['Bearer access']));
+    await waitFor(() => expect(useAuthStore.getState().status).toBe('anonymous'));
+    expect(useAuthStore.getState().accessToken).toBeNull();
+  });
+
+  it('во время выхода кнопка «Выйти» заблокирована — второй клик не шлёт второй DELETE', async () => {
+    const calls: (string | null)[] = [];
+    server.use(
+      http.delete(`${config.authApiBaseUrl}/v1/session`, async ({ request }) => {
+        calls.push(request.headers.get('Authorization'));
+        await delay(20);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    useAuthStore.setState({ status: 'authenticated', accessToken: 'access', expiresAt: null });
+    renderShell();
+
+    const btn = screen.getByRole('button', { name: 'Выйти' });
+    fireEvent.click(btn);
+    // Пока DELETE в полёте — кнопка disabled; повторный клик по ней не доходит до logout().
+    await waitFor(() => expect(btn).toBeDisabled());
+    fireEvent.click(btn);
+
+    await waitFor(() => expect(useAuthStore.getState().status).toBe('anonymous'));
+    expect(calls).toHaveLength(1);
   });
 });

@@ -26,6 +26,7 @@ interface SuccessAccessBody {
 
 let inflight: Promise<boolean> | null = null;
 let proactiveTimer: ReturnType<typeof setTimeout> | null = null;
+let loggingOut = false;
 
 /** Обработчики разлогина (guard-и подписываются, чтобы редиректнуть на /signin). */
 type LogoutListener = () => void;
@@ -44,7 +45,11 @@ export function applyAccess(body: SuccessAccessBody): void {
   scheduleProactiveRefresh();
 }
 
-export function refresh(): Promise<boolean> {
+/**
+ * Продление как таковое (single-flight). Отдельно от refresh(), потому что logout() продлевает
+ * сессию в обход запрета: ему новый access нужен ровно затем, чтобы дожать DELETE.
+ */
+function renew(): Promise<boolean> {
   if (inflight) return inflight;
 
   inflight = (async () => {
@@ -62,7 +67,8 @@ export function refresh(): Promise<boolean> {
       return true;
     } catch {
       // reuse вне grace-окна / истёкший refresh → закрыта текущая сессия → разлогин этой вкладки.
-      forceLogout();
+      // Во время выхода чистит и оповещает сам logout() — иначе слушатели сработали бы дважды.
+      if (!loggingOut) forceLogout();
       return false;
     } finally {
       inflight = null;
@@ -70,6 +76,17 @@ export function refresh(): Promise<boolean> {
   })();
 
   return inflight;
+}
+
+/**
+ * Продление по 401 или по таймеру. Пока идёт выход — не продлеваем: refresh ещё живёт в grace-окне
+ * (60с), так что PATCH вернул бы 200, а applyAccess() снова сделал бы вкладку authenticated уже
+ * после forceLogout(). Ловится это на любом параллельном запросе: например, ProfilePage
+ * перезапрашивает /v1/user, тот получает 401 от уже закрытой сессии — и воскрешает её.
+ */
+export function refresh(): Promise<boolean> {
+  if (loggingOut) return Promise.resolve(false);
+  return renew();
 }
 
 export function scheduleProactiveRefresh(): void {
@@ -82,11 +99,44 @@ export function scheduleProactiveRefresh(): void {
 }
 
 /**
- * TODO: настоящий выход пользователя должен ещё вызывать `DELETE /v1/session` — инвалидировать
- * серверную сессию и сбросить cookie RTID (иначе после reload silent-refresh молча вернёт
- * пользователя). Сейчас это только клиентская очистка; кнопка «Выйти» в ProfilePage временно
- * переиспользует forceLogout (который также вызывается при принудительном разлогине по reuse).
+ * DELETE /v1/session — через rawClient (интерсептор authClient исключает /v1/session из refresh),
+ * поэтому Authorization ставим руками: DELETE, в отличие от PATCH, требует bearer.
  */
+async function deleteSession(): Promise<void> {
+  const bodyToken = tokenStorage.getRefreshForBody();
+  const access = authStore.getAccess();
+  await rawClient.delete('/v1/session', {
+    data: bodyToken ? { refresh_token: bodyToken } : undefined,
+    headers: {
+      ...commonHeaders(),
+      ...(access ? { Authorization: `Bearer ${access}` } : {}),
+    },
+  });
+}
+
+/**
+ * Осознанный выход: инвалидирует серверную сессию (DELETE /v1/session сбрасывает cookie RTID),
+ * затем чистит клиент. Без серверной части silent-refresh после reload молча вернул бы
+ * пользователя обратно — поэтому 401 (протухший access) не проглатывается: продлеваем сессию и
+ * повторяем DELETE ровно один раз. Остальные ошибки (сеть, 5xx) неисправимы — чистим клиент как есть.
+ * На всё время выхода продление закрыто для остальных (loggingOut) — см. refresh().
+ */
+export async function logout(): Promise<void> {
+  loggingOut = true;
+  try {
+    await deleteSession();
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401 && (await renew())) {
+      // renew() положил новый access (и refresh — в body-mode), deleteSession перечитает оба.
+      await deleteSession().catch(() => undefined);
+    }
+  } finally {
+    loggingOut = false;
+  }
+  forceLogout();
+}
+
+/** Принудительный разлогин этой вкладки (протухший refresh, reuse вне grace) — только клиент. */
 export function forceLogout(): void {
   if (proactiveTimer) clearTimeout(proactiveTimer);
   proactiveTimer = null;

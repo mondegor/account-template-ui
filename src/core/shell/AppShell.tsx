@@ -18,8 +18,8 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { buildNav } from '@core/module-registry';
-import { forceLogout, useAuthStore } from '@core/auth';
-import { setLanguage } from '@core/i18n';
+import { logout, useAuthStore } from '@core/auth';
+import { isEnglish, setLanguage } from '@core/i18n';
 import { useThemeMode } from './themeMode';
 import { LangFlag } from './LangFlag';
 
@@ -177,7 +177,7 @@ const LANG_NAME: Record<'ru' | 'en', string> = { ru: 'Русский', en: 'Engl
 /** Переключатель языка ru⇄en: только флаг + тултип; клик — смена языка (провайдер + i18next). */
 function LanguageButton() {
   const { i18n } = useTranslation();
-  const current = i18n.language?.startsWith('en') ? 'en' : 'ru';
+  const current = isEnglish(i18n.language ?? '') ? 'en' : 'ru';
   const toggle = () => {
     const next = current === 'ru' ? 'en' : 'ru';
     setLanguage(next);
@@ -232,6 +232,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
   const status = useAuthStore((s) => s.status);
+  // Выход блокирует свою же кнопку: двойной клик слал бы второй DELETE /v1/session. По успеху кнопка
+  // и так исчезает (status → anonymous), сброс важен лишь на ошибке — тогда её можно нажать снова.
+  const [loggingOut, setLoggingOut] = useState(false);
+  const handleLogout = () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    void logout().finally(() => setLoggingOut(false));
+  };
 
   const drawerContent = (
     <Box>
@@ -273,7 +281,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   size="small"
                   color="inherit"
                   aria-label={t('common.shell.logout')}
-                  onClick={() => forceLogout()}
+                  disabled={loggingOut}
+                  onClick={handleLogout}
                 >
                   <LogOutGlyph />
                 </IconButton>

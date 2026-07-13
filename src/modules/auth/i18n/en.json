@@ -1,7 +1,8 @@
 {
   "auth": {
     "nav": {
-      "profile": "Profile"
+      "profile": "Profile",
+      "sessions": "Sessions"
     },
     "field": {
       "email": "Email",
@@ -59,13 +60,36 @@
       "lastLoginJustNow": "just now",
       "lastLoginIp": "Last login IP",
       "registeredAt": "Registered",
-      "createdAt": "Created",
+      "accountKind": "Account type",
       "updatedAt": "Updated",
-      "realms": "Realms",
-      "realmName": "Realm",
-      "realmKind": "Type",
+      "realms": "Workspaces",
+      "realmName": "Workspace",
       "loadError": "Failed to load profile: {{message}}",
       "twoFa": { "NONE": "2FA: off", "PASSWORD": "2FA: password", "TOTP": "2FA: TOTP" }
+    },
+    "sessions": {
+      "title": "Sessions",
+      "realmTitle": "Sessions in workspace:",
+      "realm": "Workspace",
+      "current": "Current",
+      "otherSessions": "Other sessions ({{n}})",
+      "allSessions": "Sessions ({{n}})",
+      "terminateOthers": "Terminate all other sessions",
+      "terminateAll": "Terminate all sessions in this workspace",
+      "closeOne": "Terminate session",
+      "confirmTitle": "Terminate sessions?",
+      "confirmText": "All listed sessions on other devices ({{n}}) will be closed.",
+      "cancel": "Cancel",
+      "confirm": "Terminate",
+      "empty": "No other active sessions.",
+      "noRealms": "You don't belong to any workspace — nothing to show.",
+      "ip": "IP address",
+      "location": "Location",
+      "createdAt": "Created",
+      "lastSeenAt": "Last seen",
+      "justNow": "just now",
+      "loadError": "Failed to load sessions: {{message}}",
+      "closeError": "Could not close the sessions. Please try again."
     },
     "errors": {
       "signup": "Sign up failed. Please try again later.",

@@ -16,17 +16,15 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
 }
 
 // Эндпоинты, где 401 НЕ должен инициировать refresh (guests-only + сам refresh).
-const NO_REFRESH_PATHS = [
-  '/v1/signin',
-  '/v1/signup',
-  '/v1/session',
-  '/v1/operation/',
-  '/v1/check/',
-];
+// Сравнение точное: '/v1/sessions' — другой ресурс, чем '/v1/session', и его 401 продлевать НАДО.
+const NO_REFRESH_PATHS = ['/v1/signin', '/v1/signup', '/v1/session'];
+// Здесь путь продолжается id-ом операции/логином, поэтому только эти записи матчатся префиксом.
+const NO_REFRESH_PREFIXES = ['/v1/operation/', '/v1/check/'];
 
 function isNoRefreshPath(url: string | undefined): boolean {
   if (!url) return false;
-  return NO_REFRESH_PATHS.some((p) => url.startsWith(p) || url.includes(p));
+  const path = url.split(/[?#]/)[0]!;
+  return NO_REFRESH_PATHS.includes(path) || NO_REFRESH_PREFIXES.some((p) => path.startsWith(p));
 }
 
 export const authClient: AxiosInstance = axios.create({

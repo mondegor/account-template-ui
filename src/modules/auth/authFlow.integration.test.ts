@@ -3,8 +3,10 @@ import { useAuthStore } from '@core/auth';
 import { ApiFieldError } from '@core/api';
 import {
   checkLogin,
+  closeUserSessions,
   confirmOperation,
   getUserInfo,
+  getUserSessions,
   openSession,
   resendOperation,
   signin,
@@ -82,6 +84,26 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     await expect(signup('inprogress@example.com')).rejects.toSatisfy(
       (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code !== 'user_email',
     );
+  });
+
+  it('открытая сессия видна в /v1/sessions как текущая, closeUserSessions её убирает', async () => {
+    const op = await signin('user@example.com');
+    await confirmOperation({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token, secret: '183947' });
+
+    const sessions = await getUserSessions();
+    const current = sessions.filter((s) => s.is_current);
+    expect(current).toHaveLength(1);
+    // session_id в запросах ограничен 8 символами (Auth.Sessions.Request.Model.SessionID).
+    expect(sessions.every((s) => s.session_id.length === 8)).toBe(true);
+
+    const victim = sessions.find((s) => !s.is_current)!;
+    await closeUserSessions([victim.session_id]);
+
+    const after = await getUserSessions();
+    expect(after).toHaveLength(sessions.length - 1);
+    expect(after.some((s) => s.session_id === victim.session_id)).toBe(false);
+    expect(after.some((s) => s.is_current)).toBe(true);
   });
 
   it('resend возвращает новый WaitingConfirmOperation со сброшенными счётчиками', async () => {

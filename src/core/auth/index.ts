@@ -2,6 +2,7 @@ export { authStore, useAuthStore, type AuthStatus } from './authStore';
 export {
   refresh,
   applyAccess,
+  logout,
   forceLogout,
   onForcedLogout,
   scheduleProactiveRefresh,

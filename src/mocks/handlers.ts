@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import { config } from '@config';
-import type { SuccessAccess, UserInfo, WaitingConfirmOperation } from '@modules/auth';
+import type { SuccessAccess, UserInfo, UserSession, WaitingConfirmOperation } from '@modules/auth';
 
 /**
  * MSW-мок Auth API для вертикального среза. Держит операции и сессии в памяти.
@@ -9,6 +9,10 @@ import type { SuccessAccess, UserInfo, WaitingConfirmOperation } from '@modules/
 
 const BASE = config.authApiBaseUrl; // '/api/auth'
 const MOCK_CODE = '183947';
+/** Второй реалм пользователя — чтобы на /sessions было из чего выбирать. */
+const SECOND_REALM = 'print-shop/admin';
+/** Мок-онли: 0 = у пользователя один кабинет (UI без выбора кабинета). Живёт здесь, а не в config. */
+const MOCK_MULTI_REALM = import.meta.env.VITE_MOCK_MULTI_REALM !== '0';
 
 interface MockOperation {
   token: string;
@@ -25,11 +29,16 @@ interface MockOperation {
 interface MockSession {
   access: string;
   user: UserInfo;
+  /** Связь с записью в sessionsByRealm: переживает ротацию refresh (sid не меняется). */
+  sessionId: string;
+  realm: string;
 }
 
 const operations = new Map<string, MockOperation>();
 const sessionsByRefresh = new Map<string, MockSession>();
 const userByAccess = new Map<string, UserInfo>();
+/** Открытые сессии по реалмам; сид создаётся лениво — при первом обращении к реалму. */
+const sessionsByRealm = new Map<string, UserSession[]>();
 
 function hex(len: number): string {
   const bytes = new Uint8Array(len / 2);
@@ -105,11 +114,124 @@ function buildUser(op: MockOperation): UserInfo {
         created_at: '2025-01-10T09:00:00.000+03:00',
         updated_at: now,
       },
+      // Второй кабинет — только в multi-режиме: без него UI показывает одиночный вариант
+      // (нет карточки «Кабинеты» в профиле, нет выбора кабинета на /sessions).
+      ...(MOCK_MULTI_REALM
+        ? [
+            {
+              name: SECOND_REALM,
+              user_kind: 'staff',
+              created_at: '2025-03-02T14:30:00.000+03:00',
+              updated_at: now,
+            },
+          ]
+        : []),
     ],
     status: 'ENABLED',
     created_at: '2025-01-10T09:00:00.000+03:00',
     updated_at: now,
   };
+}
+
+/** ISO-время «N минут назад» — чтобы в сиде было и относительное («5 минут назад»), и абсолютное. */
+function ago(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+function otherSession(s: Omit<UserSession, 'session_id' | 'is_current'>): UserSession {
+  return { session_id: hex(8), is_current: false, ...s };
+}
+
+/** Чужие сессии реалма. Наборы разные, чтобы смена реалма в комбобоксе была заметна. */
+function seedSessions(realm: string): UserSession[] {
+  if (realm === SECOND_REALM) {
+    return [
+      otherSession({
+        app_name: 'Web, Chrome',
+        device_name: 'MacBook Pro',
+        last_ip: '85.140.3.77',
+        location: 'Moscow, Russia',
+        created_at: ago(60 * 24 * 5),
+        last_seen_at: ago(7),
+      }),
+      otherSession({
+        app_name: 'API, curl',
+        device_name: 'CI runner',
+        last_ip: '10.8.0.14',
+        location: 'Frankfurt, Germany',
+        created_at: ago(60 * 24 * 30),
+        last_seen_at: ago(60 * 26),
+      }),
+    ];
+  }
+  return [
+    otherSession({
+      app_name: 'Mobile, iOS',
+      device_name: 'iPhone 14',
+      last_ip: '31.173.80.7',
+      location: 'Saint Petersburg, Russia',
+      created_at: ago(60 * 24 * 3),
+      last_seen_at: ago(4),
+    }),
+    otherSession({
+      app_name: 'Web, Firefox',
+      device_name: 'Рабочий ноутбук',
+      last_ip: '95.165.1.1',
+      location: 'Moscow, Russia',
+      created_at: ago(60 * 24 * 12),
+      last_seen_at: ago(60 * 9),
+    }),
+    otherSession({
+      app_name: 'Web, Chrome',
+      device_name: 'Домашний ПК',
+      last_ip: '178.176.72.19',
+      location: 'Kazan, Russia',
+      created_at: ago(60 * 24 * 44),
+      last_seen_at: ago(60 * 24 * 2),
+    }),
+  ];
+}
+
+function realmSessions(realm: string): UserSession[] {
+  let list = sessionsByRealm.get(realm);
+  if (!list) {
+    list = seedSessions(realm);
+    sessionsByRealm.set(realm, list);
+  }
+  return list;
+}
+
+function bearer(request: Request): string {
+  const auth = request.headers.get('Authorization') ?? '';
+  return auth.startsWith('Bearer ') ? auth.slice(7) : '';
+}
+
+/** Пользователь по Bearer-токену; undefined → 401. */
+function authUser(request: Request): UserInfo | undefined {
+  return userByAccess.get(bearer(request));
+}
+
+/** Сессия, из которой пришёл запрос: относительно неё сервер считает is_current. */
+function callerSession(request: Request): MockSession | undefined {
+  const access = bearer(request);
+  if (!access) return undefined;
+  for (const session of sessionsByRefresh.values()) {
+    if (session.access === access) return session;
+  }
+  return undefined;
+}
+
+/** Полное закрытие сессии: убираем и из списка реалма, и из access/refresh-хранилищ. */
+function dropSession(refresh: string, session: MockSession): void {
+  sessionsByRefresh.delete(refresh);
+  userByAccess.delete(session.access);
+  const list = sessionsByRealm.get(session.realm);
+  if (list) {
+    sessionsByRealm.set(
+      session.realm,
+      list.filter((s) => s.session_id !== session.sessionId),
+    );
+  }
 }
 
 export const handlers = [
@@ -237,8 +359,21 @@ export const handlers = [
     const access = hex(64);
     const refresh = hex(64);
     const user = buildUser(op);
-    sessionsByRefresh.set(refresh, { access, user });
+    const sessionId = hex(8);
+    const now = new Date().toISOString();
+    sessionsByRefresh.set(refresh, { access, user, sessionId, realm: op.realm });
     userByAccess.set(access, user);
+    // is_current в хранилище всегда false — GET /v1/sessions выставит его вызывающей сессии.
+    realmSessions(op.realm).unshift({
+      session_id: sessionId,
+      app_name: 'Web, этот браузер',
+      device_name: 'Текущее устройство',
+      last_ip: '95.165.1.1',
+      location: 'Moscow, Russia',
+      created_at: now,
+      last_seen_at: now,
+      is_current: false,
+    });
     operations.delete(op.token);
 
     const payload: SuccessAccess = { access_token: access, expires_in: 1800 };
@@ -264,13 +399,15 @@ export const handlers = [
       return problem(401, 'Unauthorized', 'Сессия не найдена или refresh недействителен');
     }
 
-    // Ротация: новый access + новый refresh, sid сохраняется (в моке не моделируем sid явно).
+    // Ротация: новый access + новый refresh, sid (sessionId) сохраняется — сессия та же.
     userByAccess.delete(session.access);
     sessionsByRefresh.delete(refresh);
     const newAccess = hex(64);
     const newRefresh = hex(64);
-    sessionsByRefresh.set(newRefresh, { access: newAccess, user: session.user });
+    sessionsByRefresh.set(newRefresh, { ...session, access: newAccess });
     userByAccess.set(newAccess, session.user);
+    const current = realmSessions(session.realm).find((s) => s.session_id === session.sessionId);
+    if (current) current.last_seen_at = new Date().toISOString();
 
     const payload: SuccessAccess = { access_token: newAccess, expires_in: 1800 };
     if (cookies.RTID) {
@@ -282,20 +419,66 @@ export const handlers = [
     return HttpResponse.json({ ...payload, refresh_token: newRefresh }, { status: 200 });
   }),
 
-  // --- Закрытие сессии ---
-  http.delete(`${BASE}/v1/session`, ({ cookies }) => {
-    if (cookies.RTID) sessionsByRefresh.delete(cookies.RTID);
+  // --- Закрытие сессии (выход) ---
+  http.delete(`${BASE}/v1/session`, async ({ request, cookies }) => {
+    // Bearer обязателен (openapi: security bearerAuth, x-auth-scopes any-users) — в отличие от
+    // PATCH /v1/session, который продлевает сессию как раз тогда, когда access уже протух.
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Требуется авторизация');
+    let refresh: string | undefined = cookies.RTID;
+    if (!refresh) {
+      const body = (await request.json().catch(() => null)) as { refresh_token?: string } | null;
+      refresh = body?.refresh_token;
+    }
+    const session = refresh ? sessionsByRefresh.get(refresh) : undefined;
+    // Идемпотентно: неизвестный refresh — тоже 204, но чистим только то, что нашли.
+    if (refresh && session) dropSession(refresh, session);
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': 'RTID=; Path=/; Max-Age=0' },
     });
   }),
 
+  // --- Открытые сессии реалма ---
+  http.get(`${BASE}/v1/sessions`, ({ request }) => {
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Требуется авторизация');
+    const realm = new URL(request.url).searchParams.get('realm') ?? config.realm;
+    // is_current — не хранимый флаг, а свойство ответа: «та ли это сессия, из которой спросили».
+    const mine = callerSession(request);
+    const list = realmSessions(realm).map((s) => ({
+      ...s,
+      is_current: s.session_id === mine?.sessionId,
+    }));
+    return HttpResponse.json(list);
+  }),
+
+  // --- Закрытие перечисленных сессий ---
+  http.post(`${BASE}/v1/sessions/close`, async ({ request }) => {
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Требуется авторизация');
+    const body = (await request.json().catch(() => null)) as { session_ids?: string[] } | null;
+    const ids = body?.session_ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return fieldError('session_ids', 'Укажите хотя бы одну сессию');
+    }
+
+    const closing = new Set(ids);
+    // Реальные сессии (с токенами) закрываем целиком через общий dropSession — он снимает и список
+    // реалма, и access/refresh. Засеянные сессии-витрины токенов не имеют, поэтому список реалма
+    // всё равно доводим отдельным проходом.
+    for (const [refresh, session] of sessionsByRefresh) {
+      if (closing.has(session.sessionId)) dropSession(refresh, session);
+    }
+    for (const [realm, list] of sessionsByRealm) {
+      sessionsByRealm.set(
+        realm,
+        list.filter((s) => !closing.has(s.session_id)),
+      );
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   // --- Профиль текущего пользователя ---
   http.get(`${BASE}/v1/user`, ({ request }) => {
-    const auth = request.headers.get('Authorization') ?? '';
-    const access = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-    const user = userByAccess.get(access);
+    const user = authUser(request);
     if (!user) return problem(401, 'Unauthorized', 'Требуется авторизация');
     return HttpResponse.json(user);
   }),

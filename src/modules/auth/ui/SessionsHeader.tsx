@@ -1,6 +1,6 @@
-import { Chip, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
+import { FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { realmLabel, userKindLabel } from '../lib/realmLabel';
+import { realmLabel } from '../lib/realmLabel';
 import type { UserRealm } from '../api/types';
 
 /**
@@ -27,7 +27,6 @@ export function SessionsHeader({
     );
   }
 
-  const kind = realms.find((r) => r.name === value)?.user_kind;
   return (
     <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
@@ -49,7 +48,6 @@ export function SessionsHeader({
           ))}
         </Select>
       </FormControl>
-      {kind && <Chip size="small" label={userKindLabel(t, kind)} />}
     </Stack>
   );
 }

@@ -10,10 +10,17 @@ import {
   Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { formatRelativeTime } from '@core/i18n';
-import { fmt, useLocale } from '../lib/format';
+import { fmtLong, useLocale } from '../lib/format';
 import { Row } from './Row';
-import { TrashIcon } from './icons';
+import { TimeRow } from './TimeRow';
+import {
+  CalendarIcon,
+  ClockIcon,
+  HourglassIcon,
+  MapPinIcon,
+  NetworkIcon,
+  TrashIcon,
+} from './icons';
 import type { UserSession } from '../api/types';
 
 /**
@@ -41,7 +48,6 @@ export function SessionCard({
   const { t } = useTranslation();
   const locale = useLocale();
   const p = (key: string) => t(`auth.sessions.${key}`);
-  const seen = formatRelativeTime(session.last_seen_at, { locale, now, justNow: p('justNow') });
   const isCurrent = variant === 'current';
 
   return (
@@ -72,7 +78,7 @@ export function SessionCard({
                   disabled={isClosing || disabled}
                   onClick={onClose}
                 >
-                  {isClosing ? <CircularProgress size={20} color="inherit" /> : <TrashIcon />}
+                  {isClosing ? <CircularProgress size={18} color="inherit" /> : <TrashIcon size={18} />}
                 </IconButton>
               </span>
             </Tooltip>
@@ -80,13 +86,27 @@ export function SessionCard({
         </Stack>
 
         <Divider sx={{ mt: 1 }} />
-        <Row label={p('ip')} value={session.last_ip} />
-        <Row label={p('location')} value={session.location} />
-        <Row label={p('createdAt')} value={fmt(session.created_at, locale)} />
+        <Row label={p('ip')} value={session.last_ip} icon={<NetworkIcon size={12} />} />
+        {/* Локация опциональна (только если бэк её вычислил): нет данных — Row ставит прочерк,
+            строка не прячется — единая конвенция с «Локацией последнего входа» в профиле. */}
+        <Row label={p('location')} value={session.location} icon={<MapPinIcon size={12} />} />
         <Row
+          label={p('openedAt')}
+          value={fmtLong(session.created_at, locale)}
+          icon={<CalendarIcon size={12} />}
+        />
+        <TimeRow
           label={p('lastSeenAt')}
-          value={seen ? seen.label : fmt(session.last_seen_at, locale)}
-          title={seen?.title}
+          value={session.last_seen_at}
+          locale={locale}
+          now={now}
+          justNow={p('justNow')}
+          icon={<ClockIcon size={12} />}
+        />
+        <Row
+          label={p('expiresAt')}
+          value={fmtLong(session.expires_at, locale)}
+          icon={<HourglassIcon size={12} />}
         />
       </CardContent>
     </Card>

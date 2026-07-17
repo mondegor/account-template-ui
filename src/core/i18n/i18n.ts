@@ -4,8 +4,15 @@ import { getLanguage } from './languageProvider';
 
 /**
  * Единый инстанс i18next (+ react-i18next). Язык берём из languageProvider (браузер → явный
- * выбор юзера позже). Инвариант безопасности (plan.txt): interpolation.escapeValue: true —
- * значения экранируются на уровне i18next (React экранирует повторно, это defence-in-depth).
+ * выбор юзера позже).
+ *
+ * interpolation.escapeValue: false — штатная настройка react-i18next. Экранирует React: результат
+ * t() попадает в JSX как текст, а HTML-рендера переводов в проекте нет (<Trans> не используется,
+ * dangerouslySetInnerHTML запрещён линтом во всём src и отклоняется validateSchema). Второе
+ * экранирование не защищало, а портило данные: любой `/`, `&` или кавычка в значении
+ * интерполяции доезжали до экрана сущностями — английская дата `7/15/2026` показывалась как
+ * `7&#x2F;15&#x2F;2026` (кейс закреплён в i18n.test.ts). Если появится рендер переводов как
+ * HTML — экранировать нужно будет там, а не здесь.
  *
  * Один namespace `translation` с dotted-ключами: ядро несёт `common.*` (сообщения валидации
  * из схем), модули добавляют свою ветку (`auth.*`, ...) через addTranslations() при бутстрапе.
@@ -70,7 +77,7 @@ export function initI18n(): I18nInstance {
       ru: { translation: { common: commonRu } },
       en: { translation: { common: commonEn } },
     },
-    interpolation: { escapeValue: true },
+    interpolation: { escapeValue: false },
   });
   return i18next;
 }

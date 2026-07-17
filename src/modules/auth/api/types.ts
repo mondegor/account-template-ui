@@ -48,6 +48,8 @@ export interface OperationTokenRequest {
 export interface UserRealm {
   name: string;
   user_kind: string;
+  last_location?: string;
+  last_logged_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -56,13 +58,9 @@ export interface UserInfo {
   email: string;
   phone?: string;
   lang: string;
-  last_login_ip: string;
-  last_logged_at: string;
   auth_2fa_type: UserAuth2fa;
   realms: UserRealm[];
   status: UserStatus;
-  created_at: string;
-  updated_at: string;
 }
 
 /** Открытая сессия пользователя. session_id — 8 символов (в запросах длина фиксирована). */
@@ -71,9 +69,11 @@ export interface UserSession {
   app_name: string;
   device_name: string;
   last_ip: string;
-  location: string;
+  /** Только если было вычислено — в UI строка скрывается. */
+  location?: string;
   created_at: string;
   last_seen_at: string;
+  expires_at?: string;
   is_current: boolean;
 }
 

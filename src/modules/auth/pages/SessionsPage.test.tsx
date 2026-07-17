@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { addTranslations, initI18n, setLanguage } from '@core/i18n';
+import { addTranslations, formatDateTimeLong, initI18n, setLanguage } from '@core/i18n';
 import { deployTranslations } from '@app';
 import { registerBaseComponents } from '@core/renderer';
 import { registerModule, resetRegistry } from '@core/module-registry';
@@ -10,6 +10,7 @@ import { resetComponents, resetSchemas } from '@core/schema';
 import { realmProvider, useAuthStore } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
+import { cardWith, rowValue } from '../../../test/dom';
 import { closeUserSessions, getUserInfo, getUserSessions } from '../api/authApi';
 import { SessionsPage } from './SessionsPage';
 import type { UserInfo, UserSession } from '../api/types';
@@ -30,6 +31,7 @@ function session(id: string, device: string, isCurrent = false): UserSession {
     location: 'Moscow, Russia',
     created_at: '2026-07-01T10:00:00Z',
     last_seen_at: '2026-07-12T10:00:00Z',
+    expires_at: '2026-08-11T10:00:00Z',
     is_current: isCurrent,
   };
 }
@@ -42,13 +44,9 @@ function user(realms: UserInfo['realms']): UserInfo {
   return {
     email: 'user@example.com',
     lang: 'ru-RU',
-    last_login_ip: '95.165.1.1',
-    last_logged_at: '2026-07-12T10:00:00Z',
     auth_2fa_type: 'NONE',
     realms,
     status: 'ENABLED',
-    created_at: '2025-01-10T09:00:00Z',
-    updated_at: '2026-07-12T10:00:00Z',
   };
 }
 
@@ -119,7 +117,24 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderSessions() {
+/**
+ * Кабинет живёт в URL, а MemoryRouter наружу его не отдаёт — подсматриваем через useLocation.
+ * Рядом — ссылка на /sessions без параметра: точная копия пункта меню AppShell (тот же роут,
+ * component={Link}), которым проверяется откат на кабинет деплоя без размонтирования страницы.
+ */
+function RouterProbe() {
+  const { pathname, search } = useLocation();
+  return (
+    <>
+      <span data-testid="location">{pathname + search}</span>
+      <Link to="/sessions">nav-sessions</Link>
+    </>
+  );
+}
+
+const locationNow = () => screen.getByTestId('location').textContent;
+
+function renderSessions(url = '/sessions') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   return {
@@ -127,8 +142,9 @@ function renderSessions() {
     invalidate,
     ...render(
       <QueryClientProvider client={client}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[url]}>
           <SessionsPage />
+          <RouterProbe />
         </MemoryRouter>
       </QueryClientProvider>,
     ),
@@ -148,6 +164,38 @@ describe('SessionsPage', () => {
     const currentCard = screen.getByText('Это устройство').closest('.MuiCard-root')!;
     expect(within(currentCard as HTMLElement).queryByRole('button')).toBeNull();
     expect(within(currentCard as HTMLElement).getByText('Текущая')).toBeInTheDocument();
+  });
+
+  it('«Истекает» — абсолютная дата, формат как у «Открыта»', async () => {
+    renderSessions();
+    await screen.findByText('Это устройство');
+    expect(rowValue('Истекает', cardWith('Это устройство'))?.textContent).toBe(
+      formatDateTimeLong(new Date('2026-08-11T10:00:00Z'), 'ru-RU'),
+    );
+  });
+
+  it('нет expires_at (поле опционально) → «Истекает» с прочерком', async () => {
+    vi.mocked(getUserSessions).mockResolvedValue([{ ...CURRENT, expires_at: undefined }]);
+    renderSessions();
+    await screen.findByText('Это устройство');
+    expect(rowValue('Истекает', cardWith('Это устройство'))?.textContent).toBe('—');
+  });
+
+  it('местоположение без данных (нет поля или пустая строка) → прочерк, строка на месте', async () => {
+    vi.mocked(getUserSessions).mockResolvedValue([
+      CURRENT,
+      { ...OTHERS[0]!, location: undefined },
+      { ...OTHERS[1]!, location: '' },
+    ]);
+    renderSessions();
+    await screen.findByText('Это устройство');
+
+    const locationOf = (device: string) =>
+      rowValue('Местоположение', cardWith(device))?.textContent;
+    expect(locationOf('Это устройство')).toBe('Moscow, Russia');
+    // Как в профиле у «Локации последнего входа»: нет данных — прочерк, а не пропавшая строка.
+    expect(locationOf('iPhone 14')).toBe('—');
+    expect(locationOf('Домашний ПК')).toBe('—');
   });
 
   it('массовая кнопка идёт после карточки текущей сессии и до списка остальных', async () => {
@@ -250,6 +298,71 @@ describe('SessionsPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('выбор кабинета уезжает в URL — F5 и пересланная ссылка его сохранят', async () => {
+    renderSessions();
+    await screen.findByText('Это устройство');
+    expect(locationNow()).toBe('/sessions');
+
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+
+    await waitFor(() => expect(locationNow()).toBe(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`));
+  });
+
+  it('пункт меню «Сессии» (/sessions без параметра) откатывает на кабинет деплоя', async () => {
+    renderSessions(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`);
+    await waitFor(() => expect(screen.getByRole('combobox').textContent).toBe('Служебный'));
+
+    // Роут тот же — страница не размонтируется, инициализатор стейта не перезапустился бы. Пока
+    // кабинет жил в useState, он тут залипал: адрес /sessions, а на экране служебный кабинет.
+    fireEvent.click(screen.getByRole('link', { name: 'nav-sessions' }));
+
+    await waitFor(() => expect(locationNow()).toBe('/sessions'));
+    await waitFor(() => expect(screen.getByRole('combobox').textContent).toBe('Клиентский'));
+    await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(CURRENT_REALM));
+  });
+
+  it('?realm= из ссылки в профиле открывает сессии этого кабинета', async () => {
+    renderSessions(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`);
+
+    await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(OTHER_REALM));
+    // Кабинет деплоя не должен запрашиваться даже мельком: ссылка ведёт сразу в нужный.
+    expect(getUserSessions).not.toHaveBeenCalledWith(CURRENT_REALM);
+    await waitFor(() => expect(screen.getByText('Сессии (1)')).toBeInTheDocument());
+    expect(screen.getByRole('combobox').textContent).toBe('Служебный');
+  });
+
+  it('чужой ?realm= игнорируется — откат на кабинет деплоя и чистка адреса', async () => {
+    // URL правится руками: доступа к кабинету нет, запрос туда уходить не должен.
+    renderSessions('/sessions?realm=print-shop%2Fsomebody-else');
+
+    await screen.findByText('Это устройство');
+    expect(getUserSessions).toHaveBeenCalledWith(CURRENT_REALM);
+    expect(getUserSessions).not.toHaveBeenCalledWith('print-shop/somebody-else');
+    expect(screen.getByRole('combobox').textContent).toBe('Клиентский');
+    // Иначе адрес называл бы один кабинет, а экран показывал другой — и такую ссылку переслали бы.
+    await waitFor(() => expect(locationNow()).toBe('/sessions'));
+  });
+
+  it('чужой realm не сносит соседние query-параметры', async () => {
+    renderSessions('/sessions?realm=print-shop%2Fsomebody-else&keep=1');
+
+    await screen.findByText('Это устройство');
+    await waitFor(() => expect(locationNow()).toBe('/sessions?keep=1'));
+  });
+
+  it('выбор кабинета не сносит соседние query-параметры', async () => {
+    renderSessions('/sessions?keep=1');
+    await screen.findByText('Это устройство');
+
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+
+    await waitFor(() =>
+      expect(locationNow()).toBe(`/sessions?keep=1&realm=${encodeURIComponent(OTHER_REALM)}`),
+    );
+  });
+
   it('ошибка закрытия уходит вместе со списком, к которому относилась', async () => {
     vi.mocked(closeUserSessions).mockRejectedValue(new Error('500'));
     renderSessions();
@@ -264,6 +377,56 @@ describe('SessionsPage', () => {
     fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
 
     await waitFor(() => expect(screen.getByText('Сессии (1)')).toBeInTheDocument());
+    expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
+  });
+
+  it('ошибка закрытия уходит и когда кабинет сменил не комбобокс, а пункт меню', async () => {
+    // Комбобокс — не единственная дверь: кабинет живёт в URL, и пункт меню «Сессии» меняет его
+    // мимо selectRealm (тот же роут — страница не размонтируется). Ошибка всё равно относится к
+    // прошлому списку и обязана уйти вместе с ним, иначе висит над сессиями другого кабинета.
+    vi.mocked(closeUserSessions).mockRejectedValue(new Error('500'));
+    renderSessions(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`);
+    await screen.findByText('MacBook Pro');
+
+    fireEvent.click(trashButtons()[0]!);
+    expect(
+      await screen.findByText('Не удалось закрыть сессии. Попробуйте ещё раз.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('link', { name: 'nav-sessions' }));
+
+    await waitFor(() => expect(screen.getByText('Это устройство')).toBeInTheDocument());
+    expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
+  });
+
+  it('кабинет сменили посреди запроса → ошибка не всплывает над чужим списком и не ждёт возврата', async () => {
+    // Корзины на время запроса выключены, а комбобокс — нет: кабинет можно сменить, пока запрос в
+    // полёте, и тогда ошибка рождается уже над чужим списком. Гард по isPending на смене кабинета
+    // этот случай пропускал: сбрасывать было нечего (ошибки ещё нет), а второго шанса он не давал.
+    let fail: (e: Error) => void = () => {};
+    vi.mocked(closeUserSessions).mockImplementation(
+      () => new Promise<void>((_, reject) => (fail = reject)),
+    );
+    renderSessions();
+    await screen.findByText('Это устройство');
+
+    fireEvent.click(trashButtons()[0]!);
+    await waitFor(() => expect(closeUserSessions).toHaveBeenCalledTimes(1));
+
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    await screen.findByText('MacBook Pro');
+
+    // Ошибка приходит, когда на экране уже чужой кабинет. Оседания мутации ждём по корзине: пока
+    // запрос в полёте, она выключена — включилась, значит error уже долетел до стейта.
+    fail(new Error('500'));
+    await waitFor(() => expect(trashButtons()[0]!).toBeEnabled());
+    expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
+
+    // И не всплывает при возврате: стейт мутации выброшен, а не просто спрятан условием рендера.
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(within(screen.getByRole('listbox')).getByText('Клиентский'));
+    await screen.findByText('Это устройство');
     expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
   });
 

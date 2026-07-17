@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -21,7 +22,15 @@ import { closeUserSessions, getUserInfo, getUserSessions } from '../api/authApi'
 import { useNow } from '../lib/format';
 import { SessionCard } from '../ui/SessionCard';
 import { SessionsHeader } from '../ui/SessionsHeader';
-import { StopHandIcon } from '../ui/icons';
+import { PowerIcon } from '../ui/icons';
+
+/** Копия строки запроса с одним изменённым параметром (null → удалить); соседние остаются на месте. */
+function withParam(prev: URLSearchParams, key: string, value: string | null): URLSearchParams {
+  const next = new URLSearchParams(prev);
+  if (value === null) next.delete(key);
+  else next.set(key, value);
+  return next;
+}
 
 /**
  * Открытые сессии выбранного реалма. Текущая сессия выделяется отдельно — но только в реалме
@@ -37,7 +46,12 @@ export function SessionsPage() {
 
   const user = useQuery({ queryKey: moduleQueryKey('auth', 'user'), queryFn: getUserInfo });
   const currentRealm = realmProvider.getRealm();
-  const [selected, setSelected] = useState<string | null>(null);
+  // Кабинет живёт в URL, своего стейта у него нет — расходиться нечему. Ссылка «Сессии» из профиля
+  // ведёт на /sessions?realm=…, пункт меню — на /sessions без параметра, и тогда откат на кабинет
+  // деплоя; со стейтом меню кабинет не сбрасывало бы (роут тот же, компонент не размонтируется).
+  // Заодно F5 и пересланная ссылка сохраняют кабинет.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selected = searchParams.get('realm');
   // Тик «N минут назад» один на весь список: иначе каждая карточка держала бы свой setInterval.
   const now = useNow(60_000);
 
@@ -58,9 +72,11 @@ export function SessionsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // single различает клик по корзине конкретной сессии и «закрыть все»: по длине массива их не
-  // отличить — массовое закрытие единственной чужой сессии тоже шлёт один id.
+  // отличить — массовое закрытие единственной чужой сессии тоже шлёт один id. realm в запрос не
+  // уходит (ids глобальны), он нужен только чтобы потом узнать, к какому кабинету относится ошибка.
   const close = useMutation({
-    mutationFn: ({ ids }: { ids: string[]; single: boolean }) => closeUserSessions(ids),
+    mutationFn: ({ ids }: { ids: string[]; single: boolean; realm: string | undefined }) =>
+      closeUserSessions(ids),
     // Префикс, а не sessionsKey этого рендера: пока запрос в полёте, кабинет могли переключить —
     // тогда инвалидировался бы ключ нового кабинета, а список того, где сессию реально закрыли,
     // остался бы в кэше со старой сессией.
@@ -87,16 +103,38 @@ export function SessionsPage() {
     // Диалог мог остаться открытым после того, как список опустел (закрыли последнюю чужую сессию
     // одиночной кнопкой) — пустой mutate([]) ушёл бы в бэк и вернулся 422 «укажите хотя бы одну».
     if (others.length === 0) return;
-    close.mutate({ ids: others.map((s) => s.session_id), single: false });
+    close.mutate({ ids: others.map((s) => s.session_id), single: false, realm: effective });
   };
 
-  // Ошибка закрытия относилась к прошлому списку — вместе с ним и уходит: иначе алерт висел бы над
-  // корректно загруженными сессиями другого кабинета до следующего закрытия. Но только когда запрос
-  // не в полёте: reset() посреди pending снял бы disabled с корзин нового кабинета и пустил второй
-  // параллельный mutate. Ошибка живёт лишь в не-pending состоянии, так что алерт всё равно очистится.
+  // Ошибка закрытия относится к тому кабинету, в котором закрывали (realm в variables) — над списком
+  // другого она бессмысленна. Принадлежность именно выводим из мутации, а не сторожим отдельным
+  // стейтом: кабинет живёт в URL, и пункт меню «Сессии» (тот же роут — страница не размонтируется)
+  // или «назад» меняют его мимо selectRealm, так что «текущий» кабинет пришлось бы догонять.
+  const { isError: closeIsError, reset: closeReset } = close;
+  const failedRealm = close.variables?.realm;
+  const closeFailedHere = closeIsError && failedRealm === effective;
+  // Показ гасит условие выше — этот эффект лишь выбрасывает чужой стейт, чтобы ошибка не всплыла
+  // при возврате в тот кабинет. Deps — примитивы и стабильный reset, а не весь close: тот
+  // пересоздаётся каждый рендер, и эффект гонялся бы вхолостую на каждом тике now. Гард по
+  // isPending не нужен: isError и isPending взаимоисключающи, так что reset() посреди запроса
+  // (снял бы disabled с корзин и пустил второй mutate) невозможен.
+  useEffect(() => {
+    if (closeIsError && failedRealm !== effective) closeReset();
+  }, [closeIsError, failedRealm, effective, closeReset]);
+
+  // Чужой или протухший ?realm= уже отброшен (picked), но остаётся в адресной строке: URL называл
+  // бы один кабинет, а экран показывал другой — и такую ссылку переслали бы дальше. Чистим, но
+  // только когда профиль приехал: до этого realms пусты, и снесли бы валидный кабинет из ссылки.
+  useEffect(() => {
+    if (!user.isSuccess || selected === null || picked !== null) return;
+    setSearchParams((prev) => withParam(prev, 'realm', null), { replace: true });
+  }, [user.isSuccess, selected, picked, setSearchParams]);
+
+  // replace, а не push: переключения кабинета не копятся в истории — «назад» уводит на предыдущую
+  // страницу, а не гуляет по прошлым выборам. Правим только свой параметр: форма с объектом
+  // (setSearchParams({ realm })) заменила бы всю строку запроса и снесла бы соседние.
   const selectRealm = (realm: string) => {
-    setSelected(realm);
-    if (!close.isPending) close.reset();
+    setSearchParams((prev) => withParam(prev, 'realm', realm), { replace: true });
   };
 
   const listError = (sessions.error ?? null) as Error | null;
@@ -135,7 +173,7 @@ export function SessionsPage() {
         {!effective && <Alert severity="info">{p('noRealms')}</Alert>}
 
         {/* Ошибка закрытия не должна ронять список — показываем над ним. */}
-        {close.isError && <Alert severity="error">{p('closeError')}</Alert>}
+        {closeFailedHere && <Alert severity="error">{p('closeError')}</Alert>}
 
         {sessions.isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -158,7 +196,7 @@ export function SessionsPage() {
               variant="outlined"
               size="large"
               startIcon={
-                bulkPending ? <CircularProgress size={20} color="inherit" /> : <StopHandIcon />
+                bulkPending ? <CircularProgress size={20} color="inherit" /> : <PowerIcon />
               }
               disabled={others.length === 0 || close.isPending}
               onClick={() => setConfirmOpen(true)}
@@ -185,7 +223,9 @@ export function SessionsPage() {
                   now={now}
                   isClosing={closingId === s.session_id}
                   disabled={close.isPending}
-                  onClose={() => close.mutate({ ids: [s.session_id], single: true })}
+                  onClose={() =>
+                    close.mutate({ ids: [s.session_id], single: true, realm: effective })
+                  }
                 />
               ))
             )}

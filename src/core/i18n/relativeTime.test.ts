@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { formatRelativeTime } from './relativeTime';
 
 const BASE = '2026-07-11T12:00:00Z';
+// Ожидаемый полный формат выражен независимо от formatDateTimeLong: словесная дата + короткое
+// время, в русском «г.» после года вырезано (`\s` — потому что вид пробела зависит от ICU).
+const longRu = (iso: string) =>
+  new Date(iso)
+    .toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' })
+    .replace(/\sг\./, '');
 const base = new Date(BASE).getTime();
 const at = (ms: number) => base + ms; // «now» = базовый момент + смещение
 
@@ -40,9 +46,10 @@ describe('formatRelativeTime (ru) — таблица апроксимации', 
   it('6 дней → «6 дней назад»', () => {
     expect(ru(BASE, at(6 * DAY))?.label).toBe('6 дней назад');
   });
-  it('40 дней → абсолютная дата-время (== toLocaleString)', () => {
+  it('40 дней → абсолютная дата-время словами, без «г.»', () => {
     const res = ru(BASE, at(40 * DAY));
-    expect(res?.label).toBe(new Date(BASE).toLocaleString('ru-RU'));
+    expect(res?.label).toBe(longRu(BASE));
+    expect(res?.label).not.toContain(' г.');
     expect(res?.label).toBe(res?.title);
   });
 });
@@ -60,8 +67,8 @@ describe('formatRelativeTime (en)', () => {
 });
 
 describe('formatRelativeTime — прочее', () => {
-  it('title всегда = полная дата-время в локали', () => {
-    expect(ru(BASE, at(5 * MIN))?.title).toBe(new Date(BASE).toLocaleString('ru-RU'));
+  it('title всегда = полная дата-время словами', () => {
+    expect(ru(BASE, at(5 * MIN))?.title).toBe(longRu(BASE));
   });
   it('битая дата → null', () => {
     expect(ru('не-дата', at(0))).toBeNull();
@@ -69,7 +76,17 @@ describe('formatRelativeTime — прочее', () => {
   it('пустое значение → null', () => {
     expect(formatRelativeTime(undefined, { locale: 'ru-RU', now: base, justNow: '—' })).toBeNull();
   });
-  it('время в будущем (skew) < минуты → «только что»', () => {
+  it('время в будущем в пределах допуска на рассинхрон часов → «только что»', () => {
     expect(ru(BASE, at(-10 * SEC))?.label).toBe('только что');
+    // Клиент без NTP запросто отстаёт на пару минут — свежие серверные метки не должны
+    // разом превращаться в абсолютные даты.
+    expect(ru(BASE, at(-3 * MIN))?.label).toBe('только что');
+  });
+  it('время в будущем дальше допуска → абсолютная дата, а не вечное «только что»', () => {
+    // Больше, чем терпимый рассинхрон часов, — относительное время врало бы; TZ-баг бэка
+    // (метка на день вперёд) висел бы «только что», пока now её не догонит.
+    const res = ru(BASE, at(-3 * DAY));
+    expect(res?.label).toBe(longRu(BASE));
+    expect(res?.label).toBe(res?.title);
   });
 });

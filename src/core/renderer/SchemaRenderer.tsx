@@ -6,7 +6,7 @@ import { FormRenderer } from './FormRenderer';
  * Рекурсивный рендер дерева схемы → React. По `type` берёт компонент из componentRegistry; узел
  * `form` — спец-обработка (FormRenderer ставит контекст react-hook-form). Инвариант безопасности
  * (plan.txt): fail-closed на незарегистрированный тип (не рендерим произвольное), запрет
- * dangerouslySetInnerHTML во всём каталоге renderer (ESLint).
+ * dangerouslySetInnerHTML во всём src (ESLint) — на нём же держится escapeValue: false в i18n.
  *
  * schemaId (id корневого узла) прокидывается через контекст — FormRenderer по нему берёт обработчик.
  */

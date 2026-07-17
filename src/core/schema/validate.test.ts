@@ -46,6 +46,9 @@ describe('validateSchema', () => {
 
   it('отклоняет dangerouslySetInnerHTML и прочие посторонние ключи', () => {
     expect(() =>
+      // Единственное легальное упоминание пропа: это данные для валидатора, а не рендер. Тест и
+      // проверяет, что схема с ним не проходит, — то есть охраняет тот же инвариант, что и линт.
+      // eslint-disable-next-line no-restricted-syntax
       validateSchema({ type: 'text', props: { dangerouslySetInnerHTML: { __html: 'x' } } }),
     ).toThrow(SchemaValidationError);
     expect(() => validateSchema({ type: 'text', onClick: 'alert(1)' })).toThrow(

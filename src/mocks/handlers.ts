@@ -98,44 +98,51 @@ function waiting(op: MockOperation, message: string): WaitingConfirmOperation {
 }
 
 function buildUser(op: MockOperation): UserInfo {
-  const now = new Date().toISOString();
   const isEmail = op.login.includes('@');
+  const registered = '2025-01-10T09:00:00.000+03:00';
+  const staffRegistered = '2025-03-02T14:30:00.000+03:00';
   return {
     email: isEmail ? op.login : 'user@example.com',
     phone: isEmail ? undefined : op.login,
     lang: 'ru-RU',
-    last_login_ip: '95.165.1.1',
-    last_logged_at: now,
     auth_2fa_type: 'NONE',
     realms: [
       {
         name: op.realm,
         user_kind: 'standard',
-        created_at: '2025-01-10T09:00:00.000+03:00',
-        updated_at: now,
+        last_location: 'Moscow, RU',
+        // buildUser зовётся в момент подтверждения входа — «последний вход» и есть этот вход,
+        // иначе свежезалогинившийся видел бы в профиле вход, которого не было.
+        last_logged_at: ago(0),
+        created_at: registered,
+        updated_at: registered,
       },
       // Второй кабинет — только в multi-режиме: без него UI показывает одиночный вариант
-      // (нет карточки «Кабинеты» в профиле, нет выбора кабинета на /sessions).
+      // (в профиле один блок с заголовком «Учётная запись», на /sessions нет выбора кабинета).
+      // Заодно это ветка «данных нет»: отсутствие last_location/last_logged_at даёт прочерки.
       ...(MOCK_MULTI_REALM
         ? [
             {
               name: SECOND_REALM,
               user_kind: 'staff',
-              created_at: '2025-03-02T14:30:00.000+03:00',
-              updated_at: now,
+              created_at: staffRegistered,
+              updated_at: staffRegistered,
             },
           ]
         : []),
     ],
     status: 'ENABLED',
-    created_at: '2025-01-10T09:00:00.000+03:00',
-    updated_at: now,
   };
 }
 
 /** ISO-время «N минут назад» — чтобы в сиде было и относительное («5 минут назад»), и абсолютное. */
 function ago(minutes: number): string {
   return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+/** ISO-время «через N минут» — expires_at сессий всегда в будущем. */
+function ahead(minutes: number): string {
+  return ago(-minutes);
 }
 
 function otherSession(s: Omit<UserSession, 'session_id' | 'is_current'>): UserSession {
@@ -153,14 +160,16 @@ function seedSessions(realm: string): UserSession[] {
         location: 'Moscow, Russia',
         created_at: ago(60 * 24 * 5),
         last_seen_at: ago(7),
+        expires_at: ahead(60 * 24 * 25),
       }),
+      // Без location — ветка «бэк не вычислил местоположение», в карточке прочерк.
       otherSession({
         app_name: 'API, curl',
         device_name: 'CI runner',
         last_ip: '10.8.0.14',
-        location: 'Frankfurt, Germany',
         created_at: ago(60 * 24 * 30),
         last_seen_at: ago(60 * 26),
+        expires_at: ahead(60 * 24 * 1),
       }),
     ];
   }
@@ -172,6 +181,7 @@ function seedSessions(realm: string): UserSession[] {
       location: 'Saint Petersburg, Russia',
       created_at: ago(60 * 24 * 3),
       last_seen_at: ago(4),
+      expires_at: ahead(60 * 24 * 27),
     }),
     otherSession({
       app_name: 'Web, Firefox',
@@ -180,6 +190,7 @@ function seedSessions(realm: string): UserSession[] {
       location: 'Moscow, Russia',
       created_at: ago(60 * 24 * 12),
       last_seen_at: ago(60 * 9),
+      expires_at: ahead(60 * 24 * 18),
     }),
     otherSession({
       app_name: 'Web, Chrome',
@@ -188,6 +199,7 @@ function seedSessions(realm: string): UserSession[] {
       location: 'Kazan, Russia',
       created_at: ago(60 * 24 * 44),
       last_seen_at: ago(60 * 24 * 2),
+      expires_at: ahead(60 * 24 * 10),
     }),
   ];
 }
@@ -372,6 +384,7 @@ export const handlers = [
       location: 'Moscow, Russia',
       created_at: now,
       last_seen_at: now,
+      expires_at: ahead(60 * 24 * 30),
       is_current: false,
     });
     operations.delete(op.token);

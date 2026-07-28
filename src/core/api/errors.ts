@@ -7,7 +7,7 @@ import type {
 } from './types';
 
 /**
- * Классы ошибок по форме тела (backend_answers §5, §6):
+ * Классы ошибок по форме тела:
  *  - ApiFieldError  — 400 application/json: ошибки полей (+ опц. operation_state) → на форму/движок.
  *  - ApiProblemError — RFC 9457 problem+json: 401/403/404/5xx → глобальные уведомления.
  *  - ApiTransportError — сеть/таймаут/неизвестное.

@@ -4,7 +4,7 @@ import type { SchemaNode } from './types';
 /**
  * Реестр `componentType → React-компонент`. Базовые типы регистрирует ядро
  * (registerBaseComponents), модули добавляют свои (напр. confirmOperation) — не трогая ядро.
- * Дубль типа → fail-fast (override базовых запрещён, plan.txt §«Конфликты id»).
+ * Дубль типа → fail-fast (override базовых запрещён).
  */
 
 export interface NodeComponentProps {

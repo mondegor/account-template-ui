@@ -3,9 +3,9 @@ import type { TFunction } from 'i18next';
 import { isFieldType, type FieldValidation, type SchemaNode } from '@core/schema';
 
 /**
- * Генерация zod-схемы формы из JSON `validation` полей (plan.txt §«Валидация»). Сообщения —
- * i18n-ключи из namespace `common.validation`, резолвятся переданным t → в error.message уже
- * готовый к показу текст. Ограничения (min/max) приходят из openapi через сам JSON.
+ * Генерация zod-схемы формы из JSON `validation` полей. Сообщения — i18n-ключи из namespace
+ * `common.validation`, резолвятся переданным t → в error.message уже готовый к показу текст.
+ * Ограничения (min/max) приходят из openapi через сам JSON.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

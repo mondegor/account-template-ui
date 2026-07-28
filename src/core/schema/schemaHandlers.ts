@@ -15,10 +15,7 @@ export interface HandlerContext {
   dispatchOperation: (action: OperationAction) => void;
 }
 
-export type SchemaHandler = (
-  values: Record<string, unknown>,
-  ctx: HandlerContext,
-) => Promise<void>;
+export type SchemaHandler = (values: Record<string, unknown>, ctx: HandlerContext) => Promise<void>;
 
 /** Возвращает текст ошибки (готовый к показу) или null, если значение валидно. */
 export type AsyncValidator = (

@@ -51,13 +51,7 @@ export interface NodeProps {
   variant?: 'contained' | 'outlined' | 'text' | 'filled' | 'standard';
   color?: 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
   autoComplete?:
-    | 'email'
-    | 'username'
-    | 'current-password'
-    | 'new-password'
-    | 'one-time-code'
-    | 'tel'
-    | 'off';
+    'email' | 'username' | 'current-password' | 'new-password' | 'one-time-code' | 'tel' | 'off';
   placeholder?: string;
   inputMode?: 'text' | 'numeric' | 'tel' | 'email';
   fullWidth?: boolean;

@@ -310,7 +310,9 @@ describe('SessionsPage', () => {
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
 
-    await waitFor(() => expect(locationNow()).toBe(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`));
+    await waitFor(() =>
+      expect(locationNow()).toBe(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`),
+    );
   });
 
   it('пункт меню «Сессии» (/sessions без параметра) откатывает на кабинет деплоя', async () => {

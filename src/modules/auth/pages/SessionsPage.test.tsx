@@ -40,10 +40,14 @@ const CURRENT = session('aaaaaaaa', 'Это устройство', true);
 const OTHERS = [session('bbbbbbbb', 'iPhone 14'), session('cccccccc', 'Домашний ПК')];
 const ADMIN_SESSIONS = [session('dddddddd', 'MacBook Pro')];
 
+/** Пояс профиля фикстуры: даты карточек считаются по нему, а не по зоне процесса. */
+const PROFILE_TZ = 'Europe/Moscow';
+
 function user(realms: UserInfo['realms']): UserInfo {
   return {
     email: 'user@example.com',
     lang: 'ru-RU',
+    tz: PROFILE_TZ,
     auth_2fa_type: 'NONE',
     realms,
     status: 'ENABLED',
@@ -170,7 +174,7 @@ describe('SessionsPage', () => {
     renderSessions();
     await screen.findByText('Это устройство');
     expect(rowValue('Истекает', cardWith('Это устройство'))?.textContent).toBe(
-      formatDateTimeLong(new Date('2026-08-11T10:00:00Z'), 'ru-RU'),
+      formatDateTimeLong(new Date('2026-08-11T10:00:00Z'), 'ru-RU', PROFILE_TZ),
     );
   });
 

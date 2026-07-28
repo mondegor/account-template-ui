@@ -90,3 +90,38 @@ describe('formatRelativeTime — прочее', () => {
     expect(res?.label).toBe(res?.title);
   });
 });
+
+/**
+ * Пояс отображения. Он обязан доезжать не только до `title`, но и до `label`: старше порога
+ * и «из будущего» подпись сама становится абсолютной датой — именно этой веткой рисуются даты
+ * регистрации. Сама арифметика «N назад» считается на абсолютных дельтах и от пояса не зависит.
+ */
+describe('formatRelativeTime — пояс отображения', () => {
+  const tokyo = (iso: string, now: number) =>
+    formatRelativeTime(iso, {
+      locale: 'ru-RU',
+      now,
+      justNow: 'только что',
+      timeZone: 'Asia/Tokyo',
+    });
+
+  it('title считается в заданном поясе', () => {
+    // 12:00 UTC = 21:00 в Токио.
+    expect(tokyo(BASE, at(5 * MIN))?.title).toContain('21:00');
+    expect(ru(BASE, at(5 * MIN))?.title).not.toContain('21:00');
+  });
+
+  it('абсолютный label (старше порога) — тоже в заданном поясе', () => {
+    const res = tokyo(BASE, at(40 * DAY));
+    expect(res?.label).toContain('21:00');
+    expect(res?.label).toBe(res?.title);
+  });
+
+  it('абсолютный label метки «из будущего» — тоже в заданном поясе', () => {
+    expect(tokyo(BASE, at(-3 * DAY))?.label).toContain('21:00');
+  });
+
+  it('относительная подпись от пояса не зависит', () => {
+    expect(tokyo(BASE, at(5 * MIN))?.label).toBe(ru(BASE, at(5 * MIN))?.label);
+  });
+});

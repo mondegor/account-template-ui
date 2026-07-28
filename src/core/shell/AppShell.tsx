@@ -19,7 +19,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { buildNav } from '@core/module-registry';
 import { logout, useAuthStore } from '@core/auth';
-import { isEnglish, setLanguage } from '@core/i18n';
+import { DEFAULT_LANGUAGE, LANGUAGES, findLanguage, setLanguage } from '@core/i18n';
 import { useThemeMode } from './themeMode';
 import { LangFlag } from './LangFlag';
 
@@ -172,21 +172,27 @@ function LogOutGlyph() {
   );
 }
 
-const LANG_NAME: Record<'ru' | 'en', string> = { ru: 'Русский', en: 'English' };
-
-/** Переключатель языка ru⇄en: только флаг + тултип; клик — смена языка (провайдер + i18next). */
+/**
+ * Переключатель языка: только флаг + тултип; клик — следующий язык справочника по кругу
+ * (провайдер + i18next). Список и подписи берём из data/languages.json, чтобы новый язык
+ * добавлялся правкой одного файла, а не кода шелла.
+ *
+ * Это регулятор ЯЗЫКА ОТОБРАЖЕНИЯ: выбор становится источником `local` и держится, пока
+ * пользователь сам его не сменит, — сохранение настроек профиля его не перебивает.
+ */
 function LanguageButton() {
   const { i18n } = useTranslation();
-  const current = isEnglish(i18n.language ?? '') ? 'en' : 'ru';
+  const current = findLanguage(i18n.language) ?? DEFAULT_LANGUAGE;
   const toggle = () => {
-    const next = current === 'ru' ? 'en' : 'ru';
-    setLanguage(next);
-    void i18n.changeLanguage(next);
+    const idx = LANGUAGES.findIndex((l) => l.code === current.code);
+    const next = LANGUAGES[(idx + 1) % LANGUAGES.length]!;
+    setLanguage(next.code);
+    void i18n.changeLanguage(next.code);
   };
   return (
-    <Tooltip title={LANG_NAME[current]}>
-      <IconButton size="small" color="inherit" onClick={toggle} aria-label={LANG_NAME[current]}>
-        <LangFlag lang={current} />
+    <Tooltip title={current.name}>
+      <IconButton size="small" color="inherit" onClick={toggle} aria-label={current.name}>
+        <LangFlag lang={current.code} />
       </IconButton>
     </Tooltip>
   );

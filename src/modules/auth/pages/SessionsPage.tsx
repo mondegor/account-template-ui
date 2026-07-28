@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { AppShell } from '@core/shell';
 import { realmProvider } from '@core/auth';
+import { resolveTimeZone } from '@core/i18n';
 import { moduleQueryKey } from '@core/module-registry';
 import { closeUserSessions, getUserInfo, getUserSessions } from '../api/authApi';
 import { useNow } from '../lib/format';
@@ -54,6 +55,8 @@ export function SessionsPage() {
   const selected = searchParams.get('realm');
   // Тик «N минут назад» один на весь список: иначе каждая карточка держала бы свой setInterval.
   const now = useNow(60_000);
+  // Пояс профиля проверяем один раз на страницу — вниз идёт уже пригодное значение (см. ProfilePage).
+  const timeZone = resolveTimeZone(user.data?.tz);
 
   const realms = user.data?.realms ?? [];
   // Выбор пользователя действует, только пока такой кабинет у него есть: профиль мог перезапроситься
@@ -188,7 +191,9 @@ export function SessionsPage() {
         {sessions.isSuccess && (
           <>
             {/* Подписи над карточкой нет: её метит чип «Текущая» и акцентная рамка. */}
-            {current && <SessionCard session={current} variant="current" now={now} />}
+            {current && (
+              <SessionCard session={current} variant="current" timeZone={timeZone} now={now} />
+            )}
 
             <Button
               fullWidth
@@ -220,6 +225,7 @@ export function SessionsPage() {
                   key={s.session_id}
                   session={s}
                   variant="other"
+                  timeZone={timeZone}
                   now={now}
                   isClosing={closingId === s.session_id}
                   disabled={close.isPending}

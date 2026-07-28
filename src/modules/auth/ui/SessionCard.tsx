@@ -30,6 +30,7 @@ import type { UserSession } from '../api/types';
 export function SessionCard({
   session,
   variant,
+  timeZone,
   now,
   onClose,
   isClosing,
@@ -37,6 +38,8 @@ export function SessionCard({
 }: {
   session: UserSession;
   variant: 'current' | 'other';
+  /** Пояс профиля — приходит пропом от страницы; локаль, в отличие от него, берётся хуком. */
+  timeZone?: string;
   /** Общий тик списка: таймер один на страницу, а не по одному на карточку. */
   now: number;
   onClose?: () => void;
@@ -78,7 +81,11 @@ export function SessionCard({
                   disabled={isClosing || disabled}
                   onClick={onClose}
                 >
-                  {isClosing ? <CircularProgress size={18} color="inherit" /> : <TrashIcon size={18} />}
+                  {isClosing ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <TrashIcon size={18} />
+                  )}
                 </IconButton>
               </span>
             </Tooltip>
@@ -92,20 +99,21 @@ export function SessionCard({
         <Row label={p('location')} value={session.location} icon={<MapPinIcon size={12} />} />
         <Row
           label={p('openedAt')}
-          value={fmtLong(session.created_at, locale)}
+          value={fmtLong(session.created_at, locale, timeZone)}
           icon={<CalendarIcon size={12} />}
         />
         <TimeRow
           label={p('lastSeenAt')}
           value={session.last_seen_at}
           locale={locale}
+          timeZone={timeZone}
           now={now}
           justNow={p('justNow')}
           icon={<ClockIcon size={12} />}
         />
         <Row
           label={p('expiresAt')}
-          value={fmtLong(session.expires_at, locale)}
+          value={fmtLong(session.expires_at, locale, timeZone)}
           icon={<HourglassIcon size={12} />}
         />
       </CardContent>

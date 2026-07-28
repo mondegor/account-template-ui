@@ -18,11 +18,15 @@ import { ProfilePage } from './ProfilePage';
  * ProfilePage больше не содержит хардкод-строк: подписи резолвятся из `auth.profile.*`, поэтому при
  * смене языка меняются вместе с остальной чромой. Мокаем getUserInfo (данные) и проверяем ru→en.
  */
+/** Пояс профиля фикстуры: даты на экране обязаны считаться по нему, а не по зоне процесса. */
+const PROFILE_TZ = 'Europe/Moscow';
+
 vi.mock('../api/authApi', () => ({
   getUserInfo: vi.fn(async () => ({
     email: 'user@example.com',
     phone: '+7 900 000-00-00',
-    lang: 'ru',
+    lang: 'ru-RU',
+    tz: 'Europe/Moscow',
     auth_2fa_type: 'NONE',
     realms: [
       {
@@ -97,12 +101,12 @@ describe('ProfilePage (i18n)', () => {
     expect(screen.getByText('Безопасность')).toBeInTheDocument();
   });
 
-  it('«Зарегистрирован» выводит только дату', async () => {
+  it('«Зарегистрирован» выводит только дату, в поясе профиля', async () => {
     await i18next.changeLanguage('ru');
     renderProfile();
     await screen.findByText('Зарегистрирован');
     expect(rowValue('Зарегистрирован')?.textContent).toBe(
-      new Date('2026-07-01T10:00:00Z').toLocaleDateString('ru-RU'),
+      new Date('2026-07-01T10:00:00Z').toLocaleDateString('ru-RU', { timeZone: PROFILE_TZ }),
     );
   });
 
@@ -120,12 +124,30 @@ describe('ProfilePage (i18n)', () => {
       expect(value?.textContent).toBe('5 минут назад');
       // Формат title — забота formatDateTimeLong и её тестов (relativeTime.test); здесь проверяем
       // только проводку значения, поэтому эталон берём из той же функции, а не собираем руками.
+      // Пояс — из профиля (не браузера): в этом и смысл проводки timeZone до TimeRow.
       expect(value?.getAttribute('title')).toBe(
-        formatDateTimeLong(new Date('2026-07-01T10:00:00Z'), 'ru-RU'),
+        formatDateTimeLong(new Date('2026-07-01T10:00:00Z'), 'ru-RU', PROFILE_TZ),
       );
     } finally {
       nowSpy.mockRestore();
     }
+  });
+
+  it('зона профиля, неизвестная ICU браузера, не роняет страницу', async () => {
+    // Имя приходит из справочника сервера, а форматирует ICU браузера — списки не обязаны
+    // совпадать (переименования приезжают с задержкой). Без resolveTimeZone одна такая зона
+    // роняла бы RangeError-ом весь профиль, а не одну строку.
+    const info = await vi.mocked(getUserInfo)();
+    vi.mocked(getUserInfo).mockResolvedValueOnce({ ...info, tz: 'Foo/Bar' });
+
+    await i18next.changeLanguage('ru');
+    renderProfile();
+
+    expect(await screen.findByText('Личные данные')).toBeInTheDocument();
+    // Даты отрисованы — в поясе браузера, как фолбэк.
+    expect(rowValue('Зарегистрирован')?.textContent).toBe(
+      new Date('2026-07-01T10:00:00Z').toLocaleDateString('ru-RU'),
+    );
   });
 
   it('en: подписи переключаются на английский', async () => {
@@ -135,6 +157,72 @@ describe('ProfilePage (i18n)', () => {
     expect(screen.getByText('Account')).toBeInTheDocument();
     expect(screen.getByText('Phone')).toBeInTheDocument();
     expect(screen.getByText('Security')).toBeInTheDocument();
+  });
+});
+
+describe('ProfilePage (язык и часовой пояс)', () => {
+  const personalCard = () => cardWith('Личные данные');
+
+  beforeEach(async () => {
+    setLanguage('ru');
+    await i18next.changeLanguage('ru');
+  });
+
+  it('язык показан названием, сырая локаль — в подсказке', async () => {
+    renderProfile();
+    await screen.findByText('Личные данные');
+
+    // На экране «Русский», а не ru-RU: техническое значение прячем в title (он на обёртке
+    // значения — у строки языка значение это узел с флагом, а не просто текст).
+    expect(rowValue('Язык')?.textContent).toBe('Русский');
+    expect(within(personalCard() as HTMLElement).getByTitle('ru-RU')).toBeInTheDocument();
+  });
+
+  it('часовой пояс показан подписью из справочника, IANA-имя — в подсказке', async () => {
+    renderProfile();
+    await screen.findByText('Личные данные');
+
+    expect(rowValue('Часовой пояс')?.textContent).toBe('(UTC+03:00) Москва, Санкт-Петербург');
+    expect(rowValue('Часовой пояс')?.getAttribute('title')).toBe(PROFILE_TZ);
+  });
+
+  it('незнакомые фронту язык и зона: язык как есть, зона — с посчитанным смещением', async () => {
+    const info = await vi.mocked(getUserInfo)();
+    vi.mocked(getUserInfo).mockResolvedValueOnce({
+      ...info,
+      lang: 'de-DE',
+      tz: 'Antarctica/Troll',
+    });
+    renderProfile();
+    await screen.findByText('Личные данные');
+
+    // Бэк мог завести язык или зону, которых во фронте ещё нет — врать про них нельзя.
+    // Языку подписи взять неоткуда, поэтому сырая локаль; зоне смещение считает timeZoneLabel,
+    // и выглядит она как остальные пункты — здесь и в селекте настроек одинаково.
+    expect(rowValue('Язык')?.textContent).toBe('de-DE');
+    expect(rowValue('Часовой пояс')?.textContent).toBe('(UTC+00:00) Antarctica/Troll');
+  });
+
+  it('зона, непригодная для Intl: подсказка честно говорит, в каком поясе даты', async () => {
+    // Строка показывает зону профиля, а даты рядом уходят в пояс браузера — молчать об этом
+    // нельзя, иначе страница утверждает один пояс, а рисует время в другом.
+    const info = await vi.mocked(getUserInfo)();
+    vi.mocked(getUserInfo).mockResolvedValueOnce({ ...info, tz: 'Foo/Bar' });
+    renderProfile();
+    await screen.findByText('Личные данные');
+
+    expect(rowValue('Часовой пояс')?.getAttribute('title')).toBe(
+      'Foo/Bar — этот пояс не знает браузер, даты показаны в поясе устройства',
+    );
+  });
+
+  it('ссылка «Настройки» из карточки ведёт на /settings', async () => {
+    renderProfile();
+    await screen.findByText('Личные данные');
+
+    // Ищем внутри карточки: в навигации AppShell есть одноимённый пункт.
+    const link = within(personalCard() as HTMLElement).getByRole('link', { name: /Настройки/ });
+    expect(link).toHaveAttribute('href', '/settings');
   });
 });
 
@@ -291,11 +379,13 @@ describe('ProfilePage (несколько кабинетов)', () => {
 
     // Видимый текст ссылок один — «Сессии»; различает их доступное имя с названием кабинета, так
     // что глобальный поиск по роли находит каждую однозначно (иначе скринридеру — «Сессии, Сессии»).
-    expect(
-      screen.getByRole('link', { name: 'Сессии кабинета «Клиентский»' }),
-    ).toHaveAttribute('href', '/sessions?realm=print-shop%2Fstandard');
-    expect(
-      screen.getByRole('link', { name: 'Сессии кабинета «Служебный»' }),
-    ).toHaveAttribute('href', '/sessions?realm=print-shop%2Fadmin');
+    expect(screen.getByRole('link', { name: 'Сессии кабинета «Клиентский»' })).toHaveAttribute(
+      'href',
+      '/sessions?realm=print-shop%2Fstandard',
+    );
+    expect(screen.getByRole('link', { name: 'Сессии кабинета «Служебный»' })).toHaveAttribute(
+      'href',
+      '/sessions?realm=print-shop%2Fadmin',
+    );
   });
 });

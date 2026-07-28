@@ -1,5 +1,5 @@
 import { formatDateTimeLong } from './dateTime';
-import { memoByLocale } from './intlCache';
+import { memoByKey } from './intlCache';
 
 /**
  * Относительное «X назад» с апроксимацией до одной единицы (минута/час/день).
@@ -24,14 +24,20 @@ const DEFAULT_ABSOLUTE_AFTER_MS = 30 * DAY;
 // прощают бытовой дрейф, а реальный TZ-баг бэка (метка на час/сутки вперёд) ловят по-прежнему.
 const FUTURE_SKEW_MS = 5 * MINUTE;
 
-// Кэш по локали (memoByLocale): formatRelativeTime зовётся каждой карточкой на каждый
+// Кэш по локали (memoByKey): formatRelativeTime зовётся каждой карточкой на каждый
 // минутный тик useNow.
-const rtfFor = memoByLocale((locale) => new Intl.RelativeTimeFormat(locale, { numeric: 'always' }));
+const rtfFor = memoByKey((locale) => new Intl.RelativeTimeFormat(locale, { numeric: 'always' }));
 
 export interface RelativeTimeOptions {
   locale: string;
   now: number;
   justNow: string;
+  /**
+   * Пояс отображения (пояс профиля). Нужен и для `title`, и для `label`: старше порога и «из
+   * будущего» подпись сама становится абсолютной датой — именно этой веткой рисуются даты
+   * регистрации. Арифметика «N назад» считается на абсолютных дельтах и от пояса не зависит.
+   */
+  timeZone?: string;
   /** Порог перехода к абсолютной дате; по умолчанию 30 дней. */
   absoluteAfterMs?: number;
 }
@@ -46,8 +52,8 @@ export function formatRelativeTime(
   const ms = d.getTime();
   if (Number.isNaN(ms)) return null;
 
-  const { locale, now, justNow, absoluteAfterMs = DEFAULT_ABSOLUTE_AFTER_MS } = opts;
-  const title = formatDateTimeLong(d, locale);
+  const { locale, now, justNow, timeZone, absoluteAfterMs = DEFAULT_ABSOLUTE_AFTER_MS } = opts;
+  const title = formatDateTimeLong(d, locale, timeZone);
   const diff = now - ms;
 
   // Метка из будущего: в пределах FUTURE_SKEW_MS — рассинхрон часов («только что»),

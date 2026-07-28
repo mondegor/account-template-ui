@@ -1,5 +1,13 @@
 import { http, HttpResponse } from 'msw';
 import { config } from '@config';
+import {
+  DEFAULT_LANGUAGE,
+  LANGUAGES,
+  findLanguage,
+  findTimeZone,
+  resolveTimeZone,
+} from '@core/i18n';
+import { isoIn, matchHeaderTz } from './serverTime';
 import type { SuccessAccess, UserInfo, UserSession, WaitingConfirmOperation } from '@modules/auth';
 
 /**
@@ -13,6 +21,30 @@ const MOCK_CODE = '183947';
 const SECOND_REALM = 'print-shop/admin';
 /** Мок-онли: 0 = у пользователя один кабинет (UI без выбора кабинета). Живёт здесь, а не в config. */
 const MOCK_MULTI_REALM = import.meta.env.VITE_MOCK_MULTI_REALM !== '0';
+
+/**
+ * Мок-онли: зона, которую «сервер не знает». В справочнике фронта она есть, поэтому её видно
+ * в селекте, а сохранение возвращает 400 по полю `tz` — так руками проверяется ветка, ради которой
+ * явные значения и объявлены строгими: список фронта — копия серверного и однажды может от него
+ * отстать (зону убрали на бэке, файл ещё не пересобрали).
+ *
+ * Выбрана «(UTC-12:00) Линия перемены дат»: постоянного населения там нет, так что случайно
+ * наткнуться на неё почти невозможно.
+ */
+const MOCK_REJECTED_TZ = 'Etc/GMT+12';
+
+/**
+ * Мок-онли: язык, который «сервер не знает», — та же ветка, что у MOCK_REJECTED_TZ, но для поля
+ * `lang`. Языков в справочнике всего два, лишний добавить некуда, поэтому отвергается
+ * английский — и потому это за флагом, выключенным по умолчанию: иначе в демо нельзя было бы
+ * сохранить английский язык профиля. VITE_MOCK_REJECT_LANG=1 включает ветку, когда её надо
+ * посмотреть руками: выбрал «English» → Сохранить → 400 по полю. На язык интерфейса это не
+ * влияет в любом случае — им управляет переключатель в шапке.
+ *
+ * Запрет только на ЯВНОЕ значение: в режиме «Авто» подбор не трогаем, иначе демо ломалось бы
+ * у любого с английским браузером.
+ */
+const MOCK_REJECTED_LANG = import.meta.env.VITE_MOCK_REJECT_LANG === '1' ? 'en-US' : null;
 
 interface MockOperation {
   token: string;
@@ -39,6 +71,29 @@ const sessionsByRefresh = new Map<string, MockSession>();
 const userByAccess = new Map<string, UserInfo>();
 /** Открытые сессии по реалмам; сид создаётся лениво — при первом обращении к реалму. */
 const sessionsByRealm = new Map<string, UserSession[]>();
+
+/**
+ * Язык и пояс живут в ДВУХ местах, как у бэка, — иначе окно рассинхрона в моке не выразить.
+ *
+ *  - `profileSettings` — профиль: его правит POST /v1/user/settings; когда клиент запросит
+ *    GET /v1/user, тот ответит уже новыми значениями, не дожидаясь продления сессии —
+ *    в отличие от дат, которые формируются по снимку токена;
+ *  - `settingsByAccess` — снимок, вшитый в конкретный access: по нему формируется сам ответ
+ *    (даты и, в реальном бэке, тексты). Снимок обновляется только на продлении сессии.
+ *
+ * Расхождение этих двух записей и есть окно рассинхрона: профиль уже новый, ответ ещё старый.
+ */
+interface Settings {
+  lang: string;
+  tz: string;
+}
+
+const DEFAULT_SETTINGS: Settings = { lang: 'ru-RU', tz: 'Europe/Moscow' };
+/** Пояс/язык приложения по умолчанию — когда источников в запросе нет вовсе (спека: система). */
+const SYSTEM_SETTINGS: Settings = { lang: DEFAULT_LANGUAGE.locale, tz: 'UTC' };
+
+let profileSettings: Settings = { ...DEFAULT_SETTINGS };
+const settingsByAccess = new Map<string, Settings>();
 
 function hex(len: number): string {
   const bytes = new Uint8Array(len / 2);
@@ -104,7 +159,9 @@ function buildUser(op: MockOperation): UserInfo {
   return {
     email: isEmail ? op.login : 'user@example.com',
     phone: isEmail ? undefined : op.login,
-    lang: 'ru-RU',
+    // Настройки — свойство ОТВЕТА, а не хранимой записи: их проставляет userIn() из профиля.
+    // Здесь просто заполняем обязательные поля типа.
+    ...profileSettings,
     auth_2fa_type: 'NONE',
     realms: [
       {
@@ -218,6 +275,73 @@ function bearer(request: Request): string {
   return auth.startsWith('Bearer ') ? auth.slice(7) : '';
 }
 
+/** Язык из Accept-Language: терпимо, по первому тегу («ru-RU,ru;q=0.9» → ru-RU). */
+function matchHeaderLang(header: string | null): string | undefined {
+  if (!header) return undefined;
+  const first = header.split(',')[0]?.split(';')[0]?.trim();
+  return findLanguage(first)?.locale;
+}
+
+/**
+ * Настройки, действующие для ЭТОГО ответа: query → снимок токена → заголовок → система.
+ *
+ * Выбранный пояс прогоняется через resolveTimeZone: дальше по нему считается смещение дат ответа
+ * (isoIn), а зона справочника может быть неизвестна ICU браузера — тогда мок падал бы прямо
+ * в хендлере. Здесь фолбэк именно UTC, а не «без пояса»: моку нужно конкретное имя, чтобы
+ * собрать смещение, — тем же приёмом сделан getOsTimeZone.
+ */
+function responseSettings(request: Request): Settings {
+  const query = new URL(request.url).searchParams;
+  const snapshot = settingsByAccess.get(bearer(request));
+
+  const queryLang = query.get('lang');
+  const queryTz = query.get('tz');
+  const tz =
+    (queryTz && findTimeZone(queryTz) ? queryTz : undefined) ??
+    snapshot?.tz ??
+    matchHeaderTz(request.headers.get('X-Accept-Time-Zone')) ??
+    SYSTEM_SETTINGS.tz;
+  return {
+    // Источники 1–2 строгие: значение принимается только при точном совпадении со справочником.
+    lang:
+      (queryLang && LANGUAGES.some((l) => l.locale === queryLang) ? queryLang : undefined) ??
+      snapshot?.lang ??
+      matchHeaderLang(request.headers.get('Accept-Language')) ??
+      SYSTEM_SETTINGS.lang,
+    tz: resolveTimeZone(tz) ?? 'UTC',
+  };
+}
+
+/** Те же даты сессии, но в поясе ответа. */
+function sessionIn(s: UserSession, tz: string): UserSession {
+  return {
+    ...s,
+    created_at: isoIn(s.created_at, tz),
+    last_seen_at: isoIn(s.last_seen_at, tz),
+    expires_at: s.expires_at ? isoIn(s.expires_at, tz) : undefined,
+  };
+}
+
+/**
+ * Профиль в том виде, в каком его отдаёт сервер: lang/tz — из ПРОФИЛЯ (новые сразу), а даты —
+ * в поясе ответа, то есть из снимка токена, пока сессия не продлилась. В окне рассинхрона они
+ * и расходятся: поля новые, даты ещё в прежнем поясе.
+ */
+function userIn(user: UserInfo, request: Request): UserInfo {
+  const { tz } = responseSettings(request);
+  return {
+    ...user,
+    lang: profileSettings.lang,
+    tz: profileSettings.tz,
+    realms: user.realms.map((r) => ({
+      ...r,
+      created_at: isoIn(r.created_at, tz),
+      updated_at: isoIn(r.updated_at, tz),
+      last_logged_at: r.last_logged_at ? isoIn(r.last_logged_at, tz) : undefined,
+    })),
+  };
+}
+
 /** Пользователь по Bearer-токену; undefined → 401. */
 function authUser(request: Request): UserInfo | undefined {
   return userByAccess.get(bearer(request));
@@ -237,6 +361,7 @@ function callerSession(request: Request): MockSession | undefined {
 function dropSession(refresh: string, session: MockSession): void {
   sessionsByRefresh.delete(refresh);
   userByAccess.delete(session.access);
+  settingsByAccess.delete(session.access);
   const list = sessionsByRealm.get(session.realm);
   if (list) {
     sessionsByRealm.set(
@@ -375,6 +500,8 @@ export const handlers = [
     const now = new Date().toISOString();
     sessionsByRefresh.set(refresh, { access, user, sessionId, realm: op.realm });
     userByAccess.set(access, user);
+    // Токен выпускается с текущими настройками профиля — это и есть снимок.
+    settingsByAccess.set(access, { ...profileSettings });
     // is_current в хранилище всегда false — GET /v1/sessions выставит его вызывающей сессии.
     realmSessions(op.realm).unshift({
       session_id: sessionId,
@@ -414,11 +541,14 @@ export const handlers = [
 
     // Ротация: новый access + новый refresh, sid (sessionId) сохраняется — сессия та же.
     userByAccess.delete(session.access);
+    settingsByAccess.delete(session.access);
     sessionsByRefresh.delete(refresh);
     const newAccess = hex(64);
     const newRefresh = hex(64);
     sessionsByRefresh.set(newRefresh, { ...session, access: newAccess });
     userByAccess.set(newAccess, session.user);
+    // Ровно здесь сохранённые настройки «доезжают» до токена и окно рассинхрона закрывается.
+    settingsByAccess.set(newAccess, { ...profileSettings });
     const current = realmSessions(session.realm).find((s) => s.session_id === session.sessionId);
     if (current) current.last_seen_at = new Date().toISOString();
 
@@ -457,8 +587,9 @@ export const handlers = [
     const realm = new URL(request.url).searchParams.get('realm') ?? config.realm;
     // is_current — не хранимый флаг, а свойство ответа: «та ли это сессия, из которой спросили».
     const mine = callerSession(request);
+    const { tz } = responseSettings(request);
     const list = realmSessions(realm).map((s) => ({
-      ...s,
+      ...sessionIn(s, tz),
       is_current: s.session_id === mine?.sessionId,
     }));
     return HttpResponse.json(list);
@@ -493,6 +624,40 @@ export const handlers = [
   http.get(`${BASE}/v1/user`, ({ request }) => {
     const user = authUser(request);
     if (!user) return problem(401, 'Unauthorized', 'Требуется авторизация');
-    return HttpResponse.json(user);
+    return HttpResponse.json(userIn(user, request));
+  }),
+
+  // --- Смена языка и часового пояса ---
+  http.post(`${BASE}/v1/user/settings`, async ({ request }) => {
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Требуется авторизация');
+    const body = (await request.json().catch(() => null)) as Partial<Settings> | null;
+
+    // Пустая строка по спеке невалидна: «Авто» — это ОТСУТСТВИЕ поля.
+    if (body?.lang === '') return fieldError('lang', 'Язык не может быть пустой строкой');
+    if (body?.tz === '') return fieldError('tz', 'Часовой пояс не может быть пустой строкой');
+
+    // Явные значения строгие: подбор ближайшего здесь не выполняется.
+    if (
+      body?.lang &&
+      (body.lang === MOCK_REJECTED_LANG || !LANGUAGES.some((l) => l.locale === body.lang))
+    ) {
+      return fieldError('lang', `Язык «${body.lang}» не поддерживается`);
+    }
+    if (body?.tz && (body.tz === MOCK_REJECTED_TZ || !findTimeZone(body.tz))) {
+      return fieldError('tz', `Часовой пояс «${body.tz}» не поддерживается`);
+    }
+
+    // Режим «авто»: подбираем по самому запросу, уже сохранённые настройки в подборе НЕ участвуют.
+    const query = new URL(request.url).searchParams;
+    const autoLang =
+      matchHeaderLang(query.get('lang')) ??
+      matchHeaderLang(request.headers.get('Accept-Language')) ??
+      SYSTEM_SETTINGS.lang;
+    const autoTz = matchHeaderTz(request.headers.get('X-Accept-Time-Zone')) ?? SYSTEM_SETTINGS.tz;
+
+    profileSettings = { lang: body?.lang ?? autoLang, tz: body?.tz ?? autoTz };
+    // Токен остаётся со старым снимком — до ближайшего PATCH /v1/session даты в ответах будут
+    // приходить в прежнем поясе, хотя профиль уже отдаёт новый.
+    return HttpResponse.json(profileSettings);
   }),
 ];

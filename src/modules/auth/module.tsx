@@ -4,6 +4,7 @@ import { SigninPage } from './pages/SigninPage';
 import { SignupPage } from './pages/SignupPage';
 import { ConfirmPage } from './pages/ConfirmPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SettingsPage } from './pages/SettingsPage';
 import { SessionsPage } from './pages/SessionsPage';
 import { ConfirmOperationNode } from './ui/ConfirmOperationNode';
 import { EmailFieldNode } from './ui/EmailFieldNode';
@@ -48,6 +49,14 @@ export const authModule: ModuleDefinition = {
       ),
     },
     {
+      path: '/settings',
+      element: (
+        <ProtectedRoute>
+          <SettingsPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
       path: '/sessions',
       element: (
         <ProtectedRoute>
@@ -59,6 +68,7 @@ export const authModule: ModuleDefinition = {
   nav: [
     { id: 'auth.profile', label: 'auth.nav.profile', route: '/profile' },
     { id: 'auth.sessions', label: 'auth.nav.sessions', route: '/sessions' },
+    { id: 'auth.settings', label: 'auth.nav.settings', route: '/settings' },
   ],
   schemas: {
     'auth.signup': signupSchema,

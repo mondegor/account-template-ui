@@ -2,7 +2,8 @@
   "auth": {
     "nav": {
       "profile": "Profile",
-      "sessions": "Sessions"
+      "sessions": "Sessions",
+      "settings": "Settings"
     },
     "field": {
       "email": "Email",
@@ -55,6 +56,7 @@
       "email": "Email",
       "phone": "Phone",
       "lang": "Language",
+      "tz": "Time zone",
       "security": "Security",
       "lastLogin": "Last login",
       "lastLoginJustNow": "just now",
@@ -65,7 +67,27 @@
       "sessionsOf": "Sessions of {{realm}}",
       "sessionsOfAccount": "Account sessions",
       "loadError": "Failed to load profile: {{message}}",
-      "twoFa": { "NONE": "2FA: off", "PASSWORD": "2FA: password", "TOTP": "2FA: TOTP" }
+      "settingsLink": "Settings",
+      "settingsAria": "Language and time zone settings",
+      "tzUnsupported": "your browser does not know this zone, dates are shown in the device time zone",
+      "twoFa": {
+        "NONE": "2FA: off",
+        "PASSWORD": "2FA: password",
+        "TOTP": "2FA: TOTP"
+      }
+    },
+    "settings": {
+      "title": "Settings",
+      "lang": "Language",
+      "tz": "Time zone",
+      "auto": "Auto (from my environment)",
+      "langHint": "Language of emails and server messages. The interface language is switched in the header.",
+      "osZoneHint": "Your zone is {{zone}}; it is not in the list. Pick “Auto” and the server will choose the closest one.",
+      "save": "Save",
+      "saved": "Settings saved. Information shown may differ from them for a while — to apply them instantly, sign in again.",
+      "substituted": "The closest available zone was saved: {{zone}} — its time differs from yours.",
+      "saveError": "Could not save: {{message}}",
+      "loadError": "Could not load settings: {{message}}"
     },
     "sessions": {
       "title": "Sessions",

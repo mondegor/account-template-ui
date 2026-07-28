@@ -28,7 +28,14 @@ export function SessionsHeader({
   }
 
   return (
-    <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+    <Stack
+      direction="row"
+      spacing={1.5}
+      sx={{
+        alignItems: 'center',
+        flexWrap: 'wrap',
+      }}
+    >
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
         {p('realmTitle')}
       </Typography>

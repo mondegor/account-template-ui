@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { initI18n, setLanguage } from '@core/i18n';
 import { ApiFieldError, ApiProblemError } from '@core/api';
 import {

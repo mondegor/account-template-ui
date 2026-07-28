@@ -59,12 +59,24 @@ export function SessionCard({
       sx={isCurrent ? { borderColor: 'primary.main', borderWidth: 2 } : undefined}
     >
       <CardContent>
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+          }}
+        >
           <Stack sx={{ minWidth: 0 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
               {session.device_name}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {session.app_name}
             </Typography>
           </Stack>

@@ -11,7 +11,13 @@ export const config = {
    *  подставляет, без realm запрос падает с 400. */
   realm: import.meta.env.VITE_AUTH_REALM ?? 'print-shop/standard',
   tokenMode: (import.meta.env.VITE_TOKEN_MODE ?? 'cookie') as TokenMode,
-  enableMocks: import.meta.env.VITE_ENABLE_MOCKS === '1',
+  /** Не задан — в деве включено, в проде нет; '0' явно выключает (работа против живого бэка).
+   *  Потребитель (bootstrap в main.tsx) гейтит подъём msw ещё и по import.meta.env.DEV, поэтому
+   *  в сборке с mode=production флаг не поднимет моки ни при каком значении. */
+  enableMocks:
+    import.meta.env.VITE_ENABLE_MOCKS !== undefined
+      ? import.meta.env.VITE_ENABLE_MOCKS === '1'
+      : import.meta.env.DEV,
 } as const;
 
 /**

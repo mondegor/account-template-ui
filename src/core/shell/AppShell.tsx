@@ -15,7 +15,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { buildNav } from '@core/module-registry';
 import { logout, useAuthStore } from '@core/auth';
@@ -278,7 +278,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
           {!isMobile && <ShellBrand />}
           <Box sx={{ flexGrow: 1 }} />
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <ThemeButton />
             <LanguageButton />
             {status === 'authenticated' && (
@@ -297,7 +303,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Stack>
         </Toolbar>
       </AppBar>
-
       {/* Боковое меню: десктоп — постоянное, мобайл — временный Drawer по бургеру. */}
       <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }}>
         {isMobile ? (
@@ -320,7 +325,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Drawer>
         )}
       </Box>
-
       <Box
         component="main"
         sx={{ flexGrow: 1, width: { md: `calc(100% - ${DRAWER_WIDTH}px)` }, minWidth: 0 }}

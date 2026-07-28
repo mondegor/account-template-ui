@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Link, Typography } from '@mui/material';
 import { loadSchema } from '@core/schema';
@@ -12,7 +12,14 @@ export function SigninPage() {
   return (
     <AuthCard
       footer={
-        <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 2.5 }}>
+        <Typography
+          variant="body2"
+          align="center"
+          sx={{
+            color: 'text.secondary',
+            mt: 2.5,
+          }}
+        >
           {t('auth.signin.noAccount')}{' '}
           <Link
             component="button"

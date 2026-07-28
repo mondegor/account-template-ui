@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router';
 import { useAuthStore } from '@core/auth';
 import { useOperationStore } from '@core/operation';
 import { loadSchema } from '@core/schema';

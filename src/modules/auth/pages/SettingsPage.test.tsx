@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { addTranslations, i18next, initI18n, setLanguage } from '@core/i18n';
 import { deployTranslations } from '@app';
@@ -111,7 +111,9 @@ function formReady() {
   return screen.findByRole('button', { name: 'Сохранить' });
 }
 
-describe('SettingsPage', () => {
+// Таймаут поднят точечно: страница поднимает полный MUI-рендер с двумя тяжёлыми селектами
+// (языки и полный список поясов), и при полном параллельном прогоне кейсы подходят к 5s вплотную.
+describe('SettingsPage', { timeout: 15000 }, () => {
   it('префилл — из профиля, а не «Авто»', async () => {
     renderSettings();
     await formReady();

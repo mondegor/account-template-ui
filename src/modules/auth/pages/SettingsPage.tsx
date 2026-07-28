@@ -191,7 +191,6 @@ function SettingsForm({ user }: { user: UserInfo }) {
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
         {p('title')}
       </Typography>
-
       {/* Подтверждение сохранения, а не отражение состояния сервера: показываем всегда после
           успешного save. Живёт в состоянии мутации, поэтому уходит само при следующем заходе
           на страницу — отдельного «закрыть» и отдельного признака с сервера для этого не нужно.
@@ -221,7 +220,6 @@ function SettingsForm({ user }: { user: UserInfo }) {
           {p('saved')}
         </Alert>
       )}
-
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={2.5}>
@@ -239,7 +237,13 @@ function SettingsForm({ user }: { user: UserInfo }) {
                 <MenuItem value={AUTO}>{p('auto')}</MenuItem>
                 {langOptions.map((o) => (
                   <MenuItem key={o.value} value={o.value}>
-                    <Stack direction="row" alignItems="center" spacing={1}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: 'center',
+                      }}
+                    >
                       <LangFlag lang={findLanguage(o.value)?.code ?? ''} />
                       <span>{o.label}</span>
                     </Stack>

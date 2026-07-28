@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { realmProvider } from '@core/auth';
 import { useOperationStore } from '@core/operation';
 import type { HandlerContext } from '@core/schema';

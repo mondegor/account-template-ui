@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import {
   Alert,
   Box,
@@ -209,14 +209,24 @@ export function SessionsPage() {
               {current ? p('terminateOthers') : p('terminateAll')}
             </Button>
 
-            <Typography variant="subtitle2" color="text.secondary">
+            <Typography
+              variant="subtitle2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {current
                 ? p('otherSessions', { n: others.length })
                 : p('allSessions', { n: others.length })}
             </Typography>
 
             {others.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {p('empty')}
               </Typography>
             ) : (
@@ -238,7 +248,6 @@ export function SessionsPage() {
           </>
         )}
       </Stack>
-
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogTitle>{p('confirmTitle')}</DialogTitle>
         <DialogContent>

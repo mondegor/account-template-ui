@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { Navigate, type RouteObject } from 'react-router-dom';
+import { Navigate, type RouteObject } from 'react-router';
 import { registerComponent, registerFieldType, registerSchema } from '@core/schema';
 import { addTranslations } from '@core/i18n';
 import { RoleGuard, getUserRoles, rolesEnforced } from '@core/auth';

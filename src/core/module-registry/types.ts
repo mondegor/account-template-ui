@@ -1,4 +1,4 @@
-import type { RouteObject } from 'react-router-dom';
+import type { RouteObject } from 'react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import type { NodeComponent } from '@core/schema';
 import type { ContractRegistry } from '@core/contracts';

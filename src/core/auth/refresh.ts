@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config, PROACTIVE_REFRESH_SKEW_SEC } from '@config';
-import { commonHeaders } from '@core/api';
+import { clearSettingsOverride, commonHeaders } from '@core/api';
+import { clearProfileLanguage } from '@core/i18n';
 import { authStore } from './authStore';
 import { tokenStorage } from './tokenStorage';
 
@@ -11,7 +12,9 @@ import { tokenStorage } from './tokenStorage';
  * navigator.locks не нужен.
  */
 
-// Отдельный axios без auth-response-интерсептора → нет рекурсии refresh→401→refresh.
+// Отдельный axios без auth-response-интерсептора → нет рекурсии refresh→401→refresh. Заодно мимо
+// request-интерсептора, поэтому X-Accept-Time-Zone тут не появляется — и не нужен: язык и пояс
+// нового токена сервер берёт из профиля, а не из окружения запроса.
 const rawClient = axios.create({
   baseURL: config.authApiBaseUrl,
   withCredentials: true,
@@ -20,7 +23,7 @@ const rawClient = axios.create({
 
 interface SuccessAccessBody {
   access_token: string;
-  expires_in?: number;
+  expires_in: number;
   refresh_token?: string;
 }
 
@@ -42,6 +45,9 @@ function emitForcedLogout(): void {
 export function applyAccess(body: SuccessAccessBody): void {
   authStore.setAccess(body.access_token, body.expires_in);
   tokenStorage.setRefreshFromBody(body.refresh_token);
+  // Новый токен несёт сохранённые язык и пояс сам — досылать их параметрами больше не нужно.
+  // Зовётся и на первом access при входе: для свежего токена утверждение тоже верно.
+  clearSettingsOverride();
   scheduleProactiveRefresh();
 }
 
@@ -142,5 +148,12 @@ export function forceLogout(): void {
   proactiveTimer = null;
   authStore.clear();
   tokenStorage.clear();
+  // Язык профиля — такая же принадлежность ушедшего пользователя, как токен: иначе гостевые
+  // запросы следующего уйдут с его `?lang`. Выбор в шелле при этом остаётся, он про устройство.
+  clearProfileLanguage();
+  // Оверрайд — тоже принадлежность ушедшей сессии. Гостю он не уходит и сам (localeParam отдаёт
+  // его только при токене), но чиститься окно должно там же, где и остальное состояние сессии,
+  // а не полагаться на правило из соседнего модуля.
+  clearSettingsOverride();
   emitForcedLogout();
 }

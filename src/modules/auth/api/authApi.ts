@@ -1,6 +1,8 @@
-import { authClient } from '@core/api';
+import { authClient, setSettingsOverride } from '@core/api';
 import { realmProvider, tokenStorage, applyAccess } from '@core/auth';
+import { adoptProfileLanguage, buildTimeZoneHeader } from '@core/i18n';
 import type {
+  ChangeUserSettingsRequest,
   ConfirmOperationRequest,
   LoginByTokenRequest,
   OpenSessionResult,
@@ -8,6 +10,7 @@ import type {
   SuccessAccess,
   UserInfo,
   UserSession,
+  UserSettings,
   WaitingConfirmOperation,
 } from './types';
 
@@ -25,7 +28,15 @@ export async function signin(userLogin: string): Promise<WaitingConfirmOperation
   return res.data;
 }
 
-/** Шаг 1 регистрации: создаёт операцию по email, сервер шлёт код. → WaitingConfirmOperation (200). */
+/**
+ * Шаг 1 регистрации: создаёт операцию по email, сервер шлёт код. → WaitingConfirmOperation (200).
+ *
+ * Язык и пояс тело не несёт: сервер берёт их из самого запроса и фиксирует в профиле нового
+ * пользователя на подтверждении кода — другого шанса задать пояс до POST /v1/user/settings
+ * у пользователя не будет. Оба доезжают сами, ничего точечного тут не нужно: язык — `?lang`
+ * при явном выборе в шелле, иначе браузерный `Accept-Language`; пояс — `X-Accept-Time-Zone`,
+ * который интерсептор ставит на каждый запрос без токена (httpClient).
+ */
 export async function signup(userEmail: string): Promise<WaitingConfirmOperation> {
   const res = await authClient.post<WaitingConfirmOperation>('/v1/signup', {
     realm: realmProvider.getRealm(),
@@ -84,9 +95,47 @@ export async function openSession(req: LoginByTokenRequest): Promise<OpenSession
   return { kind: 'waiting', operation: res.data as WaitingConfirmOperation };
 }
 
-/** Профиль текущего пользователя. */
+/**
+ * Профиль текущего пользователя.
+ *
+ * Здесь же применяем язык профиля к интерфейсу: это единственная воронка профильных данных (её
+ * зовут и ProfilePage, и SessionsPage), поэтому сайд-эффект тут надёжнее, чем useEffect на каждой
+ * странице — иначе язык подтягивался бы не везде и по-разному. Локальный выбор в шелле
+ * adoptProfileLanguage не перебивает (см. @core/i18n/languageSync).
+ */
 export async function getUserInfo(): Promise<UserInfo> {
   const res = await authClient.get<UserInfo>('/v1/user');
+  adoptProfileLanguage(res.data.lang);
+  return res.data;
+}
+
+/**
+ * Сохранение языка и часового пояса профиля (POST /v1/user/settings).
+ *
+ * Тело собирает форма: явно выбранное значение → поле, «Авто» → поля НЕТ вовсе (пустая строка
+ * по спеке невалидна). «Авто» значит «подбери по моему текущему окружению», а окружение — это
+ * явный выбор в навигации, если он есть, иначе сигнал браузера. Поэтому:
+ *  - язык: `?lang` (выбор в шелле) либо браузерный Accept-Language — оба уходят сами;
+ *  - пояс: заголовок X-Accept-Time-Zone — единственное место, где его приходится ставить руками.
+ *    Запрос авторизованный, поэтому интерсептор (он ставит заголовок только гостям) его не тронет,
+ *    а «Авто» здесь как раз про окружение, а не про токен. Собираем только когда tz не задан явно:
+ *    при явном значении заголовок всё равно проигрывает телу.
+ *    Появится переключатель пояса в навигации — перед заголовком встанет `?tz`, как у языка;
+ *  - `skipSettingsOverride` снимает с этого запроса оверрайд ПРОШЛОГО сохранения: query
+ *    выигрывает у заголовка, и старое значение подменило бы подбор по текущему окружению —
+ *    ровно то, чего режим «Авто» делать не должен.
+ *
+ * После успеха применяем ОТВЕТ (в «Авто» он несёт подобранное значение, а не запрошенное):
+ * кладём оба значения в оверрайд окна и подтягиваем язык интерфейса. Инвалидация кэша —
+ * забота вызывающего (у него queryClient).
+ */
+export async function changeUserSettings(req: ChangeUserSettingsRequest): Promise<UserSettings> {
+  const res = await authClient.post<UserSettings>('/v1/user/settings', req, {
+    skipSettingsOverride: true,
+    headers: req.tz ? {} : { 'X-Accept-Time-Zone': buildTimeZoneHeader() },
+  });
+  setSettingsOverride({ lang: res.data.lang, tz: res.data.tz });
+  adoptProfileLanguage(res.data.lang);
   return res.data;
 }
 
@@ -98,7 +147,11 @@ export async function getUserSessions(realm?: string): Promise<UserSession[]> {
   return res.data;
 }
 
-/** Закрытие перечисленных сессий (204). Единственный способ убрать сессию из списка — в т.ч. одну. */
+/**
+ * Закрытие перечисленных сессий (204). Единственный способ убрать сессию из списка — в т.ч. одну.
+ * Ограничение session_ids (1..64, CloseSessions) выполняется само: больше 64 сессий у пользователя
+ * не бывает, а пустой список сюда не доходит (SessionsPage не пускает mutate([])).
+ */
 export async function closeUserSessions(sessionIds: string[]): Promise<void> {
   await authClient.post('/v1/sessions/close', { session_ids: sessionIds });
 }

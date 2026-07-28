@@ -1,0 +1,721 @@
+[
+  {
+    "id": "Etc/GMT+12",
+    "std_offset": "-12:00",
+    "label": { "en": "International Date Line West", "ru": "Линия перемены дат" }
+  },
+  {
+    "id": "Etc/GMT+11",
+    "std_offset": "-11:00",
+    "label": { "en": "Coordinated Universal Time-11", "ru": "Всемирное координированное время-11" }
+  },
+  {
+    "id": "America/Adak",
+    "std_offset": "-10:00",
+    "label": { "en": "Aleutian Islands", "ru": "Алеутские острова" }
+  },
+  {
+    "id": "Pacific/Honolulu",
+    "std_offset": "-10:00",
+    "label": { "en": "Hawaii", "ru": "Гавайи" }
+  },
+  {
+    "id": "Pacific/Marquesas",
+    "std_offset": "-09:30",
+    "label": { "en": "Marquesas Islands", "ru": "Маркизские острова" }
+  },
+  {
+    "id": "America/Anchorage",
+    "std_offset": "-09:00",
+    "label": { "en": "Alaska", "ru": "Аляска" }
+  },
+  {
+    "id": "Etc/GMT+9",
+    "std_offset": "-09:00",
+    "label": { "en": "Coordinated Universal Time-09", "ru": "Всемирное координированное время-09" }
+  },
+  {
+    "id": "America/Tijuana",
+    "std_offset": "-08:00",
+    "label": { "en": "Baja California", "ru": "Нижняя Калифорния" }
+  },
+  {
+    "id": "Etc/GMT+8",
+    "std_offset": "-08:00",
+    "label": { "en": "Coordinated Universal Time-08", "ru": "Всемирное координированное время-08" }
+  },
+  {
+    "id": "America/Los_Angeles",
+    "std_offset": "-08:00",
+    "label": { "en": "Pacific Time (US & Canada)", "ru": "Тихоокеанское время (США и Канада)" }
+  },
+  {
+    "id": "America/Phoenix",
+    "std_offset": "-07:00",
+    "label": { "en": "Arizona", "ru": "Аризона" }
+  },
+  {
+    "id": "America/Mazatlan",
+    "std_offset": "-07:00",
+    "label": { "en": "La Paz, Mazatlan", "ru": "Ла-Пас, Масатлан" }
+  },
+  {
+    "id": "America/Denver",
+    "std_offset": "-07:00",
+    "label": { "en": "Mountain Time (US & Canada)", "ru": "Горное время (США и Канада)" }
+  },
+  {
+    "id": "America/Whitehorse",
+    "std_offset": "-07:00",
+    "label": { "en": "Yukon", "ru": "Юкон" }
+  },
+  {
+    "id": "America/Guatemala",
+    "std_offset": "-06:00",
+    "label": { "en": "Central America", "ru": "Центральная Америка" }
+  },
+  {
+    "id": "America/Chicago",
+    "std_offset": "-06:00",
+    "label": { "en": "Central Time (US & Canada)", "ru": "Центральное время (США и Канада)" }
+  },
+  {
+    "id": "Pacific/Easter",
+    "std_offset": "-06:00",
+    "label": { "en": "Easter Island", "ru": "Остров Пасхи" }
+  },
+  {
+    "id": "America/Mexico_City",
+    "std_offset": "-06:00",
+    "label": { "en": "Guadalajara, Mexico City, Monterrey", "ru": "Гвадалахара, Мехико, Монтеррей" }
+  },
+  {
+    "id": "America/Regina",
+    "std_offset": "-06:00",
+    "label": { "en": "Saskatchewan", "ru": "Саскачеван" }
+  },
+  {
+    "id": "America/Bogota",
+    "std_offset": "-05:00",
+    "label": { "en": "Bogota, Lima, Quito, Rio Branco", "ru": "Богота, Лима, Кито, Риу-Бранку" }
+  },
+  {
+    "id": "America/Cancun",
+    "std_offset": "-05:00",
+    "label": { "en": "Chetumal", "ru": "Четумаль" }
+  },
+  {
+    "id": "America/New_York",
+    "std_offset": "-05:00",
+    "label": { "en": "Eastern Time (US & Canada)", "ru": "Восточное время (США и Канада)" }
+  },
+  {
+    "id": "America/Port-au-Prince",
+    "std_offset": "-05:00",
+    "label": { "en": "Haiti", "ru": "Гаити" }
+  },
+  {
+    "id": "America/Havana",
+    "std_offset": "-05:00",
+    "label": { "en": "Havana", "ru": "Гавана" }
+  },
+  {
+    "id": "America/Indiana/Indianapolis",
+    "std_offset": "-05:00",
+    "label": { "en": "Indiana (East)", "ru": "Индиана (восток)" }
+  },
+  {
+    "id": "America/Grand_Turk",
+    "std_offset": "-05:00",
+    "label": { "en": "Turks and Caicos", "ru": "Тёркс и Кайкос" }
+  },
+  {
+    "id": "America/Halifax",
+    "std_offset": "-04:00",
+    "label": { "en": "Atlantic Time (Canada)", "ru": "Атлантическое время (Канада)" }
+  },
+  {
+    "id": "America/Caracas",
+    "std_offset": "-04:00",
+    "label": { "en": "Caracas", "ru": "Каракас" }
+  },
+  {
+    "id": "America/Cuiaba",
+    "std_offset": "-04:00",
+    "label": { "en": "Cuiaba", "ru": "Куяба" }
+  },
+  {
+    "id": "America/La_Paz",
+    "std_offset": "-04:00",
+    "label": {
+      "en": "Georgetown, La Paz, Manaus, San Juan",
+      "ru": "Джорджтаун, Ла-Пас, Манаус, Сан-Хуан"
+    }
+  },
+  {
+    "id": "America/Santiago",
+    "std_offset": "-04:00",
+    "label": { "en": "Santiago", "ru": "Сантьяго" }
+  },
+  {
+    "id": "America/St_Johns",
+    "std_offset": "-03:30",
+    "label": { "en": "Newfoundland", "ru": "Ньюфаундленд" }
+  },
+  {
+    "id": "America/Araguaina",
+    "std_offset": "-03:00",
+    "label": { "en": "Araguaina", "ru": "Арагуаина" }
+  },
+  {
+    "id": "America/Asuncion",
+    "std_offset": "-03:00",
+    "label": { "en": "Asuncion", "ru": "Асунсьон" }
+  },
+  {
+    "id": "America/Sao_Paulo",
+    "std_offset": "-03:00",
+    "label": { "en": "Brasilia", "ru": "Бразилиа" }
+  },
+  {
+    "id": "America/Cayenne",
+    "std_offset": "-03:00",
+    "label": { "en": "Cayenne, Fortaleza", "ru": "Кайенна, Форталеза" }
+  },
+  {
+    "id": "America/Argentina/Buenos_Aires",
+    "std_offset": "-03:00",
+    "label": { "en": "City of Buenos Aires", "ru": "Буэнос-Айрес" }
+  },
+  {
+    "id": "America/Montevideo",
+    "std_offset": "-03:00",
+    "label": { "en": "Montevideo", "ru": "Монтевидео" }
+  },
+  {
+    "id": "America/Punta_Arenas",
+    "std_offset": "-03:00",
+    "label": { "en": "Punta Arenas", "ru": "Пунта-Аренас" }
+  },
+  {
+    "id": "America/Miquelon",
+    "std_offset": "-03:00",
+    "label": { "en": "Saint Pierre and Miquelon", "ru": "Сен-Пьер и Микелон" }
+  },
+  {
+    "id": "America/Bahia",
+    "std_offset": "-03:00",
+    "label": { "en": "Salvador", "ru": "Салвадор" }
+  },
+  {
+    "id": "Etc/GMT+2",
+    "std_offset": "-02:00",
+    "label": { "en": "Coordinated Universal Time-02", "ru": "Всемирное координированное время-02" }
+  },
+  {
+    "id": "America/Godthab",
+    "std_offset": "-02:00",
+    "label": { "en": "Greenland", "ru": "Гренландия" }
+  },
+  {
+    "id": "Atlantic/Azores",
+    "std_offset": "-01:00",
+    "label": { "en": "Azores", "ru": "Азорские острова" }
+  },
+  {
+    "id": "Atlantic/Cape_Verde",
+    "std_offset": "-01:00",
+    "label": { "en": "Cabo Verde Is.", "ru": "Острова Кабо-Верде" }
+  },
+  {
+    "id": "UTC",
+    "std_offset": "+00:00",
+    "label": { "en": "Coordinated Universal Time", "ru": "Всемирное координированное время" }
+  },
+  {
+    "id": "Europe/London",
+    "std_offset": "+00:00",
+    "label": {
+      "en": "Dublin, Edinburgh, Lisbon, London",
+      "ru": "Дублин, Эдинбург, Лиссабон, Лондон"
+    }
+  },
+  {
+    "id": "Atlantic/Reykjavik",
+    "std_offset": "+00:00",
+    "label": { "en": "Monrovia, Reykjavik", "ru": "Монровия, Рейкьявик" }
+  },
+  {
+    "id": "Africa/Sao_Tome",
+    "std_offset": "+00:00",
+    "label": { "en": "Sao Tome", "ru": "Сан-Томе" }
+  },
+  {
+    "id": "Africa/Casablanca",
+    "std_offset": "+01:00",
+    "label": { "en": "Casablanca", "ru": "Касабланка" }
+  },
+  {
+    "id": "Europe/Berlin",
+    "std_offset": "+01:00",
+    "label": {
+      "en": "Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna",
+      "ru": "Амстердам, Берлин, Берн, Рим, Стокгольм, Вена"
+    }
+  },
+  {
+    "id": "Europe/Budapest",
+    "std_offset": "+01:00",
+    "label": {
+      "en": "Belgrade, Bratislava, Budapest, Ljubljana, Prague",
+      "ru": "Белград, Братислава, Будапешт, Любляна, Прага"
+    }
+  },
+  {
+    "id": "Europe/Paris",
+    "std_offset": "+01:00",
+    "label": {
+      "en": "Brussels, Copenhagen, Madrid, Paris",
+      "ru": "Брюссель, Копенгаген, Мадрид, Париж"
+    }
+  },
+  {
+    "id": "Europe/Warsaw",
+    "std_offset": "+01:00",
+    "label": { "en": "Sarajevo, Skopje, Warsaw, Zagreb", "ru": "Сараево, Скопье, Варшава, Загреб" }
+  },
+  {
+    "id": "Africa/Lagos",
+    "std_offset": "+01:00",
+    "label": { "en": "West Central Africa", "ru": "Западная Центральная Африка" }
+  },
+  {
+    "id": "Europe/Bucharest",
+    "std_offset": "+02:00",
+    "label": { "en": "Athens, Bucharest", "ru": "Афины, Бухарест" }
+  },
+  {
+    "id": "Asia/Beirut",
+    "std_offset": "+02:00",
+    "label": { "en": "Beirut", "ru": "Бейрут" }
+  },
+  {
+    "id": "Africa/Cairo",
+    "std_offset": "+02:00",
+    "label": { "en": "Cairo", "ru": "Каир" }
+  },
+  {
+    "id": "Europe/Chisinau",
+    "std_offset": "+02:00",
+    "label": { "en": "Chisinau", "ru": "Кишинёв" }
+  },
+  {
+    "id": "Asia/Hebron",
+    "std_offset": "+02:00",
+    "label": { "en": "Gaza, Hebron", "ru": "Газа, Хеврон" }
+  },
+  {
+    "id": "Africa/Johannesburg",
+    "std_offset": "+02:00",
+    "label": { "en": "Harare, Pretoria", "ru": "Хараре, Претория" }
+  },
+  {
+    "id": "Europe/Kiev",
+    "std_offset": "+02:00",
+    "label": {
+      "en": "Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius",
+      "ru": "Хельсинки, Киев, Рига, София, Таллин, Вильнюс"
+    }
+  },
+  {
+    "id": "Asia/Jerusalem",
+    "std_offset": "+02:00",
+    "label": { "en": "Jerusalem", "ru": "Иерусалим" }
+  },
+  {
+    "id": "Africa/Juba",
+    "std_offset": "+02:00",
+    "label": { "en": "Juba", "ru": "Джуба" }
+  },
+  {
+    "id": "Europe/Kaliningrad",
+    "std_offset": "+02:00",
+    "label": { "en": "Kaliningrad", "ru": "Калининград" }
+  },
+  {
+    "id": "Africa/Khartoum",
+    "std_offset": "+02:00",
+    "label": { "en": "Khartoum", "ru": "Хартум" }
+  },
+  {
+    "id": "Africa/Tripoli",
+    "std_offset": "+02:00",
+    "label": { "en": "Tripoli", "ru": "Триполи" }
+  },
+  {
+    "id": "Africa/Windhoek",
+    "std_offset": "+02:00",
+    "label": { "en": "Windhoek", "ru": "Виндхук" }
+  },
+  {
+    "id": "Europe/Moscow",
+    "std_offset": "+03:00",
+    "label": { "en": "Moscow, St. Petersburg", "ru": "Москва, Санкт-Петербург" }
+  },
+  {
+    "id": "Asia/Amman",
+    "std_offset": "+03:00",
+    "label": { "en": "Amman", "ru": "Амман" }
+  },
+  {
+    "id": "Asia/Baghdad",
+    "std_offset": "+03:00",
+    "label": { "en": "Baghdad", "ru": "Багдад" }
+  },
+  {
+    "id": "Asia/Damascus",
+    "std_offset": "+03:00",
+    "label": { "en": "Damascus", "ru": "Дамаск" }
+  },
+  {
+    "id": "Europe/Istanbul",
+    "std_offset": "+03:00",
+    "label": { "en": "Istanbul", "ru": "Стамбул" }
+  },
+  {
+    "id": "Asia/Riyadh",
+    "std_offset": "+03:00",
+    "label": { "en": "Kuwait, Riyadh", "ru": "Эль-Кувейт, Эр-Рияд" }
+  },
+  {
+    "id": "Europe/Minsk",
+    "std_offset": "+03:00",
+    "label": { "en": "Minsk", "ru": "Минск" }
+  },
+  {
+    "id": "Africa/Nairobi",
+    "std_offset": "+03:00",
+    "label": { "en": "Nairobi", "ru": "Найроби" }
+  },
+  {
+    "id": "Europe/Volgograd",
+    "std_offset": "+03:00",
+    "label": { "en": "Volgograd", "ru": "Волгоград" }
+  },
+  {
+    "id": "Asia/Tehran",
+    "std_offset": "+03:30",
+    "label": { "en": "Tehran", "ru": "Тегеран" }
+  },
+  {
+    "id": "Asia/Dubai",
+    "std_offset": "+04:00",
+    "label": { "en": "Abu Dhabi, Muscat", "ru": "Абу-Даби, Мускат" }
+  },
+  {
+    "id": "Europe/Astrakhan",
+    "std_offset": "+04:00",
+    "label": { "en": "Astrakhan, Ulyanovsk", "ru": "Астрахань, Ульяновск" }
+  },
+  {
+    "id": "Asia/Baku",
+    "std_offset": "+04:00",
+    "label": { "en": "Baku", "ru": "Баку" }
+  },
+  {
+    "id": "Europe/Samara",
+    "std_offset": "+04:00",
+    "label": { "en": "Izhevsk, Samara", "ru": "Ижевск, Самара" }
+  },
+  {
+    "id": "Indian/Mauritius",
+    "std_offset": "+04:00",
+    "label": { "en": "Port Louis", "ru": "Порт-Луи" }
+  },
+  {
+    "id": "Europe/Saratov",
+    "std_offset": "+04:00",
+    "label": { "en": "Saratov", "ru": "Саратов" }
+  },
+  {
+    "id": "Asia/Tbilisi",
+    "std_offset": "+04:00",
+    "label": { "en": "Tbilisi", "ru": "Тбилиси" }
+  },
+  {
+    "id": "Asia/Yerevan",
+    "std_offset": "+04:00",
+    "label": { "en": "Yerevan", "ru": "Ереван" }
+  },
+  {
+    "id": "Asia/Kabul",
+    "std_offset": "+04:30",
+    "label": { "en": "Kabul", "ru": "Кабул" }
+  },
+  {
+    "id": "Asia/Tashkent",
+    "std_offset": "+05:00",
+    "label": { "en": "Ashgabat, Tashkent", "ru": "Ашхабад, Ташкент" }
+  },
+  {
+    "id": "Asia/Almaty",
+    "std_offset": "+05:00",
+    "label": { "en": "Astana", "ru": "Астана" }
+  },
+  {
+    "id": "Asia/Yekaterinburg",
+    "std_offset": "+05:00",
+    "label": { "en": "Ekaterinburg", "ru": "Екатеринбург" }
+  },
+  {
+    "id": "Asia/Karachi",
+    "std_offset": "+05:00",
+    "label": { "en": "Islamabad, Karachi", "ru": "Исламабад, Карачи" }
+  },
+  {
+    "id": "Asia/Kolkata",
+    "std_offset": "+05:30",
+    "label": {
+      "en": "Chennai, Kolkata, Mumbai, New Delhi",
+      "ru": "Ченнаи, Колката, Мумбаи, Нью-Дели"
+    }
+  },
+  {
+    "id": "Asia/Colombo",
+    "std_offset": "+05:30",
+    "label": { "en": "Sri Jayawardenepura", "ru": "Шри-Джаяварденепура" }
+  },
+  {
+    "id": "Asia/Kathmandu",
+    "std_offset": "+05:45",
+    "label": { "en": "Kathmandu", "ru": "Катманду" }
+  },
+  {
+    "id": "Asia/Bishkek",
+    "std_offset": "+06:00",
+    "label": { "en": "Bishkek", "ru": "Бишкек" }
+  },
+  {
+    "id": "Asia/Dhaka",
+    "std_offset": "+06:00",
+    "label": { "en": "Dhaka", "ru": "Дакка" }
+  },
+  {
+    "id": "Asia/Omsk",
+    "std_offset": "+06:00",
+    "label": { "en": "Omsk", "ru": "Омск" }
+  },
+  {
+    "id": "Asia/Yangon",
+    "std_offset": "+06:30",
+    "label": { "en": "Yangon (Rangoon)", "ru": "Янгон (Рангун)" }
+  },
+  {
+    "id": "Asia/Bangkok",
+    "std_offset": "+07:00",
+    "label": { "en": "Bangkok, Hanoi, Jakarta", "ru": "Бангкок, Ханой, Джакарта" }
+  },
+  {
+    "id": "Asia/Barnaul",
+    "std_offset": "+07:00",
+    "label": { "en": "Barnaul, Gorno-Altaysk", "ru": "Барнаул, Горно-Алтайск" }
+  },
+  {
+    "id": "Asia/Hovd",
+    "std_offset": "+07:00",
+    "label": { "en": "Hovd", "ru": "Ховд" }
+  },
+  {
+    "id": "Asia/Krasnoyarsk",
+    "std_offset": "+07:00",
+    "label": { "en": "Krasnoyarsk", "ru": "Красноярск" }
+  },
+  {
+    "id": "Asia/Novosibirsk",
+    "std_offset": "+07:00",
+    "label": { "en": "Novosibirsk", "ru": "Новосибирск" }
+  },
+  {
+    "id": "Asia/Tomsk",
+    "std_offset": "+07:00",
+    "label": { "en": "Tomsk", "ru": "Томск" }
+  },
+  {
+    "id": "Asia/Shanghai",
+    "std_offset": "+08:00",
+    "label": {
+      "en": "Beijing, Chongqing, Hong Kong, Urumqi",
+      "ru": "Пекин, Чунцин, Гонконг, Урумчи"
+    }
+  },
+  {
+    "id": "Asia/Irkutsk",
+    "std_offset": "+08:00",
+    "label": { "en": "Irkutsk", "ru": "Иркутск" }
+  },
+  {
+    "id": "Asia/Singapore",
+    "std_offset": "+08:00",
+    "label": { "en": "Kuala Lumpur, Singapore", "ru": "Куала-Лумпур, Сингапур" }
+  },
+  {
+    "id": "Australia/Perth",
+    "std_offset": "+08:00",
+    "label": { "en": "Perth", "ru": "Перт" }
+  },
+  {
+    "id": "Asia/Taipei",
+    "std_offset": "+08:00",
+    "label": { "en": "Taipei", "ru": "Тайбэй" }
+  },
+  {
+    "id": "Asia/Ulaanbaatar",
+    "std_offset": "+08:00",
+    "label": { "en": "Ulaanbaatar", "ru": "Улан-Батор" }
+  },
+  {
+    "id": "Australia/Eucla",
+    "std_offset": "+08:45",
+    "label": { "en": "Eucla", "ru": "Юкла" }
+  },
+  {
+    "id": "Asia/Chita",
+    "std_offset": "+09:00",
+    "label": { "en": "Chita", "ru": "Чита" }
+  },
+  {
+    "id": "Asia/Tokyo",
+    "std_offset": "+09:00",
+    "label": { "en": "Osaka, Sapporo, Tokyo", "ru": "Осака, Саппоро, Токио" }
+  },
+  {
+    "id": "Asia/Pyongyang",
+    "std_offset": "+09:00",
+    "label": { "en": "Pyongyang", "ru": "Пхеньян" }
+  },
+  {
+    "id": "Asia/Seoul",
+    "std_offset": "+09:00",
+    "label": { "en": "Seoul", "ru": "Сеул" }
+  },
+  {
+    "id": "Asia/Yakutsk",
+    "std_offset": "+09:00",
+    "label": { "en": "Yakutsk", "ru": "Якутск" }
+  },
+  {
+    "id": "Australia/Adelaide",
+    "std_offset": "+09:30",
+    "label": { "en": "Adelaide", "ru": "Аделаида" }
+  },
+  {
+    "id": "Australia/Darwin",
+    "std_offset": "+09:30",
+    "label": { "en": "Darwin", "ru": "Дарвин" }
+  },
+  {
+    "id": "Australia/Brisbane",
+    "std_offset": "+10:00",
+    "label": { "en": "Brisbane", "ru": "Брисбен" }
+  },
+  {
+    "id": "Australia/Sydney",
+    "std_offset": "+10:00",
+    "label": { "en": "Canberra, Melbourne, Sydney", "ru": "Канберра, Мельбурн, Сидней" }
+  },
+  {
+    "id": "Pacific/Port_Moresby",
+    "std_offset": "+10:00",
+    "label": { "en": "Guam, Port Moresby", "ru": "Гуам, Порт-Морсби" }
+  },
+  {
+    "id": "Australia/Hobart",
+    "std_offset": "+10:00",
+    "label": { "en": "Hobart", "ru": "Хобарт" }
+  },
+  {
+    "id": "Asia/Vladivostok",
+    "std_offset": "+10:00",
+    "label": { "en": "Vladivostok", "ru": "Владивосток" }
+  },
+  {
+    "id": "Australia/Lord_Howe",
+    "std_offset": "+10:30",
+    "label": { "en": "Lord Howe Island", "ru": "Остров Лорд-Хау" }
+  },
+  {
+    "id": "Pacific/Bougainville",
+    "std_offset": "+11:00",
+    "label": { "en": "Bougainville Island", "ru": "Остров Бугенвиль" }
+  },
+  {
+    "id": "Asia/Srednekolymsk",
+    "std_offset": "+11:00",
+    "label": { "en": "Chokurdakh", "ru": "Чокурдах" }
+  },
+  {
+    "id": "Asia/Magadan",
+    "std_offset": "+11:00",
+    "label": { "en": "Magadan", "ru": "Магадан" }
+  },
+  {
+    "id": "Pacific/Norfolk",
+    "std_offset": "+11:00",
+    "label": { "en": "Norfolk Island", "ru": "Остров Норфолк" }
+  },
+  {
+    "id": "Asia/Sakhalin",
+    "std_offset": "+11:00",
+    "label": { "en": "Sakhalin", "ru": "Сахалин" }
+  },
+  {
+    "id": "Pacific/Guadalcanal",
+    "std_offset": "+11:00",
+    "label": { "en": "Solomon Is., New Caledonia", "ru": "Соломоновы о-ва, Новая Каледония" }
+  },
+  {
+    "id": "Asia/Kamchatka",
+    "std_offset": "+12:00",
+    "label": { "en": "Anadyr, Petropavlovsk-Kamchatsky", "ru": "Анадырь, Петропавловск-Камчатский" }
+  },
+  {
+    "id": "Pacific/Auckland",
+    "std_offset": "+12:00",
+    "label": { "en": "Auckland, Wellington", "ru": "Окленд, Веллингтон" }
+  },
+  {
+    "id": "Etc/GMT-12",
+    "std_offset": "+12:00",
+    "label": { "en": "Coordinated Universal Time+12", "ru": "Всемирное координированное время+12" }
+  },
+  {
+    "id": "Pacific/Fiji",
+    "std_offset": "+12:00",
+    "label": { "en": "Fiji", "ru": "Фиджи" }
+  },
+  {
+    "id": "Pacific/Chatham",
+    "std_offset": "+12:45",
+    "label": { "en": "Chatham Islands", "ru": "Острова Чатем" }
+  },
+  {
+    "id": "Etc/GMT-13",
+    "std_offset": "+13:00",
+    "label": { "en": "Coordinated Universal Time+13", "ru": "Всемирное координированное время+13" }
+  },
+  {
+    "id": "Pacific/Tongatapu",
+    "std_offset": "+13:00",
+    "label": { "en": "Nuku'alofa", "ru": "Нукуалофа" }
+  },
+  {
+    "id": "Pacific/Apia",
+    "std_offset": "+13:00",
+    "label": { "en": "Samoa", "ru": "Самоа" }
+  },
+  {
+    "id": "Pacific/Kiritimati",
+    "std_offset": "+14:00",
+    "label": { "en": "Kiritimati Island", "ru": "Остров Киритимати" }
+  }
+]

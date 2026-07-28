@@ -13,12 +13,16 @@ export const config = {
   enableMocks: import.meta.env.VITE_ENABLE_MOCKS === '1',
 } as const;
 
-/** Ограничения полей из openapi.yaml — сверяются тестом constants.test.ts. */
+/**
+ * Границы полей, которые пользователь вводит руками, — из openapi.yaml, сверяются тестом
+ * constants.test.ts. Форма отсекает по ним заведомо невалидное до запроса.
+ *
+ * Всё остальное сюда не попадает: значения из справочников и селектов набрать нельзя, константы
+ * деплоя приходят из env, а данные из ответов бэка проверять незачем.
+ */
 export const limits = {
   userLogin: { min: 7, max: 64 },
   secret: { min: 4, max: 32 },
-  token: { min: 64, max: 128 },
-  realm: { max: 32 },
 } as const;
 
 /** За сколько секунд до истечения access делаем проактивный refresh (backend_answers §3). */

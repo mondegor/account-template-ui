@@ -31,7 +31,7 @@ export interface LoginByTokenRequest {
 
 export interface SuccessAccess {
   access_token: string;
-  expires_in?: number;
+  expires_in: number;
   refresh_token?: string;
   message?: string;
 }
@@ -54,13 +54,31 @@ export interface UserRealm {
   updated_at: string;
 }
 
+/**
+ * Профиль пользователя.
+ */
 export interface UserInfo {
   email: string;
   phone?: string;
+  /** Язык профиля (ru-RU). Тексты ответа идут по языку из токена — в окне рассинхрона расходятся. */
   lang: string;
+  /** Часовой пояс профиля (IANA). В окне рассинхрона тоже опережает токен. */
+  tz: string;
   auth_2fa_type: UserAuth2fa;
   realms: UserRealm[];
   status: UserStatus;
+}
+
+/** Тело POST /v1/user/settings: пропуск поля = режим «авто» (пустая строка невалидна). */
+export interface ChangeUserSettingsRequest {
+  lang?: string;
+  tz?: string;
+}
+
+/** Ответ POST /v1/user/settings: оба значения фактически сохранены (в «авто» — подобраны бэком). */
+export interface UserSettings {
+  lang: string;
+  tz: string;
 }
 
 /** Открытая сессия пользователя. session_id — 8 символов (в запросах длина фиксирована). */

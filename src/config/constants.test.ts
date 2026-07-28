@@ -6,33 +6,48 @@ import { limits } from './index';
 /**
  * Тест-сверка констант ограничений с openapi.yaml (как требует plan.txt).
  * Если бэкенд поменяет длины — тест упадёт и заставит синхронизировать limits.
+ *
+ * Пиннятся только границы, которые фронт применяет в формах (см. limits): то, чем он не
+ * пользуется, сюда не добавляем — падение такого теста было бы не про наш код.
+ *
+ * Проверки якорятся по имени схемы: пары min/max в спеке повторяются (realm и secret — оба 4/32),
+ * поэтому поиск по всему файлу зеленел бы по чужому совпадению.
  */
 const spec = readFileSync(resolve(__dirname, '../../contracts/auth/openapi.yaml'), 'utf8');
 
-/** Грубая проверка: в спеке присутствует блок min/max для соответствующего поля. */
-function hasMinMax(min: number, max: number): boolean {
-  const re = new RegExp(`minLength:\\s*${min}[\\s\\S]{0,60}maxLength:\\s*${max}`);
-  return re.test(spec);
+/** Блок схемы `components.schemas.<name>` — от её строки до следующей записи того же отступа. */
+function schemaBlock(name: string): string {
+  const lines = spec.split('\n');
+  const start = lines.findIndex((l) => l === `    ${name}:`);
+  expect(start, `схема ${name} не найдена в openapi.yaml`).toBeGreaterThan(-1);
+  let end = start + 1;
+  while (end < lines.length && (lines[end]!.startsWith('      ') || lines[end]!.trim() === '')) {
+    end += 1;
+  }
+  return lines.slice(start, end).join('\n');
+}
+
+/** Есть ли в блоке поле `field` с указанными minLength/maxLength. */
+function hasMinMax(block: string, field: string, min: number, max: number): boolean {
+  const re = new RegExp(
+    `^        ${field}:$[\\s\\S]*?minLength: ${min}\\n\\s*maxLength: ${max}$`,
+    'm',
+  );
+  return re.test(block);
 }
 
 describe('ограничения полей соответствуют openapi', () => {
-  it('user_login 7/64', () => {
+  it('user_login 7/64 (AuthorizeUser)', () => {
     expect(limits.userLogin).toEqual({ min: 7, max: 64 });
-    expect(hasMinMax(7, 64)).toBe(true);
+    expect(hasMinMax(schemaBlock('Auth.Request.Model.AuthorizeUser'), 'user_login', 7, 64)).toBe(
+      true,
+    );
   });
 
-  it('secret/код 4/32', () => {
+  it('secret/код 4/32 (ConfirmOperation)', () => {
     expect(limits.secret).toEqual({ min: 4, max: 32 });
-    expect(hasMinMax(4, 32)).toBe(true);
-  });
-
-  it('token 64/128', () => {
-    expect(limits.token).toEqual({ min: 64, max: 128 });
-    expect(hasMinMax(64, 128)).toBe(true);
-  });
-
-  it('realm maxLength 32', () => {
-    expect(limits.realm.max).toBe(32);
-    expect(/maxLength:\s*32/.test(spec)).toBe(true);
+    expect(
+      hasMinMax(schemaBlock('Auth.Operation.Request.Model.ConfirmOperation'), 'secret', 4, 32),
+    ).toBe(true);
   });
 });

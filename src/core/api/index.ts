@@ -1,6 +1,12 @@
 export { authClient } from './httpClient';
 export { commonHeaders } from './commonHeaders';
 export {
+  setSettingsOverride,
+  getSettingsOverride,
+  clearSettingsOverride,
+  type SettingsOverride,
+} from './settingsOverride';
+export {
   ApiFieldError,
   ApiProblemError,
   ApiTransportError,

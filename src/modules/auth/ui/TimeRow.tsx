@@ -9,6 +9,7 @@ export function TimeRow({
   label,
   value,
   locale,
+  timeZone,
   now,
   justNow,
   icon,
@@ -16,11 +17,13 @@ export function TimeRow({
   label: string;
   value: string | undefined;
   locale: string;
+  /** Пояс профиля — приходит сверху явно, без скрытого глобала; undefined = пояс браузера. */
+  timeZone?: string;
   now: number;
   justNow: string;
   icon?: ReactNode;
 }) {
-  const rel = formatRelativeTime(value, { locale, now, justNow });
+  const rel = formatRelativeTime(value, { locale, timeZone, now, justNow });
   return rel ? (
     <Row label={label} value={rel.label} title={rel.title} icon={icon} />
   ) : (

@@ -1,6 +1,7 @@
 import i18next, { type i18n as I18nInstance } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getLanguage } from './languageProvider';
+import { DEFAULT_LANGUAGE, LANGUAGES } from './languages';
 
 /**
  * Единый инстанс i18next (+ react-i18next). Язык берём из languageProvider (браузер → явный
@@ -68,8 +69,9 @@ export function initI18n(): I18nInstance {
   initialized = true;
   void i18next.use(initReactI18next).init({
     lng: getLanguage(),
-    fallbackLng: 'ru',
-    supportedLngs: ['ru', 'en'],
+    // Языки — из справочника (data/languages.json): один список на i18next, переключатель и селект.
+    fallbackLng: DEFAULT_LANGUAGE.code,
+    supportedLngs: LANGUAGES.map((l) => l.code),
     load: 'languageOnly',
     nonExplicitSupportedLngs: true,
     returnNull: false,

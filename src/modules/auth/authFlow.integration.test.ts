@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useAuthStore } from '@core/auth';
-import { ApiFieldError } from '@core/api';
+import { refresh, useAuthStore } from '@core/auth';
+import { ApiFieldError, clearSettingsOverride } from '@core/api';
+import { TIME_ZONES, getLanguage, getLanguageSource, initI18n, setLanguage } from '@core/i18n';
 import {
+  changeUserSettings,
   checkLogin,
   closeUserSessions,
   confirmOperation,
@@ -22,6 +24,9 @@ import {
 describe('auth flow (signin → confirm → session → profile)', () => {
   beforeEach(() => {
     useAuthStore.getState().setAnonymous();
+    // getUserInfo применяет язык профиля через i18next — в приложении инстанс поднят бутстрапом
+    // (main.tsx) задолго до первого запроса, здесь воспроизводим то же условие. Идемпотентно.
+    initI18n();
   });
 
   it('успешный вход открывает сессию и отдаёт профиль', async () => {
@@ -104,6 +109,100 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(after).toHaveLength(sessions.length - 1);
     expect(after.some((s) => s.session_id === victim.session_id)).toBe(false);
     expect(after.some((s) => s.is_current)).toBe(true);
+  });
+
+  it('getUserInfo применяет язык профиля к интерфейсу — но не поверх выбора в шелле', async () => {
+    localStorage.clear();
+    const op = await signin('user@example.com');
+    await confirmOperation({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token, secret: '183947' });
+
+    // Мок отдаёт профиль с lang: 'ru-RU' — в хранилище должен лечь код языка, не локаль.
+    await getUserInfo();
+    expect(getLanguage()).toBe('ru');
+    expect(getLanguageSource()).toBe('profile');
+
+    // Пользователь выбрал язык в навигации — следующий заход за профилем его не перебивает.
+    setLanguage('en');
+    await getUserInfo();
+    expect(getLanguage()).toBe('en');
+    expect(getLanguageSource()).toBe('local');
+  });
+
+  it('сохранение настроек: профиль обгоняет токен, продление сессии их сводит', async () => {
+    localStorage.clear();
+    const op = await signin('user@example.com');
+    await confirmOperation({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token, secret: '183947' });
+
+    const before = await getUserInfo();
+    expect(before.tz).toBe('Europe/Moscow');
+    // Даты ответа — в поясе снимка токена (+03:00), а не в UTC.
+    expect(before.realms[0]!.created_at).toContain('+03:00');
+
+    // Язык оставляем русским: проверяем окно по поясу, лишняя смена языка только зашумила бы.
+    const saved = await changeUserSettings({ lang: 'ru-RU', tz: 'Asia/Tokyo' });
+    expect(saved).toEqual({ lang: 'ru-RU', tz: 'Asia/Tokyo' });
+
+    // Окно рассинхрона. Профиль отдаёт новые значения сразу, а даты приходят в новом поясе
+    // потому, что оверрайд шлёт ?tz.
+    const during = await getUserInfo();
+    expect(during.tz).toBe('Asia/Tokyo');
+    expect(during.realms[0]!.created_at).toContain('+09:00');
+
+    // Без оверрайда видно, что токен всё ещё старый: сервер формирует ответ по своему снимку,
+    // хотя поле tz профиля уже новое. Это и есть окно — единственная проверка,
+    // которая его целиком описывает.
+    clearSettingsOverride();
+    const withoutOverride = await getUserInfo();
+    expect(withoutOverride.tz).toBe('Asia/Tokyo');
+    expect(withoutOverride.realms[0]!.created_at).toContain('+03:00');
+
+    // Продление переносит настройки в токен: даты идут в новом поясе уже без всякого оверрайда.
+    expect(await refresh()).toBe(true);
+    const after = await getUserInfo();
+    expect(after.realms[0]!.created_at).toContain('+09:00');
+
+    // Профиль мока живёт в модуле и переживает тест — возвращаем исходные настройки, чтобы
+    // соседние кейсы не зависели от порядка запуска.
+    await changeUserSettings({ lang: 'ru-RU', tz: 'Europe/Moscow' });
+  });
+
+  it('значения, которых нет у сервера, → 400 по своему полю', async () => {
+    localStorage.clear();
+    const op = await signin('user@example.com');
+    await confirmOperation({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token, secret: '183947' });
+
+    // Зона есть в справочнике фронта, но мок её отвергает: так проверяется ветка, ради которой
+    // явные значения объявлены строгими, — список фронта может отстать от серверного.
+    await expect(changeUserSettings({ tz: 'Etc/GMT+12' })).rejects.toSatisfy(
+      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'tz',
+    );
+    // У языка та же строгость, но справочного значения под неё нет (отказ от en-US в моке живёт
+    // за флагом VITE_MOCK_REJECT_LANG, иначе в демо не сохранить английский). Берём язык вне
+    // справочника — путь тот же, поле то же.
+    await expect(changeUserSettings({ lang: 'fr-FR' })).rejects.toSatisfy(
+      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'lang',
+    );
+
+    // Профиль при этом не поменялся — сервер ничего не сохранил.
+    const after = await getUserInfo();
+    expect(after.tz).toBe('Europe/Moscow');
+    expect(after.lang).toBe('ru-RU');
+  });
+
+  it('«Авто» подбирает пояс по заголовку, незнакомое имя — по смещению', async () => {
+    localStorage.clear();
+    const op = await signin('user@example.com');
+    await confirmOperation({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token, secret: '183947' });
+
+    // Зоны ОС может не быть в справочнике приложения: сервер подберёт соседа по смещению,
+    // и клиенту важно применить именно то, что вернулось, а не то, что он просил.
+    const saved = await changeUserSettings({});
+    expect(saved.tz).not.toBe('');
+    expect(TIME_ZONES.some((z) => z.id === saved.tz)).toBe(true);
   });
 
   it('resend возвращает новый WaitingConfirmOperation со сброшенными счётчиками', async () => {

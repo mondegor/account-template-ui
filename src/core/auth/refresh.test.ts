@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { delay, http, HttpResponse } from 'msw';
 import { config } from '@config';
 import { server } from '@mocks/server';
-import { authClient } from '@core/api';
-import { logout } from './refresh';
+import { authClient, getSettingsOverride, setSettingsOverride } from '@core/api';
+import { getLanguage, getLanguageSource, setLanguage, setProfileLanguage } from '@core/i18n';
+import { applyAccess, forceLogout, logout } from './refresh';
 import { useAuthStore } from './authStore';
 
 /**
@@ -29,6 +30,45 @@ function deleteHandler(calls: (string | null)[], validAccess = 'fresh') {
     return new HttpResponse(null, { status: 204 });
   });
 }
+
+describe('applyAccess', () => {
+  it('снимает оверрайд настроек: новый токен несёт язык и пояс сам', () => {
+    setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
+
+    applyAccess({ access_token: 'fresh', expires_in: 1800 });
+
+    expect(getSettingsOverride()).toEqual({ lang: null, tz: null });
+    forceLogout();
+  });
+});
+
+describe('forceLogout', () => {
+  it('забывает язык профиля — иначе письмо следующему уйдёт на языке ушедшего', () => {
+    setProfileLanguage('en');
+
+    forceLogout();
+
+    expect(getLanguageSource()).toBe('auto');
+  });
+
+  it('снимает оверрайд настроек: окно рассинхрона принадлежит ушедшей сессии', () => {
+    setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
+
+    forceLogout();
+
+    expect(getSettingsOverride()).toEqual({ lang: null, tz: null });
+  });
+
+  it('выбор языка в шелле выход переживает: он про устройство, а не про пользователя', () => {
+    setLanguage('en');
+
+    forceLogout();
+
+    expect(getLanguage()).toBe('en');
+    expect(getLanguageSource()).toBe('local');
+    localStorage.clear();
+  });
+});
 
 describe('logout', () => {
   beforeEach(() => {

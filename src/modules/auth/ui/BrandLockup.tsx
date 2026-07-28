@@ -23,7 +23,13 @@ function BrandMark() {
 /** Брендовый локап: лого + «PRINT·SHOP» приглушённым eyebrow. Общий для auth-экранов. */
 export function BrandLockup() {
   return (
-    <Stack direction="row" alignItems="center" spacing={1}>
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        alignItems: 'center',
+      }}
+    >
       <BrandMark />
       <Typography
         variant="overline"

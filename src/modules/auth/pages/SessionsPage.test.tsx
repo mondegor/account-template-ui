@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { Link, MemoryRouter, useLocation } from 'react-router-dom';
+import { Link, MemoryRouter, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { addTranslations, formatDateTimeLong, initI18n, setLanguage } from '@core/i18n';
 import { deployTranslations } from '@app';

@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { QueryClient } from '@tanstack/react-query';
 import { initI18n, setLanguage } from '@core/i18n';
 import { useOperationStore } from '@core/operation';

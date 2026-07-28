@@ -5,7 +5,13 @@ import { Alert, Button, Typography } from '@mui/material';
 
 export function UiText({ children }: { children?: ReactNode }) {
   return (
-    <Typography variant="body2" color="text.secondary" data-testid="ui-text">
+    <Typography
+      variant="body2"
+      data-testid="ui-text"
+      sx={{
+        color: 'text.secondary',
+      }}
+    >
       {children}
     </Typography>
   );

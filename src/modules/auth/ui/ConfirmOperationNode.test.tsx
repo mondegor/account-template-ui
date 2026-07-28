@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { initI18n, setLanguage } from '@core/i18n';
 import { useOperationStore } from '@core/operation';
 import type { SchemaNode } from '@core/schema';

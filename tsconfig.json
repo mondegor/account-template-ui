@@ -16,18 +16,17 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
-    "baseUrl": ".",
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node"],
     "paths": {
-      "@app": ["src/app"],
-      "@app/*": ["src/app/*"],
-      "@core/*": ["src/core/*"],
-      "@ui": ["src/ui"],
-      "@ui/*": ["src/ui/*"],
-      "@modules/*": ["src/modules/*"],
-      "@config": ["src/config"],
-      "@config/*": ["src/config/*"],
-      "@mocks/*": ["src/mocks/*"]
+      "@app": ["./src/app"],
+      "@app/*": ["./src/app/*"],
+      "@core/*": ["./src/core/*"],
+      "@ui": ["./src/ui"],
+      "@ui/*": ["./src/ui/*"],
+      "@modules/*": ["./src/modules/*"],
+      "@config": ["./src/config"],
+      "@config/*": ["./src/config/*"],
+      "@mocks/*": ["./src/mocks/*"]
     }
   },
   "include": ["src"]

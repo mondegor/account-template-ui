@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Alert, Box, Button, Link, Stack, TextField, Typography } from '@mui/material';
 import { limits } from '@config';
@@ -68,10 +68,16 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
 
   return (
     <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          mt: 0.5,
+          mb: 2,
+        }}
+      >
         {hint}
       </Typography>
-
       {exhausted ? (
         <Alert severity="error" sx={{ mb: 2 }}>
           {exhaustedAlert}
@@ -85,7 +91,6 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
           {t('auth.confirm.lastResend')}
         </Alert>
       ) : null}
-
       <Box component="form" onSubmit={onSubmit} noValidate>
         {!exhausted && (
           <TextField
@@ -108,16 +113,26 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
         {!exhausted && (
           <Stack
             direction="row"
-            justifyContent="space-between"
-            sx={{ mt: 1, mb: 1.5, fontSize: 12, minHeight: 20 }}
+            sx={{
+              justifyContent: 'space-between',
+              mt: 1,
+              mb: 1.5,
+              fontSize: 12,
+              minHeight: 20,
+            }}
           >
             <Typography
               variant="caption"
-              color={snapshot.remainingAttempts <= 1 ? 'error' : 'text.secondary'}
+              sx={{ color: snapshot.remainingAttempts <= 1 ? 'error.main' : 'text.secondary' }}
             >
               {t('auth.confirm.attemptsLeft', { n: snapshot.remainingAttempts })}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {expiresLeft > 0
                 ? t('auth.confirm.expiresIn', { time: mmss(expiresLeft) })
                 : t('auth.confirm.expired')}
@@ -149,13 +164,15 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
           </Button>
         )}
       </Box>
-
       <Stack
         direction="row"
-        justifyContent="center"
-        alignItems="center"
         spacing={3}
-        sx={{ mt: 2, minHeight: 24 }}
+        sx={{
+          justifyContent: 'center',
+          alignItems: 'center',
+          mt: 2,
+          minHeight: 24,
+        }}
       >
         {canRequestNewCode &&
           !exhausted &&
@@ -169,7 +186,12 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
               {t('auth.confirm.resendLink')}
             </Link>
           ) : (
-            <Typography variant="body2" color="text.disabled">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.disabled',
+              }}
+            >
               {resendLeft > 0
                 ? t('auth.confirm.resendTimer', { time: mmss(resendLeft) })
                 : t('auth.confirm.resendLink')}
@@ -178,9 +200,14 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
         <Link
           component="button"
           type="button"
-          color="text.secondary"
           onClick={() => void flow.revoke()}
-          sx={{ verticalAlign: 'baseline', fontSize: 14, lineHeight: 'inherit', p: 0 }}
+          sx={{
+            color: 'text.secondary',
+            verticalAlign: 'baseline',
+            fontSize: 14,
+            lineHeight: 'inherit',
+            p: 0,
+          }}
         >
           {t('auth.confirm.revoke')}
         </Link>

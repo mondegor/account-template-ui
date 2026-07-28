@@ -18,7 +18,10 @@ async function bootstrap() {
   registerBaseComponents();
   registerAllModules();
 
-  if (config.enableMocks) {
+  // DEV — это `mode !== 'production'`, а не «дев-сервер»: при обычной сборке он статически false,
+  // и вся ветка с msw вырезается из бандла. Сборка в другом режиме (`vite build --mode staging`)
+  // его не гасит — там msw останется в бандле и поднимется, если флаг не выключен явно.
+  if (import.meta.env.DEV && config.enableMocks) {
     const { worker } = await import('@mocks/browser');
     await worker.start({ onUnhandledRequest: 'bypass' });
   }

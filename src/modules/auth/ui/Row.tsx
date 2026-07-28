@@ -33,7 +33,14 @@ export function Row({
   icon?: ReactNode;
 }) {
   return (
-    <Stack direction="row" alignItems="center" sx={{ py: 0.75, gap: 1 }}>
+    <Stack
+      direction="row"
+      sx={{
+        alignItems: 'center',
+        py: 0.75,
+        gap: 1,
+      }}
+    >
       {icon && (
         <Box
           sx={{
@@ -48,7 +55,12 @@ export function Row({
           {icon}
         </Box>
       )}
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {label}
       </Typography>
       {typeof value === 'string' || value == null ? (

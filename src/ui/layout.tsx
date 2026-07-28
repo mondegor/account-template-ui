@@ -23,7 +23,14 @@ export function UiPage({
         </Typography>
       )}
       {subtitle && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 0.5,
+            mb: 2.5,
+          }}
+        >
           {subtitle}
         </Typography>
       )}

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router';
 import {
   Alert,
   Box,
@@ -63,12 +63,20 @@ function CardHeading({
   return (
     <Stack
       direction="row"
-      justifyContent="space-between"
-      alignItems="center"
       spacing={2}
-      sx={{ mb }}
+      sx={{
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        mb,
+      }}
     >
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+        }}
+      >
         <Box sx={{ color: 'primary.main', display: 'flex', flexShrink: 0 }}>{icon}</Box>
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
           {title}
@@ -195,7 +203,6 @@ function ProfileView({ user }: { user: UserInfo }) {
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
         {p('title')}
       </Typography>
-
       <Card variant="outlined">
         <CardContent>
           <CardHeading
@@ -224,7 +231,13 @@ function ProfileView({ user }: { user: UserInfo }) {
             // не теряем, но и не показываем им `ru-RU` вместо «Русский».
             title={user.lang}
             value={
-              <Stack direction="row" alignItems="center" spacing={1}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 {/* Незнакомую фронту локаль показываем как есть, без флага: чужой флаг врал бы. */}
                 <LangFlag lang={fromApiLocale(user.lang) ?? ''} />
                 <Typography variant="body2">{langName}</Typography>
@@ -234,7 +247,6 @@ function ProfileView({ user }: { user: UserInfo }) {
           <Row label={p('tz')} icon={<ClockIcon size={12} />} title={tzTitle} value={tzLabel} />
         </CardContent>
       </Card>
-
       {user.realms.map((realm) => (
         <RealmCard
           key={realm.name}
@@ -246,7 +258,6 @@ function ProfileView({ user }: { user: UserInfo }) {
           now={now}
         />
       ))}
-
       <Card variant="outlined">
         <CardContent>
           <CardHeading icon={<ShieldIcon size={18} />} title={p('security')} mb={1.5} />

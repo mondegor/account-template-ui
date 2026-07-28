@@ -2,7 +2,8 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
-import importPlugin from 'eslint-plugin-import';
+import importPlugin from 'eslint-plugin-import-x';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import boundaries from 'eslint-plugin-boundaries';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
@@ -13,7 +14,7 @@ import globals from 'globals';
  *    элемента (относительные `./x`) boundaries игнорирует, поэтому «модуль → свой же модуль»
  *    разрешать не нужно: достаточно не давать modules импортировать элемент modules вообще —
  *    кросс-модульный `@modules/other` станет ошибкой, а внутримодульные relative-импорты пройдут.
- *  - import/no-internal-modules — barrels: кросс-пакетный alias-импорт только через index
+ *  - import-x/no-internal-modules — barrels: кросс-пакетный alias-импорт только через index
  *    (`@core/api`), глубокий `@core/api/errors` запрещён. Относительные импорты не трогаются.
  * prettier-config идёт последним — гасит стилевые правила (форматирование за Prettier).
  */
@@ -33,13 +34,14 @@ export default tseslint.config(
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
-      import: importPlugin,
+      'import-x': importPlugin,
       boundaries,
     },
     settings: {
-      'import/resolver': {
-        typescript: { project: './tsconfig.json' },
-      },
+      'import-x/resolver-next': [createTypeScriptImportResolver({ project: './tsconfig.json' })],
+      // Обход графа зависимостей (no-cycle) фильтрует файлы по этому списку, а дефолт — только
+      // js/jsx. Без .ts/.tsx правило доходит до первого импорта и молча ничего не находит.
+      'import-x/extensions': ['.ts', '.tsx', '.js', '.jsx'],
       'boundaries/elements': [
         { type: 'config', pattern: 'src/config' },
         { type: 'mocks', pattern: 'src/mocks' },
@@ -59,10 +61,10 @@ export default tseslint.config(
       'no-console': 'warn',
 
       // Ленивый цикл core/api ↔ core/auth безопасен (ссылки в колбэках) → warn, не error.
-      'import/no-cycle': 'warn',
+      'import-x/no-cycle': 'warn',
 
       // Barrels: запрет глубоких кросс-пакетных alias-импортов (относительные разрешены).
-      'import/no-internal-modules': [
+      'import-x/no-internal-modules': [
         'error',
         { forbid: ['@core/*/*', '@modules/*/*', '@app/*/*'] },
       ],

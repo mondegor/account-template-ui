@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router';
 import { useAuthStore } from './authStore';
 import { onForcedLogout } from './refresh';
 import { getUserRoles, rolesEnforced } from './roles';

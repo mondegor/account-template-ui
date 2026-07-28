@@ -22,7 +22,9 @@ async function restricted(code: string, filePath = 'src/core/renderer/fixture.ts
   return result!.messages.filter((m) => m.ruleId === 'no-restricted-syntax');
 }
 
-describe('eslint.config.js — запрет dangerouslySetInnerHTML', () => {
+// Таймаут поднят точечно: первый lintText прогревает ESLint (загрузка конфига со всеми плагинами
+// и typescript-eslint) и при полном параллельном прогоне не укладывается в дефолтные 5s.
+describe('eslint.config.js — запрет dangerouslySetInnerHTML', { timeout: 15000 }, () => {
   it('ловит JSX-атрибут', async () => {
     const msgs = await restricted(
       'export const C = ({ html }: { html: string }) => (\n' +

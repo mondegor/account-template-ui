@@ -16,7 +16,8 @@ export interface Error400Body {
 
 /**
  * Состояние операции подтверждения (`Auth.Response.Model.ConfirmOperationState`).
- * Приходит вложенным в 400 на confirm / open-session / resend (backend_answers §6).
+ * Приходит вложенным в 400 на confirm / open-session / resend — и только на них; читать его
+ * нужно «если присутствует» (на входной валидации токена приходит плоская 400 без счётчиков).
  */
 export interface ConfirmOperationState {
   remaining_attempts: number;

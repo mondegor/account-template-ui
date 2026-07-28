@@ -3,7 +3,7 @@ import { create } from 'zustand';
 /**
  * Auth-состояние. access-токен — ТОЛЬКО в памяти (не персистится); трактуется как opaque
  * Bearer независимо от access_type (session|jwt). expiresAt — абсолютный момент истечения
- * для проактивного refresh (backend_answers §3).
+ * для проактивного refresh (считается из expires_in ответа, срок сервер задаёт сам).
  */
 
 export type AuthStatus = 'unknown' | 'authenticated' | 'anonymous';

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { validateSchema, SchemaValidationError } from './validate';
 
 /**
- * Инварианты безопасности схемы (plan.txt): strictObject → любое сырое оформление/посторонние
+ * Инварианты безопасности схемы: strictObject → любое сырое оформление/посторонние
  * ключи отклоняются; неизвестный type — fail-closed; enum-пропсы строгие.
  */
 describe('validateSchema', () => {

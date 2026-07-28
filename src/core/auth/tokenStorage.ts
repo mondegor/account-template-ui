@@ -7,7 +7,7 @@ import { config } from '@config';
  *  - body-mode (dev/кросс-домен): refresh — ТОЛЬКО в памяти (никакого localStorage),
  *    шлётся в теле ContinueSession.refresh_token; после reload silent-refresh невозможен.
  *
- * Никогда не кладём токены в localStorage/sessionStorage. См. память [[token-storage]].
+ * Никогда не кладём токены в localStorage/sessionStorage.
  */
 
 let memoryRefresh: string | null = null;

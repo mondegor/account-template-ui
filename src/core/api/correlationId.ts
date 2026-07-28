@@ -1,7 +1,7 @@
 /**
  * Клиентская корреляционная сессия: UUID в sessionStorage, ротация по 20-мин простою
  * и по закрытию вкладки. Это НЕ auth-сессия — только для трассировки запросов
- * (заголовок X-Correlation-Id). См. память [[request-headers]].
+ * (заголовок X-Correlation-Id).
  */
 
 const KEY = 'x-correlation-id';

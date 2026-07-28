@@ -18,7 +18,7 @@ interface UseConfirmFlowArgs {
 /**
  * Флоу подтверждения (auth-обвязка над generic-движком). После 204 выполняет терминальное
  * действие openSession({token, secret}); 200 из confirm = следующее звено цепочки (задел под 2FA).
- * Счётчики/таймеры обновляются из ответов; неверный код читает operation_state (backend_answers §6).
+ * Счётчики/таймеры обновляются из ответов; неверный код читает operation_state из тела 400.
  */
 export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
   const snapshot = useOperationStore((s) => s.snapshot);

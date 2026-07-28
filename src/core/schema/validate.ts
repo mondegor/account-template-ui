@@ -3,7 +3,7 @@ import type { SchemaNode } from './types';
 import { isKnownNodeType } from './nodeTypes';
 
 /**
- * Валидация самой JSON-схемы (fail-fast при загрузке). Инварианты plan.txt:
+ * Валидация самой JSON-схемы (fail-fast при загрузке). Инварианты:
  *  - strictObject на каждом узле → любой посторонний ключ (в т.ч. `sx`/`style`/`className`/
  *    инлайновый CSS/`onClick`/`dangerouslySetInnerHTML`) — ошибка валидации;
  *  - `variant`/`color`/`autoComplete`/`inputMode` — строго enum;

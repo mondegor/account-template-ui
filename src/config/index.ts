@@ -7,7 +7,8 @@ export type TokenMode = 'cookie' | 'body';
 
 export const config = {
   authApiBaseUrl: import.meta.env.VITE_AUTH_API_BASE_URL ?? '/api/auth',
-  /** realm-константа деплоя; обязателен на signin/signup/check-login (backend_answers §7). */
+  /** realm-константа деплоя; обязателен на signin/signup/check-login — дефолта бэкенд не
+   *  подставляет, без realm запрос падает с 400. */
   realm: import.meta.env.VITE_AUTH_REALM ?? 'print-shop/standard',
   tokenMode: (import.meta.env.VITE_TOKEN_MODE ?? 'cookie') as TokenMode,
   enableMocks: import.meta.env.VITE_ENABLE_MOCKS === '1',
@@ -25,5 +26,9 @@ export const limits = {
   secret: { min: 4, max: 32 },
 } as const;
 
-/** За сколько секунд до истечения access делаем проактивный refresh (backend_answers §3). */
+/**
+ * За сколько секунд до истечения access делаем проактивный refresh. Сам срок жизни не хардкодим:
+ * он приходит в expires_in каждого ответа и заметно разный по режимам деплоя (минуты у jwt,
+ * десятки минут у непрозрачного access) — здесь только запас на дорогу до сервера.
+ */
 export const PROACTIVE_REFRESH_SKEW_SEC = 30;

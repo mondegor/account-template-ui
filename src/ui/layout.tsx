@@ -53,14 +53,9 @@ export function UiGrid({
   const templ =
     typeof cols === 'number'
       ? `repeat(${cols}, 1fr)`
-      : Object.fromEntries(
-          Object.entries(cols).map(([bp, n]) => [bp, `repeat(${n}, 1fr)`]),
-        );
+      : Object.fromEntries(Object.entries(cols).map(([bp, n]) => [bp, `repeat(${n}, 1fr)`]));
   return (
-    <Box
-      data-testid="ui-grid"
-      sx={{ display: 'grid', gap: spacing, gridTemplateColumns: templ }}
-    >
+    <Box data-testid="ui-grid" sx={{ display: 'grid', gap: spacing, gridTemplateColumns: templ }}>
       {children}
     </Box>
   );

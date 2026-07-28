@@ -44,8 +44,8 @@ describe('checkEmailAvailability (общий кэш дедупит check-login)'
     expect(await checkEmailAvailability('flaky@example.com')).toEqual({ state: 'unknown' });
     expect(getCachedEmailAvailability('flaky@example.com')).toBeUndefined();
     await checkEmailAvailability('flaky@example.com');
-    expect(vi.mocked(checkLogin).mock.calls.filter((c) => c[0] === 'flaky@example.com')).toHaveLength(
-      2,
-    );
+    expect(
+      vi.mocked(checkLogin).mock.calls.filter((c) => c[0] === 'flaky@example.com'),
+    ).toHaveLength(2);
   });
 });

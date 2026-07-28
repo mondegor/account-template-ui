@@ -12,9 +12,7 @@ import { checkLogin } from '../api/authApi';
  * ручку повторно. Транзиентные ('unknown') не кэшируем — их перепроверят и сервер на сабмите.
  */
 export type EmailAvailability =
-  | { state: 'free' }
-  | { state: 'taken'; message: string | null }
-  | { state: 'unknown' };
+  { state: 'free' } | { state: 'taken'; message: string | null } | { state: 'unknown' };
 
 /** Осевший (детерминированный) исход — то, что кладём в кэш и отдаём для мгновенного восстановления. */
 export type SettledAvailability = Extract<EmailAvailability, { state: 'free' | 'taken' }>;

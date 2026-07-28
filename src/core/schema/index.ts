@@ -9,12 +9,7 @@ export {
   type SchemaNode,
   type SchemaSource,
 } from './types';
-export {
-  isFieldType,
-  isKnownNodeType,
-  registerFieldType,
-  resetNodeTypes,
-} from './nodeTypes';
+export { isFieldType, isKnownNodeType, registerFieldType, resetNodeTypes } from './nodeTypes';
 export { validateSchema, SchemaValidationError } from './validate';
 export {
   registerComponent,

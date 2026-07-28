@@ -5,13 +5,7 @@ import { realmProvider } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
 import { loadSchema, resetComponents, resetHandlers, resetSchemas } from '@core/schema';
 import { initI18n } from '@core/i18n';
-import {
-  buildNav,
-  buildRoutes,
-  moduleQueryKey,
-  registerModule,
-  resetRegistry,
-} from './index';
+import { buildNav, buildRoutes, moduleQueryKey, registerModule, resetRegistry } from './index';
 import type { ModuleDefinition, ModuleInitContext } from './types';
 
 const ctx: ModuleInitContext = {

@@ -1,5 +1,5 @@
 import { authClient, setSettingsOverride } from '@core/api';
-import { realmProvider, tokenStorage, applyAccess } from '@core/auth';
+import { authStore, realmProvider, tokenStorage, applyAccess } from '@core/auth';
 import { adoptProfileLanguage, buildTimeZoneHeader } from '@core/i18n';
 import type {
   ChangeUserSettingsRequest,
@@ -74,8 +74,14 @@ export async function resendOperation(
   return res.data;
 }
 
-/** Отмена операции (204). */
+/**
+ * Отмена операции (204). Метод класса `any-users`: отзыв доступен только авторизованному,
+ * и 401 у него — протухший access, который интерсептор гасит продлением. Гость (кнопка «Отменить»
+ * на подтверждении входа и регистрации) права на отзыв не имеет — сервер ответил бы 401, поэтому
+ * запроса не делаем вовсе: гостевая операция живёт на сервере до истечения.
+ */
 export async function revokeOperation(req: OperationTokenRequest): Promise<void> {
+  if (!authStore.getAccess()) return;
   await authClient.patch('/v1/operation/revoke', req);
 }
 

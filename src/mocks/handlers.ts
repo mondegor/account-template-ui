@@ -479,6 +479,9 @@ export const handlers = [
 
   // --- Отмена операции ---
   http.patch(`${BASE}/v1/operation/revoke`, async ({ request }) => {
+    // Единственный из методов операции с bearer (x-auth-scopes any-users) — гостю, отменяющему
+    // своё подтверждение входа, тут прилетает штатный 401.
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Требуется авторизация');
     const body = (await request.json()) as { token?: string };
     if (body.token) operations.delete(body.token);
     return new HttpResponse(null, { status: 204 });
@@ -536,7 +539,8 @@ export const handlers = [
     }
     const session = refresh ? sessionsByRefresh.get(refresh) : undefined;
     if (!refresh || !session) {
-      return problem(401, 'Unauthorized', 'Сессия не найдена или refresh недействителен');
+      // 403, а не 401: у метода нет схемы аутентификации (security: []) — предъявлять нечего.
+      return problem(403, 'Forbidden', 'Сессия не найдена или refresh недействителен');
     }
 
     // Ротация: новый access + новый refresh, sid (sessionId) сохраняется — сессия та же.
@@ -555,11 +559,11 @@ export const handlers = [
     const payload: SuccessAccess = { access_token: newAccess, expires_in: 1800 };
     if (cookies.RTID) {
       return HttpResponse.json(payload, {
-        status: 200,
+        status: 201,
         headers: { 'Set-Cookie': `RTID=${newRefresh}; Path=/; SameSite=Strict` },
       });
     }
-    return HttpResponse.json({ ...payload, refresh_token: newRefresh }, { status: 200 });
+    return HttpResponse.json({ ...payload, refresh_token: newRefresh }, { status: 201 });
   }),
 
   // --- Закрытие сессии (выход) ---

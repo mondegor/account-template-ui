@@ -14,7 +14,7 @@ import { authClient } from './httpClient';
 const BASE = config.authApiBaseUrl;
 
 /** Отдаёт 401 на первый вызов и 200 — на повтор с новым access. */
-function protectedOnce(method: 'get' | 'post', path: string, calls: (string | null)[]) {
+function protectedOnce(method: 'get' | 'post' | 'patch', path: string, calls: (string | null)[]) {
   return http[method](`${BASE}${path}`, ({ request }) => {
     const auth = request.headers.get('Authorization');
     calls.push(auth);
@@ -32,7 +32,7 @@ function protectedOnce(method: 'get' | 'post', path: string, calls: (string | nu
 function refreshHandler(patches: string[]) {
   return http.patch(`${BASE}/v1/session`, () => {
     patches.push('patch');
-    return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 });
+    return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 }, { status: 201 });
   });
 }
 
@@ -75,6 +75,28 @@ describe('authClient: 401 → refresh → повтор', () => {
     server.use(refreshHandler(patches), protectedOnce('post', '/v1/session', calls));
 
     await expect(authClient.post('/v1/session', { token: 'x', secret: '1' })).rejects.toThrow();
+
+    expect(patches).toEqual([]);
+    expect(calls).toEqual(['Bearer stale']);
+  });
+
+  it('401 на PATCH /v1/operation/revoke продлевается: отзыв доступен авторизованному', async () => {
+    const patches: string[] = [];
+    const calls: (string | null)[] = [];
+    server.use(refreshHandler(patches), protectedOnce('patch', '/v1/operation/revoke', calls));
+
+    await authClient.patch('/v1/operation/revoke', { token: 'x' });
+
+    expect(patches).toHaveLength(1);
+    expect(calls).toEqual(['Bearer stale', 'Bearer fresh']);
+  });
+
+  it('401 на PATCH /v1/operation/confirm refresh НЕ запускает: метод гостевой', async () => {
+    const patches: string[] = [];
+    const calls: (string | null)[] = [];
+    server.use(refreshHandler(patches), protectedOnce('patch', '/v1/operation/confirm', calls));
+
+    await expect(authClient.patch('/v1/operation/confirm', { token: 'x' })).rejects.toThrow();
 
     expect(patches).toEqual([]);
     expect(calls).toEqual(['Bearer stale']);

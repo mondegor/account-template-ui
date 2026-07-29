@@ -4,7 +4,7 @@ import { config } from '@config';
 import { server } from '@mocks/server';
 import { authClient, getSettingsOverride, setSettingsOverride } from '@core/api';
 import { getLanguage, getLanguageSource, setLanguage, setProfileLanguage } from '@core/i18n';
-import { applyAccess, forceLogout, logout, refresh } from './refresh';
+import { applyAccess, forceLogout, logout } from './refresh';
 import { useAuthStore } from './authStore';
 
 /**
@@ -39,27 +39,6 @@ describe('applyAccess', () => {
 
     expect(getSettingsOverride()).toEqual({ lang: null, tz: null });
     forceLogout();
-  });
-});
-
-describe('refresh', () => {
-  /**
-   * Продление не завязано на код ответа: спека объявляет 201, моки отдают 200. Тест держит это
-   * свойство — иначе расхождение спеки с реализацией бэка роняло бы сессию на ровном месте.
-   */
-  it('201 применяет access так же, как 200', async () => {
-    useAuthStore.setState({ status: 'anonymous', accessToken: null, expiresAt: null });
-    server.use(
-      http.patch(`${BASE}/v1/session`, () =>
-        HttpResponse.json({ access_token: 'fresh', expires_in: 1800 }, { status: 201 }),
-      ),
-    );
-
-    await expect(refresh()).resolves.toBe(true);
-
-    expect(useAuthStore.getState().status).toBe('authenticated');
-    expect(useAuthStore.getState().accessToken).toBe('fresh');
-    forceLogout(); // снимает проактивный таймер, заведённый applyAccess
   });
 });
 
@@ -102,7 +81,7 @@ describe('logout', () => {
     server.use(
       http.patch(`${BASE}/v1/session`, () => {
         patches.push('patch');
-        return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 });
+        return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 }, { status: 201 });
       }),
       deleteHandler(deletes),
     );
@@ -121,7 +100,7 @@ describe('logout', () => {
     server.use(
       http.patch(`${BASE}/v1/session`, () => {
         patches.push('patch');
-        return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 });
+        return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 }, { status: 201 });
       }),
       deleteHandler(deletes, 'stale'),
     );
@@ -138,8 +117,8 @@ describe('logout', () => {
     server.use(
       http.patch(`${BASE}/v1/session`, () =>
         HttpResponse.json(
-          { title: 'Unauthorized', status: 401 },
-          { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
+          { title: 'Forbidden', status: 403 },
+          { status: 403, headers: { 'Content-Type': 'application/problem+json' } },
         ),
       ),
       deleteHandler(deletes),
@@ -156,7 +135,7 @@ describe('logout', () => {
     server.use(
       http.patch(`${BASE}/v1/session`, () => {
         patches.push('patch');
-        return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 });
+        return HttpResponse.json({ access_token: 'fresh', expires_in: 1800 }, { status: 201 });
       }),
       // 401 от уже закрытой сессии — ровно то, что вернёт бэк смонтированной странице.
       http.get(`${BASE}/v1/user`, () =>
@@ -176,7 +155,7 @@ describe('logout', () => {
     const stray = authClient.get('/v1/user').catch(() => undefined);
     await Promise.all([out, stray]);
 
-    // Продление внутри grace-окна вернуло бы 200, applyAccess() снова выставил бы authenticated —
+    // Продление внутри grace-окна вернуло бы 201, applyAccess() снова выставил бы authenticated —
     // вкладка осталась бы «залогиненной» с сессией, которую сервер уже закрыл.
     expect(patches).toEqual([]);
     expect(useAuthStore.getState().status).toBe('anonymous');

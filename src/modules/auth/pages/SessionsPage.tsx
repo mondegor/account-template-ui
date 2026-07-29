@@ -104,7 +104,7 @@ export function SessionsPage() {
   const closeOthers = () => {
     setConfirmOpen(false);
     // Диалог мог остаться открытым после того, как список опустел (закрыли последнюю чужую сессию
-    // одиночной кнопкой) — пустой mutate([]) ушёл бы в бэк и вернулся 422 «укажите хотя бы одну».
+    // одиночной кнопкой) — пустой mutate([]) ушёл бы в бэк и вернулся 400: список обязателен.
     if (others.length === 0) return;
     close.mutate({ ids: others.map((s) => s.session_id), single: false, realm: effective });
   };

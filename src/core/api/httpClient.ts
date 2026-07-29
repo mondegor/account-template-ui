@@ -30,11 +30,20 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean;
 }
 
-// Эндпоинты, где 401 НЕ должен инициировать refresh (guests-only + сам refresh).
-// Сравнение точное: '/v1/sessions' — другой ресурс, чем '/v1/session', и его 401 продлевать НАДО.
-const NO_REFRESH_PATHS = ['/v1/signin', '/v1/signup', '/v1/session'];
-// Здесь путь продолжается id-ом операции/логином, поэтому только эти записи матчатся префиксом.
-const NO_REFRESH_PREFIXES = ['/v1/operation/', '/v1/check/'];
+// Эндпоинты, где 401 НЕ должен инициировать refresh: по спеке они гостевые и 401 не отдают вовсе.
+// Из /v1/session сюда доходит только POST — PATCH и DELETE идут через rawClient, мимо этого
+// интерсептора. Сравнение точное: '/v1/sessions' — другой ресурс, чем '/v1/session', и его 401
+// продлевать НАДО. По той же причине тут нет '/v1/operation/revoke': отзыв операции — метод
+// класса any-users, 401 у него штатный (протухший access), и продлевать его НАДО.
+const NO_REFRESH_PATHS = [
+  '/v1/signin',
+  '/v1/signup',
+  '/v1/session',
+  '/v1/operation/confirm',
+  '/v1/operation/resend',
+];
+// Группа /v1/check/* гостевая целиком, поэтому матчится префиксом.
+const NO_REFRESH_PREFIXES = ['/v1/check/'];
 
 function isNoRefreshPath(url: string | undefined): boolean {
   if (!url) return false;

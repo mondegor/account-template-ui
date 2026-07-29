@@ -26,7 +26,7 @@ async function load(saved: { lang: string; tz: string }) {
   const i18n = await import('@core/i18n');
   i18n.initI18n();
   const auth = await import('@core/auth');
-  const api = await import('@core/api');
+  const requestMeta = await import('@core/request-meta');
   const { changeUserSettings } = await import('./authApi');
 
   auth.useAuthStore.setState({
@@ -48,7 +48,7 @@ async function load(saved: { lang: string; tz: string }) {
     }),
   );
 
-  return { ...i18n, ...api, changeUserSettings, sent };
+  return { ...i18n, ...requestMeta, changeUserSettings, sent };
 }
 
 describe('changeUserSettings: что уходит на сервер', () => {

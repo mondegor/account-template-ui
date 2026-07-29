@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { delay, http, HttpResponse } from 'msw';
 import { config } from '@config';
 import { server } from '@mocks/server';
-import { authClient, getSettingsOverride, setSettingsOverride } from '@core/api';
+import { authClient } from '@core/api';
 import { getLanguage, getLanguageSource, setLanguage, setProfileLanguage } from '@core/i18n';
+import { getSettingsOverride, setSettingsOverride } from '@core/request-meta';
 import { applyAccess, forceLogout, logout } from './refresh';
 import { useAuthStore } from './authStore';
 

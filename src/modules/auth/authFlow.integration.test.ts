@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { refresh, useAuthStore } from '@core/auth';
-import { ApiFieldError, clearSettingsOverride } from '@core/api';
+import { ApiFieldError } from '@core/api';
 import { TIME_ZONES, getLanguage, getLanguageSource, initI18n, setLanguage } from '@core/i18n';
+import { clearSettingsOverride } from '@core/request-meta';
 import {
   changeUserSettings,
   checkLogin,

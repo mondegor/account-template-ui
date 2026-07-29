@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { config, PROACTIVE_REFRESH_SKEW_SEC } from '@config';
-import { clearSettingsOverride, commonHeaders } from '@core/api';
 import { clearProfileLanguage } from '@core/i18n';
+import { clearSettingsOverride, commonHeaders } from '@core/request-meta';
 import { authStore } from './authStore';
 import { tokenStorage } from './tokenStorage';
 

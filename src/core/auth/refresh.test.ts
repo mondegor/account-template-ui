@@ -4,7 +4,7 @@ import { config } from '@config';
 import { server } from '@mocks/server';
 import { authClient, getSettingsOverride, setSettingsOverride } from '@core/api';
 import { getLanguage, getLanguageSource, setLanguage, setProfileLanguage } from '@core/i18n';
-import { applyAccess, forceLogout, logout } from './refresh';
+import { applyAccess, forceLogout, logout, refresh } from './refresh';
 import { useAuthStore } from './authStore';
 
 /**
@@ -39,6 +39,27 @@ describe('applyAccess', () => {
 
     expect(getSettingsOverride()).toEqual({ lang: null, tz: null });
     forceLogout();
+  });
+});
+
+describe('refresh', () => {
+  /**
+   * Продление не завязано на код ответа: спека объявляет 201, моки отдают 200. Тест держит это
+   * свойство — иначе расхождение спеки с реализацией бэка роняло бы сессию на ровном месте.
+   */
+  it('201 применяет access так же, как 200', async () => {
+    useAuthStore.setState({ status: 'anonymous', accessToken: null, expiresAt: null });
+    server.use(
+      http.patch(`${BASE}/v1/session`, () =>
+        HttpResponse.json({ access_token: 'fresh', expires_in: 1800 }, { status: 201 }),
+      ),
+    );
+
+    await expect(refresh()).resolves.toBe(true);
+
+    expect(useAuthStore.getState().status).toBe('authenticated');
+    expect(useAuthStore.getState().accessToken).toBe('fresh');
+    forceLogout(); // снимает проактивный таймер, заведённый applyAccess
   });
 });
 

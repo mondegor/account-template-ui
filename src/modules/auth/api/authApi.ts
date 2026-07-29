@@ -1,6 +1,7 @@
-import { authClient, setSettingsOverride } from '@core/api';
+import { authClient } from '@core/api';
 import { authStore, realmProvider, tokenStorage, applyAccess } from '@core/auth';
 import { adoptProfileLanguage, buildTimeZoneHeader } from '@core/i18n';
+import { setSettingsOverride } from '@core/request-meta';
 import type {
   ChangeUserSettingsRequest,
   ConfirmOperationRequest,

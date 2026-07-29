@@ -22,8 +22,7 @@ async function load() {
   const i18n = await import('@core/i18n');
   const auth = await import('@core/auth');
   const { authClient } = await import('./httpClient');
-  const { commonHeaders } = await import('./commonHeaders');
-  const override = await import('./settingsOverride');
+  const requestMeta = await import('@core/request-meta');
 
   const seen: URL[] = [];
   server.use(
@@ -46,7 +45,7 @@ async function load() {
       expiresAt: null,
     });
 
-  return { ...i18n, ...override, commonHeaders, call, authenticate };
+  return { ...i18n, ...requestMeta, call, authenticate };
 }
 
 describe('интерсептор: ?lang по источнику языка', () => {

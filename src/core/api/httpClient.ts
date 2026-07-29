@@ -2,9 +2,8 @@ import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig 
 import { config } from '@config';
 import { authStore, refresh } from '@core/auth';
 import { buildTimeZoneHeader, getLanguage, getLanguageSource, toLocale } from '@core/i18n';
-import { commonHeaders } from './commonHeaders';
+import { commonHeaders, getSettingsOverride } from '@core/request-meta';
 import { normalizeError } from './errors';
-import { getSettingsOverride } from './settingsOverride';
 
 /**
  * Auth-клиент. withCredentials — только тут (не глобально), чтобы кука RTID уходила по назначению.

@@ -79,6 +79,47 @@ describe('operationReducer', () => {
   it('REVOKED очищает состояние', () => {
     expect(operationReducer(start(), { type: 'REVOKED' })).toBeNull();
   });
+
+  /**
+   * `dead` ≠ `expired`: срок как раз не истёк, отпало само условие операции. TICK такую фазу
+   * трогать не должен — иначе она подменилась бы на «истекло», и экран предложил бы запросить
+   * новый код там, где запрашивать не у чего.
+   */
+  it('INVALIDATED переводит в dead, и TICK эту фазу не переписывает', () => {
+    const s = operationReducer(start(), { type: 'INVALIDATED' })!;
+    expect(s.phase).toBe('dead');
+
+    const after = operationReducer(s, { type: 'TICK', now: T0 + 700_000 })!;
+    expect(after.phase).toBe('dead');
+  });
+
+  /**
+   * Истечение ПОДТВЕРЖДЁННОЙ операции — тоже тупик, а не обычное `expired`: подтверждать в ней
+   * нечего, а повторную отправку кода по подтверждённой операции сервер отклоняет. Уйди она в
+   * `expired` — экран предложил бы «Запросить новый код», который заведомо откажет.
+   */
+  it('TICK над confirmed → dead, а не expired', () => {
+    const confirmed = operationReducer(start(), { type: 'CONFIRMED' })!;
+    expect(confirmed.phase).toBe('confirmed');
+
+    const alive = operationReducer(confirmed, { type: 'TICK', now: T0 + 599_000 })!;
+    expect(alive.phase).toBe('confirmed');
+
+    const after = operationReducer(confirmed, { type: 'TICK', now: T0 + 600_001 })!;
+    expect(after.phase).toBe('dead');
+  });
+
+  it('CONFIRM_FAILED мёртвую операцию не воскрешает', () => {
+    const dead = operationReducer(start(), { type: 'INVALIDATED' })!;
+
+    const after = operationReducer(dead, {
+      type: 'CONFIRM_FAILED',
+      state: { remaining_attempts: 2, expires_in: 500 },
+      now: T0 + 10_000,
+    })!;
+
+    expect(after).toBe(dead);
+  });
 });
 
 describe('селекторы резенда', () => {

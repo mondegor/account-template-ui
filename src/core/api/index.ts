@@ -2,8 +2,11 @@ export { authClient } from './httpClient';
 export {
   ApiFieldError,
   ApiProblemError,
+  ApiRateLimitError,
   ApiTransportError,
+  apiErrorText,
   normalizeError,
+  parseErrorCode,
   type ApiError,
 } from './errors';
 export type {

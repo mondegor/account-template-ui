@@ -9,7 +9,7 @@ export function createContractRegistry(): ContractRegistry {
   return {
     provide<T>(key: ContractKey<T>, impl: T): void {
       if (impls.has(key.id)) {
-        throw new Error(`contractRegistry: контракт "${key.id}" уже опубликован`);
+        throw new Error(`contractRegistry: contract "${key.id}" is already published`);
       }
       impls.set(key.id, impl);
     },

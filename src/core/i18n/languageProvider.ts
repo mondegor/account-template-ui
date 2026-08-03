@@ -73,7 +73,7 @@ export function clearProfileLanguage(): void {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(SOURCE_KEY);
   } catch {
-    // недоступный storage — в памяти уже сброшено, а писать было некуда и раньше.
+    // недоступный storage — в памяти уже сброшено, а писать некуда.
   }
 }
 

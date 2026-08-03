@@ -1,10 +1,12 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { ApiProblemError, ApiRateLimitError } from '@core/api';
 import { initI18n, setLanguage } from '@core/i18n';
 import { useOperationStore } from '@core/operation';
 import type { SchemaNode } from '@core/schema';
 import { authTranslations } from '../i18n';
+import { confirmOperation, openSession } from '../api/authApi';
 import { saveConfirmReturn } from '../lib/confirmReturn';
 import { ConfirmOperationNode } from './ConfirmOperationNode';
 
@@ -48,6 +50,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   sessionStorage.clear();
+  vi.mocked(confirmOperation).mockReset();
+  vi.mocked(openSession).mockReset();
   // Активная операция подтверждения, чтобы узел отрисовался (иначе snapshot=null → null).
   useOperationStore.getState().dispatch({
     type: 'START',
@@ -61,6 +65,11 @@ beforeEach(() => {
     },
     now: Date.now(),
   });
+});
+
+afterEach(() => {
+  // Тик узла живёт на setInterval: оставленные фейковые таймеры утекли бы в соседний кейс.
+  vi.useRealTimers();
 });
 
 describe('ConfirmOperationNode — «Отменить» возвращает на исходный экран', () => {
@@ -78,5 +87,115 @@ describe('ConfirmOperationNode — «Отменить» возвращает н�
     renderConfirm();
     fireEvent.click(screen.getByRole('button', { name: 'Отменить' }));
     await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/signin'));
+  });
+});
+
+/**
+ * Код принят, а открыть сессию не вышло (429 — лимит одновременных сессий). Операция при этом цела,
+ * и повторять надо ровно открытие сессии: экран не должен просить код заново — звено уже пройдено,
+ * и повторное подтверждение вернуло бы тот же 204, не приблизив пользователя ко входу.
+ */
+describe('ConfirmOperationNode — отказ терминального действия', () => {
+  async function failOpenSession() {
+    vi.mocked(confirmOperation).mockResolvedValue(null);
+    vi.mocked(openSession).mockRejectedValue(
+      new ApiRateLimitError(
+        {
+          title: 'Too Many Requests',
+          status: 429,
+          detail: 'Превышен лимит одновременных сессий',
+          instance: '',
+          time: '',
+        },
+        30,
+      ),
+    );
+    renderConfirm();
+    fireEvent.change(screen.getByLabelText('Код подтверждения'), { target: { value: '183947' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+    // Ждём ТЕКСТ ОТКАЗА, а не кнопку «Повторить»: кнопку рисует уже фаза `confirmed`, то есть до
+    // того, как приедет отказ openSession. На той ранней отрисовке сабмит ещё выключен (submitting),
+    // и клик по «Повторить» ушёл бы в никуда. Отказ же приходит вместе со снятием submitting.
+    await screen.findByText(/Превышен лимит одновременных сессий/);
+  }
+
+  it('поле кода и повторная отправка уходят, остаётся «Повторить»', async () => {
+    await failOpenSession();
+
+    expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Отправить повторно')).not.toBeInTheDocument();
+    expect(screen.getByText(/Подтверждать заново не нужно/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Повторить' })).toBeEnabled();
+  });
+
+  it('«Повторить» дёргает только открытие сессии — подтверждение не переигрывается', async () => {
+    await failOpenSession();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+
+    await waitFor(() => expect(vi.mocked(openSession)).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(confirmOperation)).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * «Повторить» так и не нажали, и срок операции вышел. Отказ сервера объяснял прошлое состояние
+   * экрана, а не это: повторять больше негде, и обещание «через 30 секунд» звало бы в кнопку,
+   * которой уже нет. Экран обязан говорить про саму операцию.
+   */
+  it('срок вышел, пока ждали повтора: текст про операцию, а не прошлый отказ', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await failOpenSession();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(601_000);
+    });
+
+    expect(screen.getByText(/Эту операцию больше нельзя завершить/)).toBeInTheDocument();
+    expect(screen.queryByText(/Превышен лимит одновременных сессий/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 409 — операцию аннулировало само условие, при котором она создавалась (2FA отключили уже после).
+ * Экран обязан стать тупиком: ни поля кода, ни «Повторить», ни «запросить новый код» — повторять
+ * нечего, единственный выход отсюда — начать вход заново. Объяснить это может только сервер:
+ * свой текст про «начните заново» говорит, что делать, но не почему.
+ */
+describe('ConfirmOperationNode — операция аннулирована сервером', () => {
+  it('экран сводится к тупику с причиной от сервера', async () => {
+    vi.mocked(confirmOperation).mockRejectedValue(
+      new ApiProblemError({
+        title: 'Conflict',
+        status: 409,
+        detail: '2FA была отключена',
+        instance: '',
+        time: '',
+      }),
+    );
+    renderConfirm();
+    fireEvent.change(screen.getByLabelText('Код подтверждения'), { target: { value: '183947' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+
+    expect(await screen.findByText('2FA была отключена')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Запросить новый код/)).not.toBeInTheDocument();
+    // Выход с экрана остаётся ровно один.
+    expect(screen.getByRole('button', { name: 'Отменить' })).toBeInTheDocument();
+  });
+
+  /**
+   * В `dead` приводит и локальный таймер — истечением уже подтверждённой операции. Отказа сервера
+   * там не было, объяснять нечем, и вместо пустого места экран говорит свой текст.
+   */
+  it('без отказа сервера (операция истекла подтверждённой) — свой текст про тупик', async () => {
+    useOperationStore.getState().dispatch({ type: 'INVALIDATED' });
+    renderConfirm();
+
+    expect(await screen.findByText(/Эту операцию больше нельзя завершить/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
   });
 });

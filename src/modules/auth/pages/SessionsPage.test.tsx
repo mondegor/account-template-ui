@@ -8,6 +8,7 @@ import { registerBaseComponents } from '@core/renderer';
 import { registerModule, resetRegistry } from '@core/module-registry';
 import { resetComponents, resetSchemas } from '@core/schema';
 import { realmProvider, useAuthStore } from '@core/auth';
+import { ApiTransportError } from '@core/api';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
 import { cardWith, rowValue } from '../../../test/dom';
@@ -273,7 +274,7 @@ describe('SessionsPage', () => {
     // Пока диалог закрывается, MUI держит контент под ним aria-hidden — ждём, пока корзины вернутся.
     await waitFor(() => expect(trashButtons()).toHaveLength(OTHERS.length));
 
-    // Клик по корзине посреди bulk раньше сбрасывал спиннер массовой кнопки и путал onSettled.
+    // Клик по корзине посреди bulk не трогает спиннер массовой кнопки и не путает onSettled.
     trashButtons().forEach((btn) => expect(btn).toBeDisabled());
     fireEvent.click(trashButtons()[0]!);
     expect(closeUserSessions).toHaveBeenCalledTimes(1);
@@ -289,7 +290,7 @@ describe('SessionsPage', () => {
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
 
-    // Регрессия: раньше страница на время загрузки схлопывалась целиком, вместе с комбобоксом.
+    // Комбобокс переживает загрузку: страница не схлопывается целиком.
     expect(screen.getByRole('combobox')).toBeInTheDocument();
 
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(OTHER_REALM));
@@ -407,8 +408,7 @@ describe('SessionsPage', () => {
 
   it('кабинет сменили посреди запроса → ошибка не всплывает над чужим списком и не ждёт возврата', async () => {
     // Корзины на время запроса выключены, а комбобокс — нет: кабинет можно сменить, пока запрос в
-    // полёте, и тогда ошибка рождается уже над чужим списком. Гард по isPending на смене кабинета
-    // этот случай пропускал: сбрасывать было нечего (ошибки ещё нет), а второго шанса он не давал.
+    // полёте, и тогда ошибка рождается уже над чужим списком.
     let fail: (e: Error) => void = () => {};
     vi.mocked(closeUserSessions).mockImplementation(
       () => new Promise<void>((_, reject) => (fail = reject)),
@@ -474,11 +474,17 @@ describe('SessionsPage', () => {
   });
 
   it('упал профиль → сообщение про профиль, а не про сессии', async () => {
-    vi.mocked(getUserInfo).mockRejectedValue(new Error('нет связи'));
+    // Ошибка в том виде, в каком её отдаёт интерсептор. Текст плашки берётся из переводов, а не из
+    // `message` класса: тот английский и служебный (@core/api/errors).
+    vi.mocked(getUserInfo).mockRejectedValue(new ApiTransportError());
     renderSessions();
 
     // Список сессий тут даже не запрашивался (реалмы неизвестны) — текст про него сбивал бы с толку.
-    expect(await screen.findByText('Не удалось загрузить профиль: нет связи')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Не удалось загрузить профиль: Нет связи с сервером. Проверьте подключение.',
+      ),
+    ).toBeInTheDocument();
     expect(getUserSessions).not.toHaveBeenCalled();
   });
 

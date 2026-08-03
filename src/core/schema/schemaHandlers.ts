@@ -33,7 +33,7 @@ const handlers = new Map<string, HandlerEntry>();
 
 export function registerHandler(schemaId: string, entry: HandlerEntry): void {
   if (handlers.has(schemaId)) {
-    throw new Error(`schemaHandlers: обработчик "${schemaId}" уже зарегистрирован`);
+    throw new Error(`schemaHandlers: handler "${schemaId}" is already registered`);
   }
   handlers.set(schemaId, entry);
 }

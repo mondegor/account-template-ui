@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Box } from '@mui/material';
-import { ApiFieldError, ApiProblemError } from '@core/api';
+import { ApiFieldError, apiErrorText } from '@core/api';
 import { getHandler, type SchemaNode } from '@core/schema';
 import { UiAlert, UiButton } from '@ui';
 import { useHandlerContext } from './bindings';
@@ -22,9 +22,10 @@ type FormValues = Record<string, unknown>;
 /**
  * Рендер узла `form`: react-hook-form + zod-схема, СГЕНЕРИРОВАННАЯ из `validation` полей. На submit
  * берёт обработчик по schemaId (schemaHandlers) — маппинг в DTO и вызов API живут там. Ошибки:
- * поля с известным именем → setError на поле; прочие + ApiProblemError (401/403/5xx) → форменный
- * алерт. Чувствительные поля (password) сбрасываются после submit. children — предрендеренные
- * дочерние узлы (поля резолвят контекст формы позиционно внутри FormProvider).
+ * 400 по полю этой формы → setError на поле; прочие 400, 429 и ApiProblemError (401/403/5xx) →
+ * форменный алерт с текстом от apiErrorText. Чувствительные поля (password) чистятся после submit.
+ * children — предрендеренные дочерние узлы (поля резолвят контекст формы позиционно внутри
+ * FormProvider).
  */
 export function FormRenderer({
   node,
@@ -38,8 +39,8 @@ export function FormRenderer({
   const { t } = useTranslation();
   const ctx = useHandlerContext();
   const [formError, setFormError] = useState<string | null>(null);
-  // Правка любого поля убирает форменный алерт прошлой попытки (как в старом SignupPage). setState
-  // с тем же null React пропускает, так что вызов на каждый keystroke безвреден.
+  // Правка любого поля убирает форменный алерт прошлой попытки. setState с тем же null React
+  // пропускает, так что вызов на каждый keystroke безвреден.
   const clearFormError = useCallback(() => setFormError(null), []);
   const formErrorCtx = useMemo(
     () => ({ hasError: formError !== null, clear: clearFormError }),
@@ -154,17 +155,12 @@ function mapSubmitError(
   t: TFunction,
 ): void {
   if (e instanceof ApiFieldError) {
-    const globals: string[] = [];
-    for (const f of e.fields) {
-      if (fieldNames.has(f.code)) setError(f.code, { message: f.detail });
-      else globals.push(f.detail);
-    }
-    if (globals.length) setFormError(globals.join(' '));
+    const { byField, global } = e.split(fieldNames, t);
+    for (const { name, detail } of byField) setError(name, { message: detail });
+    if (global) setFormError(global);
     return;
   }
-  if (e instanceof ApiProblemError) {
-    setFormError(e.details.detail || e.details.title);
-    return;
-  }
-  setFormError(t('common.error.generic'));
+  // Всё остальное (429, problem+json, транспорт, неизвестное) — общим сообщением по единому
+  // правилу: серверная деталь, иначе перевод.
+  setFormError(apiErrorText(e, t));
 }

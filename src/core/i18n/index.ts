@@ -10,8 +10,8 @@ export { adoptProfileLanguage } from './languageSync';
 export { LANGUAGES, DEFAULT_LANGUAGE, findLanguage, toLocale, fromApiLocale } from './languages';
 export type { Language } from './languages';
 // Наружу — только прикладное. Арифметика смещений (parseGmtOffset, getTimeZoneOffset,
-// formatOffset, isDstActive) остаётся внутренней: единственным её потребителем со стороны был
-// мок, и у него теперь своя (src/mocks/serverTime.ts).
+// formatOffset, isDstActive) остаётся внутренней: снаружи она никому не нужна — у мока своя
+// (src/mocks/serverTime.ts).
 export {
   TIME_ZONES,
   findTimeZone,

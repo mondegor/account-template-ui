@@ -111,9 +111,7 @@ function formReady() {
   return screen.findByRole('button', { name: 'Сохранить' });
 }
 
-// Таймаут поднят точечно: страница поднимает полный MUI-рендер с двумя тяжёлыми селектами
-// (языки и полный список поясов), и при полном параллельном прогоне кейсы подходят к 5s вплотную.
-describe('SettingsPage', { timeout: 15000 }, () => {
+describe('SettingsPage', () => {
   it('префилл — из профиля, а не «Авто»', async () => {
     renderSettings();
     await formReady();
@@ -182,7 +180,10 @@ describe('SettingsPage', { timeout: 15000 }, () => {
 
   it('400 по полю подсвечивает нужный селект его же текстом', async () => {
     vi.mocked(changeUserSettings).mockRejectedValue(
-      new ApiFieldError([{ code: 'tz', detail: 'Часовой пояс не поддерживается' }], 400),
+      new ApiFieldError(
+        [{ code: 'ValidateError/tz', detail: 'Часовой пояс не поддерживается' }],
+        400,
+      ),
     );
     renderSettings();
     await formReady();

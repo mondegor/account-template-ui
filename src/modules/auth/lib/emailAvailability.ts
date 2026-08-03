@@ -1,4 +1,4 @@
-import { ApiFieldError } from '@core/api';
+import { ApiFieldError, parseErrorCode } from '@core/api';
 import { checkLogin } from '../api/authApi';
 
 /**
@@ -6,6 +6,12 @@ import { checkLogin } from '../api/authApi';
  * (EmailFieldNode) и async-валидатора на submit (register.ts), чтобы классификация ответа не
  * разъезжалась. Занят → 400 ApiFieldError (текст поля в `message`); 5xx/сеть → 'unknown'
  * (нейтрально: не подтверждаем и не блокируем — реальный гейт сам signup).
+ *
+ * «Занят» — это РОВНО `EmailAlreadyExists`, а не любой 400: `ValidateError/...` значит, что запрос
+ * забракован по значению (в т.ч. по realm'у, к емаилу отношения не имеющему), и выдавать это за
+ * занятость нельзя — тем более что исход оседает в кэше на всю сессию. Разбираем поэтому префикс
+ * кода; суффикс, наоборот, не смотрим: check-login ругается на своё поле (`user_login`), а форма
+ * регистрации зовёт поле `user_email` — под него текст кладёт явный асинк-валидатор.
  *
  * Детерминированные исходы (free/taken) кэшируются на сессию по нормализованному email: живой чек
  * поля уже сходил в сеть, поэтому async-валидатор на сабмите берёт готовый результат и НЕ дёргает
@@ -34,8 +40,13 @@ export async function checkEmailAvailability(email: string): Promise<EmailAvaila
     cache.set(key, result);
     return result;
   } catch (e) {
-    if (e instanceof ApiFieldError) {
-      const result: SettledAvailability = { state: 'taken', message: e.fields[0]?.detail ?? null };
+    // `errors` — список, и занятость в нём не обязана быть первой: ищем по всему.
+    const attr =
+      e instanceof ApiFieldError
+        ? e.fields.find((f) => parseErrorCode(f.code).reason === 'EmailAlreadyExists')
+        : undefined;
+    if (attr) {
+      const result: SettledAvailability = { state: 'taken', message: attr.detail || null };
       cache.set(key, result);
       return result;
     }

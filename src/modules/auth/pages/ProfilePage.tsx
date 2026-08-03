@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import { AppShell, LangFlag } from '@core/shell';
+import { apiErrorText } from '@core/api';
 import { realmProvider } from '@core/auth';
 import { findLanguage, fromApiLocale, resolveTimeZone, timeZoneLabel } from '@core/i18n';
 import { moduleQueryKey } from '@core/module-registry';
@@ -265,6 +266,27 @@ function ProfileView({ user }: { user: UserInfo }) {
             <Chip size="small" label={p(`twoFa.${user.auth_2fa_type}`)} />
             <Chip size="small" color={STATUS_COLOR[user.status]} label={user.status} />
           </Stack>
+          {/* Остаток аварийных кодов приходит только при включённой 2FA — отсутствие поля значит
+              «показывать нечего», а не «ноль». Ноль же не рядовое число, а повод их перевыпустить,
+              поэтому он предупреждающий и словом: перевыпуск живёт в разделе безопасности, которого
+              в UI пока нет, и обещать кнопку тут нечем. */}
+          {user.recovery_codes_left !== undefined && (
+            <Row
+              label={p('recoveryCodesLeft')}
+              icon={<ShieldIcon size={12} />}
+              value={
+                <Chip
+                  size="small"
+                  color={user.recovery_codes_left === 0 ? 'warning' : 'default'}
+                  label={
+                    user.recovery_codes_left === 0
+                      ? p('recoveryCodesEmpty')
+                      : String(user.recovery_codes_left)
+                  }
+                />
+              }
+            />
+          )}
         </CardContent>
       </Card>
     </Stack>
@@ -287,7 +309,7 @@ export function ProfilePage() {
       )}
       {isError && (
         <Alert severity="error" sx={{ maxWidth: 880, mx: 'auto' }}>
-          {t('auth.profile.loadError', { message: (error as Error).message })}
+          {t('auth.profile.loadError', { message: apiErrorText(error, t) })}
         </Alert>
       )}
       {data && <ProfileView user={data} />}

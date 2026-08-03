@@ -29,7 +29,7 @@ beforeEach(() => {
 describe('module-registry', () => {
   it('дубль id модуля → fail-fast', () => {
     registerModule(mod({ id: 'a' }), ctx);
-    expect(() => registerModule(mod({ id: 'a' }), ctx)).toThrow(/уже зарегистрирован/);
+    expect(() => registerModule(mod({ id: 'a' }), ctx)).toThrow(/already registered/);
   });
 
   it('buildRoutes: роуты модулей + app-level fallback "*"', () => {

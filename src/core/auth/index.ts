@@ -5,6 +5,7 @@ export {
   logout,
   forceLogout,
   onForcedLogout,
+  onSessionRecovered,
   scheduleProactiveRefresh,
 } from './refresh';
 export { realmProvider } from './realm';

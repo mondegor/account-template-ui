@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { registerModule, type ModuleInitContext } from '@core/module-registry';
 import { addTranslations } from '@core/i18n';
-import { onForcedLogout, realmProvider } from '@core/auth';
+import { onForcedLogout, onSessionRecovered, realmProvider } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
 import { demoModule } from '@modules/demo';
@@ -33,4 +33,9 @@ export function registerAllModules(): void {
   // следующий пользователь в этой же вкладке увидит из кэша профиль и устройства предыдущего.
   // Подписка со стороны app — ядру про QueryClient знать незачем.
   onForcedLogout(() => queryClient.clear());
+
+  // Сессия пережила отказ продления и вернулась. Запросы, отбившиеся 401-ми, пока цикл повторов
+  // крутился, осели в кэше ошибками и сами не переиграются: retry у queries выключен. Здесь именно
+  // invalidateQueries, а не clear(): данные не чужие — они просто не доехали.
+  onSessionRecovered(() => void queryClient.invalidateQueries());
 }

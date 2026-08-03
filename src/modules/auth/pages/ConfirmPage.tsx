@@ -15,8 +15,6 @@ import { loadConfirmReturn } from '../lib/confirmReturn';
  *    в кабинет /profile, как и onAccess узла;
  *  - прямой заход ИЛИ «Отменить»/reset без сессии → на исходный экран (loadConfirmReturn:
  *    signup/signin, дефолт /signin), как и onRevoked узла.
- * Раньше access-переход спасал лишь бонс через GuestOnly (/signin → /profile) — теперь таргет верный
- * сразу.
  */
 export function ConfirmPage() {
   const snapshot = useOperationStore((s) => s.snapshot);

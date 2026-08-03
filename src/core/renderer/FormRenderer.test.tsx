@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { initI18n, setLanguage } from '@core/i18n';
-import { ApiFieldError, ApiProblemError } from '@core/api';
+import { ApiFieldError, ApiProblemError, ApiRateLimitError } from '@core/api';
 import {
   registerHandler,
   resetComponents,
@@ -137,12 +137,72 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
   it('ApiFieldError с известным полем → setError под поле', async () => {
     setup({
       handler: async () => {
-        throw new ApiFieldError([{ code: 'user_email', detail: 'Этот email занят' }], 400);
+        throw new ApiFieldError(
+          [{ code: 'EmailAlreadyExists/user_email', detail: 'Этот email занят' }],
+          400,
+        );
       },
     });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     fireEvent.click(screen.getByTestId('ui-button'));
     expect(await screen.findByText('Этот email занят')).toBeInTheDocument();
+  });
+
+  it('ApiFieldError без суффикса (отказ по существу) → форменный алерт, а не тишина', async () => {
+    setup({
+      handler: async () => {
+        throw new ApiFieldError([{ code: 'ErrorCode', detail: 'Отказано по существу' }], 400);
+      },
+    });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByTestId('ui-button'));
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Отказано по существу');
+  });
+
+  it('ApiFieldError без суффикса и с пустым detail → перевод, а не пустой алерт', async () => {
+    // Сервер обязан прислать detail, но если он пуст — молчать нельзя: кнопка просто перестала бы
+    // крутиться, ничего не объяснив.
+    setup({
+      handler: async () => {
+        throw new ApiFieldError([{ code: 'ErrorCode', detail: '' }], 400);
+      },
+    });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByTestId('ui-button'));
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent(
+      'Что-то пошло не так. Попробуйте позже.',
+    );
+  });
+
+  it('ApiFieldError с суффиксом чужого поля → форменный алерт: под что класть, нечего', async () => {
+    setup({
+      handler: async () => {
+        throw new ApiFieldError([{ code: 'ValidateError/realm', detail: 'Realm не найден' }], 400);
+      },
+    });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByTestId('ui-button'));
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Realm не найден');
+  });
+
+  it('ApiRateLimitError (429) → форменный алерт с деталью сервера', async () => {
+    setup({
+      handler: async () => {
+        throw new ApiRateLimitError(
+          {
+            title: 'Too Many Requests',
+            status: 429,
+            detail: 'Заявка уже обрабатывается',
+            instance: '',
+            time: '',
+          },
+          600,
+        );
+      },
+    });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByTestId('ui-button'));
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Заявка уже обрабатывается');
   });
 
   it('ApiProblemError → форменный алерт (глобальное уведомление)', async () => {
@@ -165,7 +225,10 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
   it('регресс: ApiFieldError на password-поле держится, значение поля очищается', async () => {
     const { container } = setupPassword({
       handler: async () => {
-        throw new ApiFieldError([{ code: 'user_password', detail: 'Неверный пароль' }], 400);
+        throw new ApiFieldError(
+          [{ code: 'ValidateError/user_password', detail: 'Неверный пароль' }],
+          400,
+        );
       },
     });
     const input = container.querySelector<HTMLInputElement>('input[name="user_password"]')!;

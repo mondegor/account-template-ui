@@ -17,7 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import { AppShell, LangFlag } from '@core/shell';
-import { ApiFieldError } from '@core/api';
+import { ApiFieldError, apiErrorText } from '@core/api';
 import {
   LANGUAGES,
   TIME_ZONES,
@@ -43,6 +43,9 @@ import type { ChangeUserSettingsRequest, UserInfo, UserSettings } from '../api/t
 
 /** Значение «подбери по моему окружению» — на сервер уходит ОТСУТСТВИЕМ поля в теле. */
 const AUTO = 'auto';
+
+/** Поля этой формы: под них садится 400, чей суффикс `code` совпал с именем поля запроса. */
+const SETTINGS_FIELDS: ReadonlySet<string> = new Set(['lang', 'tz']);
 
 interface Option {
   value: string;
@@ -177,14 +180,12 @@ function SettingsForm({ user }: { user: UserInfo }) {
     });
   };
 
-  // 400 приходит по полю (ApiFieldError) — подсвечиваем нужный селект, остальное показываем общим
-  // сообщением. В режиме «Авто» такой ошибки не бывает: там значение подбирает сервер.
-  const fieldError = (code: string) =>
-    save.error instanceof ApiFieldError
-      ? save.error.fields.find((f) => f.code === code)?.detail
-      : undefined;
-  const otherError =
-    save.error && !(save.error instanceof ApiFieldError) ? save.error.message : undefined;
+  // 400 приходит по полю (ApiFieldError, `ValidateError/lang` и `ValidateError/tz`) — подсвечиваем
+  // нужный селект по суффиксу кода, остальное показываем общим сообщением. В режиме «Авто» такой
+  // ошибки не бывает: там значение подбирает сервер.
+  const parts = save.error instanceof ApiFieldError ? save.error.split(SETTINGS_FIELDS, t) : null;
+  const fieldError = (name: string) => parts?.byField.find((f) => f.name === name)?.detail;
+  const otherError = parts ? parts.global : save.error ? apiErrorText(save.error, t) : undefined;
 
   return (
     <Stack spacing={2} sx={{ maxWidth: 640, mx: 'auto' }}>
@@ -317,7 +318,7 @@ export function SettingsPage() {
       )}
       {isError && (
         <Alert severity="error" sx={{ maxWidth: 640, mx: 'auto' }}>
-          {t('auth.settings.loadError', { message: (error as Error).message })}
+          {t('auth.settings.loadError', { message: apiErrorText(error, t) })}
         </Alert>
       )}
       {/* Без key: перемонтирование на смене профиля сбрасывало бы и плашку сохранения, и

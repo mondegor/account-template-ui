@@ -40,7 +40,15 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
   if (!flow.snapshot) return null;
 
   const { snapshot, expiresLeft, resendLeft, isResendApplicable } = flow;
-  const exhausted = snapshot.phase === 'exhausted' || snapshot.phase === 'expired';
+  // Операцию завершить нельзя ничем — ни вводом кода, ни новым кодом, ни ожиданием: сервер снял
+  // условие её создания (409), отказал в самом действии (403), не принял её токен (400 по
+  // OperationInvalid/OperationAlreadyExpired) либо истёк срок уже подтверждённой (см. ниже).
+  // Дальше она ведёт себя как тупик, поэтому попадает в exhausted.
+  const dead = snapshot.phase === 'dead';
+  const exhausted = dead || snapshot.phase === 'exhausted' || snapshot.phase === 'expired';
+  // Код уже принят, сорвалось только терминальное действие: вводить нечего и подтверждать нечего —
+  // экран сводится к «Повторить» и таймеру остатка жизни операции.
+  const awaitingFinish = flow.awaitingFinish && !exhausted;
   const resendsLeft = snapshot.remainingResends;
   const resendReady =
     isResendApplicable &&
@@ -49,16 +57,25 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
     !flow.submitting &&
     !flow.resending;
   const canRequestNewCode = isResendApplicable && (resendsLeft ?? 0) > 0;
-  const deadEnd = exhausted && !canRequestNewCode;
-  const exhaustedAlert = deadEnd
-    ? t('auth.confirm.deadEnd')
-    : snapshot.phase === 'expired'
-      ? t('auth.confirm.exhaustedExpired')
-      : t('auth.confirm.exhaustedAttempts');
-  const lastResendUsed = !exhausted && isResendApplicable && resendsLeft === 0;
-  const hint = t(`auth.confirm.hint.${snapshot.confirmMethod}`, {
-    defaultValue: t('auth.confirm.hint.EMAIL'),
-  });
+  // У аннулированной операции запрашивать новый код тоже не у чего — тупик независимо от остатка.
+  const deadEnd = dead || (exhausted && !canRequestNewCode);
+  // У аннулированной операции причину знает только сервер («2FA была отключена», «доступ к контуру
+  // отозван»), и общий текст её не заменяет: без неё пользователю не отличить свою ошибку от
+  // изменившихся обстоятельств. Запасной вариант нужен для истечения ПОДТВЕРЖДЁННОЙ операции —
+  // туда приводит локальный TICK, и отказа сервера там не было вовсе.
+  const exhaustedAlert = dead
+    ? (flow.error ?? t('auth.confirm.invalidated'))
+    : deadEnd
+      ? t('auth.confirm.deadEnd')
+      : snapshot.phase === 'expired'
+        ? t('auth.confirm.exhaustedExpired')
+        : t('auth.confirm.exhaustedAttempts');
+  const lastResendUsed = !exhausted && !awaitingFinish && isResendApplicable && resendsLeft === 0;
+  const hint = awaitingFinish
+    ? t('auth.confirm.awaitingFinish')
+    : t(`auth.confirm.hint.${snapshot.confirmMethod}`, {
+        defaultValue: t('auth.confirm.hint.EMAIL'),
+      });
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -92,7 +109,7 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
         </Alert>
       ) : null}
       <Box component="form" onSubmit={onSubmit} noValidate>
-        {!exhausted && (
+        {!exhausted && !awaitingFinish && (
           <TextField
             label={t('auth.field.code')}
             value={code}
@@ -121,20 +138,26 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
               minHeight: 20,
             }}
           >
-            <Typography
-              variant="caption"
-              sx={{ color: snapshot.remainingAttempts <= 1 ? 'error.main' : 'text.secondary' }}
-            >
-              {t('auth.confirm.attemptsLeft', { n: snapshot.remainingAttempts })}
-            </Typography>
+            {/* Попытки ввода к повтору входа не относятся: код уже принят. */}
+            {!awaitingFinish && (
+              <Typography
+                variant="caption"
+                sx={{ color: snapshot.remainingAttempts <= 1 ? 'error.main' : 'text.secondary' }}
+              >
+                {t('auth.confirm.attemptsLeft', { n: snapshot.remainingAttempts })}
+              </Typography>
+            )}
             <Typography
               variant="caption"
               sx={{
                 color: 'text.secondary',
+                ml: 'auto',
               }}
             >
               {expiresLeft > 0
-                ? t('auth.confirm.expiresIn', { time: mmss(expiresLeft) })
+                ? t(awaitingFinish ? 'auth.confirm.finishExpiresIn' : 'auth.confirm.expiresIn', {
+                    time: mmss(expiresLeft),
+                  })
                 : t('auth.confirm.expired')}
             </Typography>
           </Stack>
@@ -158,9 +181,11 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
             type="submit"
             variant="contained"
             fullWidth
-            disabled={flow.submitting || code.trim().length < limits.secret.min}
+            disabled={
+              flow.submitting || (!awaitingFinish && code.trim().length < limits.secret.min)
+            }
           >
-            {t('auth.confirm.submit')}
+            {t(awaitingFinish ? 'auth.confirm.retryFinish' : 'auth.confirm.submit')}
           </Button>
         )}
       </Box>
@@ -174,8 +199,10 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
           minHeight: 24,
         }}
       >
+        {/* Повторная отправка кода подтверждённой операции бессмысленна — только «Отменить». */}
         {canRequestNewCode &&
           !exhausted &&
+          !awaitingFinish &&
           (resendReady ? (
             <Link
               component="button"

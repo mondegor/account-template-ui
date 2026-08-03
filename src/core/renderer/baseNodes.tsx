@@ -44,7 +44,7 @@ function TextFieldNode({ node }: NodeComponentProps) {
       value={(field.value as string) ?? ''}
       // submitOnly: редактирование гасит показанную ошибку (снова покажется на след. сабмите). Без
       // флага ре-валидация onChange пересчитывает ошибку сама — гасить вручную не нужно. Форменный
-      // алерт прошлой попытки убираем всегда (как в старом SignupPage).
+      // алерт прошлой попытки убираем всегда.
       onChange={(value) => {
         field.onChange(value);
         if (submitOnly && fieldState.error) clearErrors(field.name);

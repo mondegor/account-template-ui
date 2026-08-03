@@ -16,6 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import { AppShell } from '@core/shell';
+import { apiErrorText } from '@core/api';
 import { realmProvider } from '@core/auth';
 import { resolveTimeZone } from '@core/i18n';
 import { moduleQueryKey } from '@core/module-registry';
@@ -140,7 +141,7 @@ export function SessionsPage() {
     setSearchParams((prev) => withParam(prev, 'realm', realm), { replace: true });
   };
 
-  const listError = (sessions.error ?? null) as Error | null;
+  const listError = sessions.error ? apiErrorText(sessions.error, t) : undefined;
 
   // Спиннер на весь экран — только пока нет профиля. Смена реалма перезагружает список, но
   // заголовок с комбобоксом должен остаться на месте, иначе страница «моргает» целиком.
@@ -160,7 +161,7 @@ export function SessionsPage() {
     return (
       <AppShell>
         <Alert severity="error" sx={{ maxWidth: 880, mx: 'auto' }}>
-          {t('auth.profile.loadError', { message: (user.error as Error | null)?.message })}
+          {t('auth.profile.loadError', { message: apiErrorText(user.error, t) })}
         </Alert>
       </AppShell>
     );
@@ -185,7 +186,7 @@ export function SessionsPage() {
         )}
 
         {sessions.isError && (
-          <Alert severity="error">{p('loadError', { message: listError?.message })}</Alert>
+          <Alert severity="error">{p('loadError', { message: listError })}</Alert>
         )}
 
         {sessions.isSuccess && (

@@ -12,7 +12,7 @@ const schemas = new Map<string, SchemaNode>();
 /** Регистрация локальной схемы модуля (напр. import signup.json). Валидирует немедленно. */
 export function registerSchema(id: string, source: SchemaSource): void {
   if (schemas.has(id)) {
-    throw new Error(`loader: схема "${id}" уже зарегистрирована`);
+    throw new Error(`loader: schema "${id}" is already registered`);
   }
   schemas.set(id, validateSchema(source));
 }
@@ -20,7 +20,7 @@ export function registerSchema(id: string, source: SchemaSource): void {
 /** Возвращает валидированное дерево схемы по id (бросает, если не зарегистрирована). */
 export function loadSchema(id: string): SchemaNode {
   const node = schemas.get(id);
-  if (!node) throw new Error(`loader: схема "${id}" не найдена`);
+  if (!node) throw new Error(`loader: schema "${id}" is not registered`);
   return node;
 }
 

@@ -35,9 +35,12 @@
         "PASSWORD": "Enter your password to confirm.",
         "TOTP": "Enter the code from your authenticator app."
       },
+      "awaitingFinish": "The code was accepted, but signing in failed. No need to confirm again — just try once more.",
       "submit": "Confirm",
+      "retryFinish": "Try again",
       "attemptsLeft": "Attempts left: {{n}}",
       "expiresIn": "Code valid for {{time}}",
+      "finishExpiresIn": "You can retry for another {{time}}",
       "expired": "Code expired",
       "resendLink": "Resend",
       "resendTimer": "Resend · {{time}}",
@@ -47,7 +50,8 @@
       "lastResend": "Note: that was the last resend of the code.",
       "exhaustedAttempts": "Wrong code, no attempts left. Request a new code.",
       "exhaustedExpired": "The code has expired. Request a new code.",
-      "deadEnd": "You've run out of entry attempts and resends. Start signing in again."
+      "deadEnd": "You've run out of entry attempts and resends. Start signing in again.",
+      "invalidated": "This operation can no longer be completed. Start signing in again."
     },
     "profile": {
       "title": "Profile",
@@ -58,6 +62,8 @@
       "lang": "Language",
       "tz": "Time zone",
       "security": "Security",
+      "recoveryCodesLeft": "Recovery codes",
+      "recoveryCodesEmpty": "None left",
       "lastLogin": "Last login",
       "lastLoginJustNow": "just now",
       "lastLocation": "Last location",
@@ -118,7 +124,10 @@
       "signup": "Sign up failed. Please try again later.",
       "signin": "Sign in failed. Please try again later.",
       "confirm": "Could not confirm the code. Please try again.",
-      "resend": "Could not resend the code."
+      "wrongCode": "Wrong code",
+      "finish": "Could not complete sign-in. Please try again.",
+      "resend": "Could not resend the code.",
+      "resendUnavailable": "Resend is not available yet"
     }
   }
 }

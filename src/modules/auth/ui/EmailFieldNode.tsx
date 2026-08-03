@@ -4,7 +4,7 @@ import { useController, useFormContext } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import type { NodeComponentProps } from '@core/schema';
 import { FormErrorContext, SubmitOnlyContext } from '@core/renderer';
-import { validateEmail } from '../lib/userLogin';
+import { isSignupEmail } from '../lib/userLogin';
 import {
   checkEmailAvailability,
   getCachedEmailAvailability,
@@ -95,7 +95,7 @@ export function EmailFieldNode({ node }: NodeComponentProps) {
     setTakenMsg(null);
     // Ручку дёргаем только для валидного формата и лишь после паузы в наборе.
     timerRef.current = setTimeout(() => {
-      if (validateEmail(raw) === null) void runCheck(raw);
+      if (isSignupEmail(raw)) void runCheck(raw);
     }, CHECK_DEBOUNCE_MS);
   };
 

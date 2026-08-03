@@ -15,6 +15,11 @@ export interface CreateUserRequest {
 }
 
 export interface WaitingConfirmOperation {
+  /**
+   * Токен ТЕКУЩЕГО звена цепочки подтверждений: при переходе к следующему выдаётся новый, а
+   * предыдущий сразу перестаёт действовать. Клиент всегда работает с токеном последнего
+   * полученного звена — им же зовётся и завершающий метод операции.
+   */
   token: string;
   confirm_method: ConfirmMethod;
   remaining_attempts: number;
@@ -65,6 +70,11 @@ export interface UserInfo {
   /** Часовой пояс профиля (IANA). В окне рассинхрона тоже опережает токен. */
   tz: string;
   auth_2fa_type: UserAuth2fa;
+  /**
+   * Остаток неиспользованных одноразовых аварийных кодов; 0 = коды исчерпаны и их нужно
+   * перевыпустить. Поля НЕТ, когда 2FA выключена (`auth_2fa_type`: `NONE`).
+   */
+  recovery_codes_left?: number;
   realms: UserRealm[];
   status: UserStatus;
 }

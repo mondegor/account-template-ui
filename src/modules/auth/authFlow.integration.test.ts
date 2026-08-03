@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { refresh, useAuthStore } from '@core/auth';
-import { ApiFieldError } from '@core/api';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { logout, refresh, useAuthStore } from '@core/auth';
+import { ApiFieldError, ApiRateLimitError } from '@core/api';
 import { TIME_ZONES, getLanguage, getLanguageSource, initI18n, setLanguage } from '@core/i18n';
 import { clearSettingsOverride } from '@core/request-meta';
 import {
@@ -30,6 +30,10 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     initI18n();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('успешный вход открывает сессию и отдаёт профиль', async () => {
     const op = await signin('user@example.com');
     expect(op.token).toHaveLength(64);
@@ -39,7 +43,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     const next = await confirmOperation({ token: op.token, secret: '183947' });
     expect(next).toBeNull(); // 204 — подтверждено
 
-    const result = await openSession({ token: op.token, secret: '183947' });
+    const result = await openSession({ token: op.token });
     expect(result.kind).toBe('access');
     expect(useAuthStore.getState().status).toBe('authenticated');
     expect(useAuthStore.getState().accessToken).toBeTruthy();
@@ -56,7 +60,33 @@ describe('auth flow (signin → confirm → session → profile)', () => {
       (e: unknown) =>
         e instanceof ApiFieldError &&
         e.operationState?.remaining_attempts === 2 &&
-        e.fields[0]?.code === 'secret',
+        e.fields[0]?.code === 'ConfirmCodeIsIncorrect/secret',
+    );
+  });
+
+  /**
+   * `expires_in` — ОСТАТОК срока, а не полный срок операции: клиент пересчитывает дедлайн от
+   * каждого ответа, и полное значение отматывало бы таймер назад на каждом неверном коде. Тогда
+   * операция умирала бы, пока на экране ещё остаются минуты.
+   */
+  it('операция не молодеет: 400 несёт остаток срока, а не полный', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const op = await signin('user@example.com');
+    expect(op.expires_in).toBe(600);
+
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    const err = await confirmOperation({ token: op.token, secret: '000000' }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(ApiFieldError);
+    expect((err as ApiFieldError).operationState?.expires_in).toBeLessThanOrEqual(480);
+
+    // Пережившая срок операция отвечает уже по токену, а не по коду.
+    await vi.advanceTimersByTimeAsync(481_000);
+    await expect(confirmOperation({ token: op.token, secret: '183947' })).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof ApiFieldError && e.fields[0]?.code === 'OperationAlreadyExpired/token',
     );
   });
 
@@ -69,7 +99,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     const confirmed = await confirmOperation({ token: op.token, secret: '183947' });
     expect(confirmed).toBeNull();
 
-    const result = await openSession({ token: op.token, secret: '183947' });
+    const result = await openSession({ token: op.token });
     expect(result.kind).toBe('access');
 
     const user = await getUserInfo();
@@ -82,20 +112,21 @@ describe('auth flow (signin → confirm → session → profile)', () => {
 
   it('check-login: занятый email → ApiFieldError (400) с деталью под поле', async () => {
     await expect(checkLogin('taken@example.com')).rejects.toSatisfy(
-      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'user_login',
+      (e: unknown) =>
+        e instanceof ApiFieldError && e.fields[0]?.code === 'EmailAlreadyExists/user_login',
     );
   });
 
-  it('signup с активным локом регистрации → ApiFieldError с бизнес-code (не поле формы)', async () => {
+  it('signup с активным локом регистрации → 429 с Retry-After (анти-спам троттл)', async () => {
     await expect(signup('inprogress@example.com')).rejects.toSatisfy(
-      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code !== 'user_email',
+      (e: unknown) => e instanceof ApiRateLimitError && e.retryAfterSec === 600,
     );
   });
 
   it('открытая сессия видна в /v1/sessions как текущая, closeUserSessions её убирает', async () => {
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
-    await openSession({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token });
 
     const sessions = await getUserSessions();
     const current = sessions.filter((s) => s.is_current);
@@ -116,7 +147,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
-    await openSession({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token });
 
     // Мок отдаёт профиль с lang: 'ru-RU' — в хранилище должен лечь код языка, не локаль.
     await getUserInfo();
@@ -134,7 +165,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
-    await openSession({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token });
 
     const before = await getUserInfo();
     expect(before.tz).toBe('Europe/Moscow');
@@ -173,18 +204,18 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
-    await openSession({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token });
 
     // Зона есть в справочнике фронта, но мок её отвергает: так проверяется ветка, ради которой
     // явные значения объявлены строгими, — список фронта может отстать от серверного.
     await expect(changeUserSettings({ tz: 'Etc/GMT+12' })).rejects.toSatisfy(
-      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'tz',
+      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'ValidateError/tz',
     );
     // У языка та же строгость, но справочного значения под неё нет (отказ от en-US в моке живёт
     // за флагом VITE_MOCK_REJECT_LANG, иначе в демо не сохранить английский). Берём язык вне
     // справочника — путь тот же, поле то же.
     await expect(changeUserSettings({ lang: 'fr-FR' })).rejects.toSatisfy(
-      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'lang',
+      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'ValidateError/lang',
     );
 
     // Профиль при этом не поменялся — сервер ничего не сохранил.
@@ -197,7 +228,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
-    await openSession({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token });
 
     // Зоны ОС может не быть в справочнике приложения: сервер подберёт соседа по смещению,
     // и клиенту важно применить именно то, что вернулось, а не то, что он просил.
@@ -212,5 +243,20 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     const resent = await resendOperation({ token: op.token });
     expect(resent.remaining_attempts).toBe(3);
     expect(resent.remaining_resends).toBe(1);
+  });
+
+  it('повторный выход: закрывать уже нечего, метод идемпотентен', async () => {
+    const op = await signin('user@example.com');
+    await confirmOperation({ token: op.token, secret: '183947' });
+    await openSession({ token: op.token });
+    expect(useAuthStore.getState().status).toBe('authenticated');
+
+    await logout();
+    // Сессия закрыта первым выходом, поэтому второму DELETE закрывать нечего — по спеке он молча
+    // отвечает 204. Клиента это не должно ни ронять, ни оставлять залогиненным.
+    await logout();
+
+    expect(useAuthStore.getState().status).toBe('anonymous');
+    expect(useAuthStore.getState().accessToken).toBeNull();
   });
 });

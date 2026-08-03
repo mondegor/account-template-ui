@@ -15,7 +15,7 @@ import { getUserInfo } from '../api/authApi';
 import { ProfilePage } from './ProfilePage';
 
 /**
- * ProfilePage больше не содержит хардкод-строк: подписи резолвятся из `auth.profile.*`, поэтому при
+ * ProfilePage не содержит хардкод-строк: подписи резолвятся из `auth.profile.*`, поэтому при
  * смене языка меняются вместе с остальной чромой. Мокаем getUserInfo (данные) и проверяем ru→en.
  */
 /** Пояс профиля фикстуры: даты на экране обязаны считаться по нему, а не по зоне процесса. */
@@ -387,5 +387,48 @@ describe('ProfilePage (несколько кабинетов)', () => {
       'href',
       '/sessions?realm=print-shop%2Fadmin',
     );
+  });
+});
+
+describe('ProfilePage (аварийные коды)', () => {
+  const securityCard = () => cardWith('Безопасность');
+
+  beforeEach(async () => {
+    setLanguage('ru');
+    await i18next.changeLanguage('ru');
+  });
+
+  /** Профиль с включённой 2FA: только при ней сервер и присылает остаток кодов. */
+  async function with2fa(recoveryCodesLeft?: number) {
+    const info = await vi.mocked(getUserInfo)();
+    vi.mocked(getUserInfo).mockResolvedValueOnce({
+      ...info,
+      auth_2fa_type: 'PASSWORD',
+      ...(recoveryCodesLeft === undefined ? {} : { recovery_codes_left: recoveryCodesLeft }),
+    });
+  }
+
+  it('остаток кодов показан числом', async () => {
+    await with2fa(8);
+    renderProfile();
+    await screen.findByText('Безопасность');
+
+    expect(within(securityCard()).getByText('Аварийные коды')).toBeInTheDocument();
+    expect(within(securityCard()).getByText('8')).toBeInTheDocument();
+  });
+
+  it('ноль — не рядовое число: строка говорит, что коды кончились', async () => {
+    await with2fa(0);
+    renderProfile();
+    await screen.findByText('Безопасность');
+
+    expect(within(securityCard()).getByText('Закончились')).toBeInTheDocument();
+  });
+
+  it('без поля (2FA выключена) строки нет вовсе — «нет данных» здесь не ноль', async () => {
+    renderProfile();
+    await screen.findByText('Безопасность');
+
+    expect(within(securityCard()).queryByText('Аварийные коды')).not.toBeInTheDocument();
   });
 });

@@ -27,7 +27,7 @@ describe('checkEmailAvailability (общий кэш дедупит check-login)'
 
   it("занятый email кэшируется c текстом; 'unknown' (сеть/5xx) — нет", async () => {
     vi.mocked(checkLogin).mockRejectedValueOnce(
-      new ApiFieldError([{ code: 'user_email', detail: 'Занят' }], 400),
+      new ApiFieldError([{ code: 'EmailAlreadyExists/user_login', detail: 'Занят' }], 400),
     );
     expect(await checkEmailAvailability('taken@example.com')).toEqual({
       state: 'taken',
@@ -47,5 +47,16 @@ describe('checkEmailAvailability (общий кэш дедупит check-login)'
     expect(
       vi.mocked(checkLogin).mock.calls.filter((c) => c[0] === 'flaky@example.com'),
     ).toHaveLength(2);
+  });
+
+  it("400 не про занятость ('ValidateError/...') — 'unknown', а не 'занят' в кэше", async () => {
+    // Отказ по значению (в т.ч. по realm'у) к емаилу отношения не имеет: выдать его за занятость
+    // значило бы навсегда — исход кэшируется — запретить пользователю его собственный адрес.
+    vi.mocked(checkLogin).mockRejectedValue(
+      new ApiFieldError([{ code: 'ValidateError/realm', detail: 'Realm не найден' }], 400),
+    );
+
+    expect(await checkEmailAvailability('user@example.com')).toEqual({ state: 'unknown' });
+    expect(getCachedEmailAvailability('user@example.com')).toBeUndefined();
   });
 });

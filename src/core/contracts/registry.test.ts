@@ -20,6 +20,6 @@ describe('contract-registry', () => {
   it('повторная публикация того же ключа → fail-fast', () => {
     const r = createContractRegistry();
     r.provide(GREETER, { hello: () => 'a' });
-    expect(() => r.provide(GREETER, { hello: () => 'b' })).toThrow(/уже опубликован/);
+    expect(() => r.provide(GREETER, { hello: () => 'b' })).toThrow(/already published/);
   });
 });

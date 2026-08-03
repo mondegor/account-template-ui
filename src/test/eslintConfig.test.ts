@@ -22,9 +22,11 @@ async function restricted(code: string, filePath = 'src/core/renderer/fixture.ts
   return result!.messages.filter((m) => m.ruleId === 'no-restricted-syntax');
 }
 
-// Таймаут поднят точечно: первый lintText прогревает ESLint (загрузка конфига со всеми плагинами
-// и typescript-eslint) и при полном параллельном прогоне не укладывается в дефолтные 5s.
-describe('eslint.config.js — запрет dangerouslySetInnerHTML', { timeout: 15000 }, () => {
+// Таймаут поднят сверх общего (vite.config.ts): первый lintText прогревает ESLint — загрузку
+// конфига со всеми плагинами и typescript-eslint, — и при полном параллельном прогоне это дольше
+// всего, что ждут остальные тесты. Запас взят с большим отрывом от наблюдаемого прогрева: тест
+// сторожит правило, а не его скорость, и ложное падение на загруженной машине дороже ожидания.
+describe('eslint.config.js — запрет dangerouslySetInnerHTML', { timeout: 60000 }, () => {
   it('ловит JSX-атрибут', async () => {
     const msgs = await restricted(
       'export const C = ({ html }: { html: string }) => (\n' +

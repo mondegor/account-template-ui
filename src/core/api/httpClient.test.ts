@@ -6,9 +6,9 @@ import { forceLogout, useAuthStore } from '@core/auth';
 import { authClient } from './httpClient';
 
 /**
- * 401-интерсептор: single-flight refresh + один повтор запроса. Проверяем именно выбор пути —
- * `/v1/sessions` (список устройств) раньше матчился префиксом `/v1/session` и молча оставался
- * без продления, хотя это обычный защищённый ресурс.
+ * 401-интерсептор: single-flight refresh + один повтор запроса. Проверяем именно выбор пути: он
+ * сверяется точно, а не по префиксу, поэтому `/v1/sessions` (список устройств) — обычный
+ * защищённый ресурс и подлежит продлению.
  */
 
 const BASE = config.authApiBaseUrl;

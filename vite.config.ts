@@ -20,5 +20,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Кейс должен переживать несколько ожиданий подряд по asyncUtilTimeout из setup.ts, поэтому
+    // дефолтных 5s мало. Точечные override-ы у describe после этого не нужны — кроме тех, где
+    // ждут не рендер (напр. прогрев ESLint).
+    testTimeout: 30000,
   },
 });

@@ -15,7 +15,7 @@ const modules: ModuleDefinition[] = [];
 
 export function registerModule(def: ModuleDefinition, ctx: ModuleInitContext): void {
   if (modules.some((m) => m.id === def.id)) {
-    throw new Error(`module-registry: модуль "${def.id}" уже зарегистрирован`);
+    throw new Error(`module-registry: module "${def.id}" is already registered`);
   }
   if (def.i18n) addTranslations(def.i18n);
   // Кастомные типы-поля — ДО схем: registerSchema валидирует дерево и отклонил бы неизвестный тип.

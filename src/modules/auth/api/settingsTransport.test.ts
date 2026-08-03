@@ -165,7 +165,7 @@ describe('X-Accept-Time-Zone: где заголовок нужен, а где е
 
     // Гость: пояс брать больше неоткуда — заголовок наш, браузер его не поставит.
     await signin('user@example.com');
-    await openSession({ token: 'a'.repeat(64), secret: '183947' });
+    await openSession({ token: 'a'.repeat(64) });
     const tz = /^[\w/+-]+;offset=[+-]\d{2}:\d{2};dst=[01]$/;
     expect(headers[0]).toMatch(tz);
     expect(headers[1]).toMatch(tz);

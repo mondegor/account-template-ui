@@ -1,42 +1,20 @@
 import { limits } from '@config';
 
 /**
- * Валидация поля `user_login` (email ИЛИ телефон). Клиентская проверка — только для быстрого
- * UX-фидбека; источник истины — сервер (`signin`/`check-login` вернут 400 с ошибкой поля).
- * Переиспользуется в signup и позже в zod-схемах schema-renderer.
+ * Предварительная проверка емаила регистрации — ради одного потребителя: EmailFieldNode дёргает
+ * `check-login` только после паузы в наборе и только для правдоподобного адреса, чтобы не ходить
+ * в сеть на каждый символ. Полноценная валидация формы живёт не здесь: сообщения под полями
+ * собирает zod-схема из `validation` узлов (@core/renderer/validationToZod), а источник истины —
+ * сервер (`signup`/`check-login` вернут 400 с ошибкой поля).
+ *
+ * Поэтому предикат, а не текст ошибки: второй набор строк был бы и лишним, и непереведённым —
+ * язык интерфейса в lib неизвестен.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** Телефон: опц. ведущий '+', остальное — цифры/разделители; значимых цифр ≥10 (openapi phone min10). */
-const PHONE_MIN_DIGITS = 10;
 
-export function isEmailOrPhone(value: string): boolean {
+/** Годен ли ввод как email регистрации: длина по openapi + формат (телефон signup не принимает). */
+export function isSignupEmail(value: string): boolean {
   const v = value.trim();
-  if (v.includes('@')) return EMAIL_RE.test(v);
-  const digits = v.replace(/\D/g, '');
-  return digits.length >= PHONE_MIN_DIGITS && /^\+?[\d\s()-]+$/.test(v);
-}
-
-/** Возвращает текст ошибки для поля или `null`, если ввод валиден. */
-export function validateUserLogin(value: string): string | null {
-  const v = value.trim();
-  if (!v) return 'Укажите email или телефон';
-  if (v.length < limits.userLogin.min || v.length > limits.userLogin.max) {
-    return 'Введите корректный email или телефон';
-  }
-  return isEmailOrPhone(v) ? null : 'Введите корректный email или телефон';
-}
-
-export function isEmail(value: string): boolean {
-  return EMAIL_RE.test(value.trim());
-}
-
-/** Валидация поля email на регистрации (signup принимает только email, не телефон). */
-export function validateEmail(value: string): string | null {
-  const v = value.trim();
-  if (!v) return 'Укажите email';
-  if (v.length < limits.userLogin.min || v.length > limits.userLogin.max) {
-    return 'Введите корректный email';
-  }
-  return isEmail(v) ? null : 'Введите корректный email';
+  return v.length >= limits.userLogin.min && v.length <= limits.userLogin.max && EMAIL_RE.test(v);
 }

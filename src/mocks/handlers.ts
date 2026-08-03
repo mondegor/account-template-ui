@@ -8,7 +8,13 @@ import {
   resolveTimeZone,
 } from '@core/i18n';
 import { isoIn, matchHeaderTz } from './serverTime';
-import type { SuccessAccess, UserInfo, UserSession, WaitingConfirmOperation } from '@modules/auth';
+import type {
+  SuccessAccess,
+  UserAuth2fa,
+  UserInfo,
+  UserSession,
+  WaitingConfirmOperation,
+} from '@modules/auth';
 
 /**
  * MSW-мок Auth API для вертикального среза. Держит операции и сессии в памяти.
@@ -46,6 +52,29 @@ const MOCK_REJECTED_TZ = 'Etc/GMT+12';
  */
 const MOCK_REJECTED_LANG = import.meta.env.VITE_MOCK_REJECT_LANG === '1' ? 'en-US' : null;
 
+/**
+ * Мок-онли: второй фактор в ПРОФИЛЕ. По умолчанию `NONE`, как у свежего аккаунта.
+ * VITE_MOCK_2FA=PASSWORD|TOTP включает его, чтобы посмотреть зависимую от него часть профиля:
+ * остаток аварийных кодов приходит ТОЛЬКО при включённой 2FA. Число кодов задаётся отдельно
+ * (VITE_MOCK_RECOVERY_CODES), в том числе `0` — ветка «коды кончились, пора перевыпускать».
+ *
+ * На сам вход флаг не влияет: цепочку подтверждений со вторым звеном мок не изображает, у него
+ * подтверждение всегда одношаговое.
+ */
+const MOCK_2FA: UserAuth2fa =
+  (['PASSWORD', 'TOTP'] as const).find((v) => v === import.meta.env.VITE_MOCK_2FA) ?? 'NONE';
+const RECOVERY_CODES_RAW = Number(import.meta.env.VITE_MOCK_RECOVERY_CODES);
+const MOCK_RECOVERY_CODES =
+  Number.isInteger(RECOVERY_CODES_RAW) && RECOVERY_CODES_RAW >= 0 ? RECOVERY_CODES_RAW : 8;
+
+/**
+ * Мок-онли: лимит одновременных сессий. 1 = первое открытие сессии по операции отклоняется `429`,
+ * повтор проходит. Так руками видна единственная ветка, где код уже принят, а войти не удалось:
+ * подтверждённая операция при отказе НЕ расходуется, поэтому повторять нужно ровно открытие
+ * сессии — тем же токеном и уже без `secret`.
+ */
+const MOCK_SESSION_LIMIT = import.meta.env.VITE_MOCK_SESSION_LIMIT === '1';
+
 interface MockOperation {
   token: string;
   realm: string;
@@ -56,6 +85,8 @@ interface MockOperation {
   expiresInSec: number;
   createdAt: number;
   confirmed: boolean;
+  /** Мок-онли (MOCK_SESSION_LIMIT): лимит сессий срабатывает по операции ровно один раз. */
+  sessionLimitHit?: boolean;
 }
 
 interface MockSession {
@@ -101,6 +132,11 @@ function hex(len: number): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * 400 со списком errors. `code` по спеке — либо `КодОшибки`, либо `КодОшибки/имя_поля`, где суффикс
+ * совпадает с именем поля в теле запроса: по нему клиент и решает, садится ошибка под поле формы
+ * или показывается общим уведомлением.
+ */
 function fieldError(code: string, detail: string, status = 400) {
   return HttpResponse.json(
     { status, instance: '', errors: [{ code, detail }], time: new Date().toISOString() },
@@ -108,7 +144,38 @@ function fieldError(code: string, detail: string, status = 400) {
   );
 }
 
-function operationError(op: MockOperation, detail: string) {
+/**
+ * Разбор токена операции. Спека различает два исхода, и клиенту они говорят разное: `OperationInvalid`
+ * — токен неизвестен, уже использован или отозван; `OperationAlreadyExpired` — операция была, но её
+ * срок вышел, и её нужно создавать заново.
+ */
+function findOperation(token: string | undefined): MockOperation | 'invalid' | 'expired' {
+  const op = token ? operations.get(token) : undefined;
+  if (!op) return 'invalid';
+  if (Date.now() >= op.createdAt + op.expiresInSec * 1000) {
+    operations.delete(op.token);
+    return 'expired';
+  }
+  return op;
+}
+
+function operationTokenError(state: 'invalid' | 'expired') {
+  return state === 'invalid'
+    ? fieldError('OperationInvalid/token', 'Токен операции неизвестен или уже использован')
+    : fieldError('OperationAlreadyExpired/token', 'Срок жизни операции истёк, начните заново');
+}
+
+/**
+ * ОСТАТОК жизни операции, а не её полный срок: по нему findOperation() и признаёт операцию
+ * истёкшей, поэтому в ответах должно ехать то же число. Иначе клиент, который пересчитывает
+ * дедлайн от каждого ответа, после неверного кода отмотал бы таймер обратно на полный срок —
+ * и операция умирала бы, пока на экране ещё остаются минуты.
+ */
+function expiresLeftSec(op: MockOperation): number {
+  return Math.max(0, Math.ceil((op.createdAt + op.expiresInSec * 1000 - Date.now()) / 1000));
+}
+
+function operationError(op: MockOperation, code: string, detail: string) {
   return HttpResponse.json(
     {
       status: 400,
@@ -117,9 +184,9 @@ function operationError(op: MockOperation, detail: string) {
         remaining_attempts: op.remainingAttempts,
         remaining_resends: op.remainingResends,
         resends_in: op.resendsInSec,
-        expires_in: op.expiresInSec,
+        expires_in: expiresLeftSec(op),
       },
-      errors: [{ code: 'secret', detail }],
+      errors: [{ code, detail }],
       time: new Date().toISOString(),
     },
     { status: 400 },
@@ -140,6 +207,16 @@ function problem(status: number, title: string, detail: string) {
   );
 }
 
+/**
+ * 429: запрос корректен, но отклонён временно. Тело — то же problem+json, машиночитаемого кода
+ * в нём нет; срок повтора клиент берёт из Retry-After (заголовок необязателен).
+ */
+function tooManyRequests(retryAfterSec: number, detail: string) {
+  const res = problem(429, 'Too Many Requests', detail);
+  res.headers.set('Retry-After', String(retryAfterSec));
+  return res;
+}
+
 function waiting(op: MockOperation, message: string): WaitingConfirmOperation {
   return {
     token: op.token,
@@ -147,7 +224,7 @@ function waiting(op: MockOperation, message: string): WaitingConfirmOperation {
     remaining_attempts: op.remainingAttempts,
     remaining_resends: op.remainingResends,
     resends_in: op.resendsInSec,
-    expires_in: op.expiresInSec,
+    expires_in: expiresLeftSec(op),
     message,
   };
 }
@@ -162,7 +239,10 @@ function buildUser(op: MockOperation): UserInfo {
     // Настройки — свойство ОТВЕТА, а не хранимой записи: их проставляет userIn() из профиля.
     // Здесь просто заполняем обязательные поля типа.
     ...profileSettings,
-    auth_2fa_type: 'NONE',
+    auth_2fa_type: MOCK_2FA,
+    // Аварийные коды существуют только при включённой 2FA — без неё поля в ответе нет вовсе
+    // (отсутствие поля клиент трактует как «показывать нечего», а не как ноль).
+    ...(MOCK_2FA === 'NONE' ? {} : { recovery_codes_left: MOCK_RECOVERY_CODES }),
     realms: [
       {
         name: op.realm,
@@ -376,9 +456,14 @@ export const handlers = [
   http.post(`${BASE}/v1/signin`, async ({ request }) => {
     const body = (await request.json()) as { realm?: string; user_login?: string };
     const login = (body.user_login ?? '').trim();
-    if (!body.realm) return fieldError('realm', 'Realm обязателен');
+    if (!body.realm) return fieldError('ValidateError/realm', 'Realm обязателен');
     if (login.length < 7 || login.length > 64) {
-      return fieldError('user_login', 'Укажите корректный email или телефон');
+      return fieldError('ValidateError/user_login', 'Укажите корректный email или телефон');
+    }
+    // Демо: зарезервированный логин, которого «нет в системе». Ошибка садится под поле ввода —
+    // суффикс кода совпадает с именем поля запроса.
+    if (login.toLowerCase() === 'nobody@example.com') {
+      return fieldError('LoginNotExists/user_login', 'Пользователь с таким логином не найден');
     }
     const op: MockOperation = {
       token: hex(64),
@@ -403,13 +488,13 @@ export const handlers = [
   http.post(`${BASE}/v1/check/check-login`, async ({ request }) => {
     const body = (await request.json()) as { realm?: string; user_login?: string };
     const login = (body.user_login ?? '').trim();
-    if (!body.realm) return fieldError('realm', 'Realm обязателен');
+    if (!body.realm) return fieldError('ValidateError/realm', 'Realm обязателен');
     if (login.length < 7 || login.length > 64 || !login.includes('@')) {
-      return fieldError('user_login', 'Укажите корректный email');
+      return fieldError('ValidateError/user_login', 'Укажите корректный email');
     }
     // Демо: зарезервированный «занятый» логин отдаёт 400, остальные свободны.
     if (login.toLowerCase() === 'taken@example.com') {
-      return fieldError('user_login', 'Этот email уже зарегистрирован');
+      return fieldError('EmailAlreadyExists/user_login', 'Этот email уже зарегистрирован');
     }
     return new HttpResponse(null, { status: 204 });
   }),
@@ -418,13 +503,20 @@ export const handlers = [
   http.post(`${BASE}/v1/signup`, async ({ request }) => {
     const body = (await request.json()) as { realm?: string; user_email?: string };
     const email = (body.user_email ?? '').trim();
-    if (!body.realm) return fieldError('realm', 'Realm обязателен');
+    if (!body.realm) return fieldError('ValidateError/realm', 'Realm обязателен');
     if (email.length < 7 || email.length > 64 || !email.includes('@')) {
-      return fieldError('user_email', 'Укажите корректный email');
+      return fieldError('ValidateError/user_email', 'Укажите корректный email');
     }
-    // Демо: распределённый лок регистрации (realm+email, 10 мин) → анти-спам-ошибка.
+    // Демо: по этому емаилу «уже идёт регистрация» — анти-спам троттл. Это 429, а не 400: ответ
+    // намеренно не раскрывает, зарегистрирован ли емаил, а лишь просит повторить попытку позже.
     if (email.toLowerCase() === 'inprogress@example.com') {
-      return fieldError('signup', 'Заявка на регистрацию уже обрабатывается. Попробуйте позже.');
+      return tooManyRequests(600, 'Заявка на регистрацию уже обрабатывается. Попробуйте позже.');
+    }
+    // Тот же занятый емаил, что и у check-login, но поле здесь своё — `user_email`. Форма зовёт
+    // check-login заранее, поэтому в UI ветка видна, только если проверку обошли (быстрый сабмит,
+    // сеть моргнула): последнее слово всё равно за signup.
+    if (email.toLowerCase() === 'taken@example.com') {
+      return fieldError('EmailAlreadyExists/user_email', 'Этот email уже зарегистрирован');
     }
     const op: MockOperation = {
       token: hex(64),
@@ -448,29 +540,53 @@ export const handlers = [
   // --- Подтверждение кода ---
   http.patch(`${BASE}/v1/operation/confirm`, async ({ request }) => {
     const body = (await request.json()) as { token?: string; secret?: string };
-    const op = body.token ? operations.get(body.token) : undefined;
-    if (!op) return fieldError('token', 'Некорректный токен операции');
-    if (op.remainingAttempts <= 0) return operationError(op, 'Попытки исчерпаны');
+    const found = findOperation(body.token);
+    if (typeof found === 'string') return operationTokenError(found);
+    const op = found;
+    // Метод идемпотентен: по уже подтверждённой операции подтверждать нечего — снова 204, а
+    // переданный secret игнорируется. Попытка при этом не расходуется.
+    if (op.confirmed) return new HttpResponse(null, { status: 204 });
+    if (op.remainingAttempts <= 0) {
+      return operationError(op, 'NoAttemptsToConfirmOperation/secret', 'Попытки исчерпаны');
+    }
 
     if (body.secret === MOCK_CODE) {
       op.confirmed = true;
       return new HttpResponse(null, { status: 204 });
     }
     op.remainingAttempts -= 1;
-    return operationError(op, 'Неверный код. Проверьте письмо и попробуйте ещё раз.');
+    return operationError(
+      op,
+      'ConfirmCodeIsIncorrect/secret',
+      'Неверный код. Проверьте письмо и попробуйте ещё раз.',
+    );
   }),
 
   // --- Повторная отправка кода ---
   http.patch(`${BASE}/v1/operation/resend`, async ({ request }) => {
     const body = (await request.json()) as { token?: string };
-    const op = body.token ? operations.get(body.token) : undefined;
-    if (!op) return fieldError('token', 'Некорректный токен операции');
+    const found = findOperation(body.token);
+    if (typeof found === 'string') return operationTokenError(found);
+    const op = found;
+    // Подтверждённой операции код больше не нужен — отправлять нечего.
+    if (op.confirmed) {
+      return fieldError('OperationAlreadyConfirmed/token', 'Операция уже подтверждена');
+    }
+    // Отправки израсходованы ОКОНЧАТЕЛЬНО — это не троттл: ждать бессмысленно, операцию нужно
+    // создавать заново (`SendingNewMessagesIsTemporarilyRestricted` спека оставляет за временным
+    // ограничением, у которого счётчик ещё не исчерпан).
     if (op.remainingResends <= 0) {
-      return operationError(op, 'Слишком частая повторная отправка. Попробуйте позже.');
+      return operationError(
+        op,
+        'NoAttemptsToResendCode/token',
+        'Повторные отправки закончились. Начните заново.',
+      );
     }
     op.remainingResends -= 1;
     op.resendsInSec = 30;
+    // Новый код — новый срок жизни операции, иначе продлённым он был бы только на словах.
     op.expiresInSec = 600;
+    op.createdAt = Date.now();
     op.remainingAttempts = 3;
     // eslint-disable-next-line no-console
     console.info(`[MSW] Повторный код для ${op.login}: ${MOCK_CODE}`);
@@ -490,10 +606,34 @@ export const handlers = [
   // --- Открытие сессии ---
   http.post(`${BASE}/v1/session`, async ({ request }) => {
     const body = (await request.json()) as { token?: string; secret?: string };
-    const op = body.token ? operations.get(body.token) : undefined;
-    if (!op) return fieldError('token', 'Некорректный токен операции');
-    if (!op.confirmed && body.secret !== MOCK_CODE) {
-      return operationError(op, 'Операция не подтверждена');
+    const found = findOperation(body.token);
+    if (typeof found === 'string') return operationTokenError(found);
+    const op = found;
+    // Метод совмещает подтверждение последнего звена и открытие сессии, поэтому secret нужен ровно
+    // до тех пор, пока операция не подтверждена; по подтверждённой он игнорируется (повтор входа
+    // после отказа — идемпотентен).
+    if (!op.confirmed) {
+      // Подтверждать нечем: это не ошибка ввода, а его отсутствие, поэтому попытка не расходуется.
+      if (body.secret === undefined) {
+        return operationError(op, 'ConfirmCodeIsRequired/secret', 'Введите код подтверждения');
+      }
+      // Попытки общие с PATCH /v1/operation/confirm: этот метод подтверждает то же звено, поэтому
+      // и счётчик расходует так же — и так же перестаёт их принимать, когда счётчик исчерпан.
+      if (op.remainingAttempts <= 0) {
+        return operationError(op, 'NoAttemptsToConfirmOperation/secret', 'Попытки исчерпаны');
+      }
+      if (body.secret !== MOCK_CODE) {
+        op.remainingAttempts -= 1;
+        return operationError(op, 'ConfirmCodeIsIncorrect/secret', 'Неверный код подтверждения');
+      }
+    }
+
+    // Звено подтверждено (сейчас или раньше) — отсюда операция уже не требует secret. Отказ по
+    // лимиту сессий приходит именно на этом рубеже, поэтому признак ставим до него.
+    op.confirmed = true;
+    if (MOCK_SESSION_LIMIT && !op.sessionLimitHit) {
+      op.sessionLimitHit = true;
+      return tooManyRequests(30, 'Превышен лимит одновременных сессий. Повторите попытку позже.');
     }
 
     const access = hex(64);
@@ -537,10 +677,15 @@ export const handlers = [
       const body = (await request.json().catch(() => null)) as { refresh_token?: string } | null;
       refresh = body?.refresh_token;
     }
-    const session = refresh ? sessionsByRefresh.get(refresh) : undefined;
-    if (!refresh || !session) {
-      // 403, а не 401: у метода нет схемы аутентификации (security: []) — предъявлять нечего.
-      return problem(403, 'Forbidden', 'Сессия не найдена или refresh недействителен');
+    // Токена нет ни в куке, ни в теле — 400: нарушена схема запроса. Спека называет для этого
+    // ровно один код, `ValidateError/refresh_token`, независимо от того, откуда токен ждали.
+    if (!refresh) return fieldError('ValidateError/refresh_token', 'Refresh токен не указан');
+    const session = sessionsByRefresh.get(refresh);
+    // Токен предъявлен, но негоден (неизвестен, истёк, уже использован) — 401: право на продление
+    // даёт сам refresh токен, а не схема аутентификации. Кода ошибки тело 401 не несёт: причина
+    // однозначно задана методом.
+    if (!session) {
+      return problem(401, 'Unauthorized', 'Сессия не найдена или refresh недействителен');
     }
 
     // Ротация: новый access + новый refresh, sid (sessionId) сохраняется — сессия та же.
@@ -576,9 +721,12 @@ export const handlers = [
       const body = (await request.json().catch(() => null)) as { refresh_token?: string } | null;
       refresh = body?.refresh_token;
     }
-    const session = refresh ? sessionsByRefresh.get(refresh) : undefined;
-    // Идемпотентно: неизвестный refresh — тоже 204, но чистим только то, что нашли.
-    if (refresh && session) dropSession(refresh, session);
+    if (!refresh) return fieldError('ValidateError/refresh_token', 'Refresh токен не указан');
+    // Метод идемпотентен: неизвестный токен и уже закрытая сессия молча игнорируются и тоже дают
+    // 204 — закрывать нечего, а цель вызова (сессии нет) уже достигнута. Куку гасим в обоих
+    // случаях: клиент до HttpOnly не дотянется, и протухший токен уезжал бы на каждом продлении.
+    const session = sessionsByRefresh.get(refresh);
+    if (session) dropSession(refresh, session);
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': 'RTID=; Path=/; Max-Age=0' },
@@ -587,8 +735,18 @@ export const handlers = [
 
   // --- Открытые сессии реалма ---
   http.get(`${BASE}/v1/sessions`, ({ request }) => {
-    if (!authUser(request)) return problem(401, 'Unauthorized', 'Требуется авторизация');
-    const realm = new URL(request.url).searchParams.get('realm') ?? config.realm;
+    const user = authUser(request);
+    if (!user) return problem(401, 'Unauthorized', 'Требуется авторизация');
+    const asked = new URL(request.url).searchParams.get('realm');
+    // Параметр по схеме 4..32 символа; вне диапазона — отказ по значению поля.
+    if (asked !== null && (asked.length < 4 || asked.length > 32)) {
+      return fieldError('ValidateError/realm', `Realm «${asked}» не входит в список realm'ов`);
+    }
+    // Чужой кабинет — 403: спрашивать сессии realm'а, к которому пользователь не привязан, нельзя.
+    if (asked !== null && !user.realms.some((r) => r.name === asked)) {
+      return problem(403, 'Forbidden', 'Пользователь не привязан к запрошенному realm’у');
+    }
+    const realm = asked ?? config.realm;
     // is_current — не хранимый флаг, а свойство ответа: «та ли это сессия, из которой спросили».
     const mine = callerSession(request);
     const { tz } = responseSettings(request);
@@ -604,8 +762,17 @@ export const handlers = [
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Требуется авторизация');
     const body = (await request.json().catch(() => null)) as { session_ids?: string[] } | null;
     const ids = body?.session_ids;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return fieldError('session_ids', 'Укажите хотя бы одну сессию');
+    // Всё это — проверка схемы, поэтому код один: спека относит к `ValidateError/session_ids` и
+    // размер списка, и формат элемента (8-символьный hex). Отдельный `SessionIDIsInvalid` она
+    // оставляет за элементом, который схему прошёл, а числом не разобрался, — воспроизвести это
+    // моком нечем: 8 hex-символов разбираются всегда.
+    if (
+      !Array.isArray(ids) ||
+      ids.length === 0 ||
+      ids.length > 64 ||
+      ids.some((id) => !/^[0-9a-f]{8}$/i.test(id))
+    ) {
+      return fieldError('ValidateError/session_ids', 'Укажите от 1 до 64 идентификаторов сессий');
     }
 
     const closing = new Set(ids);
@@ -637,18 +804,22 @@ export const handlers = [
     const body = (await request.json().catch(() => null)) as Partial<Settings> | null;
 
     // Пустая строка по спеке невалидна: «Авто» — это ОТСУТСТВИЕ поля.
-    if (body?.lang === '') return fieldError('lang', 'Язык не может быть пустой строкой');
-    if (body?.tz === '') return fieldError('tz', 'Часовой пояс не может быть пустой строкой');
+    if (body?.lang === '') {
+      return fieldError('ValidateError/lang', 'Язык не может быть пустой строкой');
+    }
+    if (body?.tz === '') {
+      return fieldError('ValidateError/tz', 'Часовой пояс не может быть пустой строкой');
+    }
 
     // Явные значения строгие: подбор ближайшего здесь не выполняется.
     if (
       body?.lang &&
       (body.lang === MOCK_REJECTED_LANG || !LANGUAGES.some((l) => l.locale === body.lang))
     ) {
-      return fieldError('lang', `Язык «${body.lang}» не поддерживается`);
+      return fieldError('ValidateError/lang', `Язык «${body.lang}» не поддерживается`);
     }
     if (body?.tz && (body.tz === MOCK_REJECTED_TZ || !findTimeZone(body.tz))) {
-      return fieldError('tz', `Часовой пояс «${body.tz}» не поддерживается`);
+      return fieldError('ValidateError/tz', `Часовой пояс «${body.tz}» не поддерживается`);
     }
 
     // Режим «авто»: подбираем по самому запросу, уже сохранённые настройки в подборе НЕ участвуют.

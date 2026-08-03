@@ -59,7 +59,10 @@ describe('EmailFieldNode (живая проверка доступности)', 
 
   it('занятый email (ApiFieldError) → текст ошибки под полем', async () => {
     vi.mocked(checkLogin).mockRejectedValueOnce(
-      new ApiFieldError([{ code: 'user_email', detail: 'Этот email уже зарегистрирован' }], 400),
+      new ApiFieldError(
+        [{ code: 'EmailAlreadyExists/user_login', detail: 'Этот email уже зарегистрирован' }],
+        400,
+      ),
     );
     render(<Harness />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'taken@example.com' } });

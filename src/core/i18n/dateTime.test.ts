@@ -43,7 +43,7 @@ describe('пояс отображения', () => {
     expect(formatDate(lateEvening, 'ru-RU', 'Asia/Tokyo')).toBe('16.07.2026');
   });
 
-  it('без пояса форматируем как раньше — в поясе браузера', () => {
+  it('без пояса форматируем в поясе браузера', () => {
     expect(formatDate(D, 'ru-RU')).toBe(D.toLocaleDateString('ru-RU'));
     expect(formatDateTimeLong(D, 'ru-RU')).toBe(
       D.toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' }).replace(/\sг\./g, ''),

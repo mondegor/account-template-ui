@@ -47,7 +47,7 @@ const fieldValidation = z.strictObject({
 const nodeSchema: z.ZodType<SchemaNode> = z.lazy(() =>
   z.strictObject({
     // Встроенные типы + зарегистрированные модулями (registerFieldType); чужой тип — fail-closed.
-    type: z.string().refine(isKnownNodeType, { message: 'неизвестный тип узла' }),
+    type: z.string().refine(isKnownNodeType, { message: 'unknown node type' }),
     children: z.array(nodeSchema).optional(),
     id: z.string().optional(),
     title: z.string().optional(),
@@ -82,7 +82,7 @@ export function validateSchema(input: unknown): SchemaNode {
     const issues = result.error.issues
       .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
       .join('; ');
-    throw new SchemaValidationError(`Некорректная схема представления: ${issues}`);
+    throw new SchemaValidationError(`Invalid view schema: ${issues}`);
   }
   return result.data;
 }

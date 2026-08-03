@@ -1,6 +1,16 @@
 /** Ядровые DTO ошибок из openapi (общие для всех модулей). */
 
-/** Один атрибут ошибки валидации 400: `code` = имя поля формы. */
+/**
+ * Один элемент списка `errors` в ответе 400 (`Api.Response.Model.ErrorAttribute`).
+ *
+ * `code` принимает одну из двух форм:
+ *  - `КодОшибки` — запрос отклонён по существу, а не по значению поля (состояние аккаунта, лимит
+ *    сервера); поля формы у такой ошибки нет, её показывают общим уведомлением;
+ *  - `КодОшибки/имя_поля` — суффикс после ПЕРВОГО `/` совпадает с именем поля в JSON запроса,
+ *    поэтому ошибка ложится под соответствующее поле формы, а префикс объясняет причину отказа.
+ *
+ * Разбирать это правило руками не нужно — есть ApiFieldError.split() (@core/api/errors).
+ */
 export interface ErrorAttribute {
   code: string;
   detail: string;
@@ -31,7 +41,11 @@ export interface OperationError400Body extends Error400Body {
   operation_state?: ConfirmOperationState;
 }
 
-/** RFC 9457 problem+json (`Api.Response.Model.ErrorDetails`) — 401/403/404/5xx. */
+/**
+ * RFC 9457 problem+json (`Api.Response.Model.ErrorDetails`) — всё, кроме 400:
+ * 401/403/404/422/429/5xx.
+ * Машиночитаемого `code` в теле нет: причина отказа задана самим методом и статусом.
+ */
 export interface ErrorDetailsBody {
   type?: string;
   title: string;

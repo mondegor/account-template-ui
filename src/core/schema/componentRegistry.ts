@@ -19,7 +19,7 @@ const registry = new Map<string, NodeComponent>();
 
 export function registerComponent(type: string, component: NodeComponent): void {
   if (registry.has(type)) {
-    throw new Error(`componentRegistry: тип "${type}" уже зарегистрирован (override запрещён)`);
+    throw new Error(`componentRegistry: type "${type}" is already registered (override forbidden)`);
   }
   registry.set(type, component);
 }

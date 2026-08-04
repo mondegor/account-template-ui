@@ -91,7 +91,7 @@ describe('authClient: 401 → refresh → повтор', () => {
     expect(calls).toEqual(['Bearer stale', 'Bearer fresh']);
   });
 
-  it('401 на PATCH /v1/operation/confirm refresh НЕ запускает: метод гостевой', async () => {
+  it('401 на PATCH /v1/operation/confirm refresh НЕ запускает: у метода нет схемы безопасности', async () => {
     const patches: string[] = [];
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('patch', '/v1/operation/confirm', calls));

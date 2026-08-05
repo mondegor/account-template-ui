@@ -14,23 +14,46 @@ import {
   apiErrorText,
   parseErrorCode,
 } from '@core/api';
-import { confirmOperation, openSession, resendOperation, revokeOperation } from '../api/authApi';
+import { confirmOperation, resendOperation, revokeOperation } from '../api/authApi';
 import type { WaitingConfirmOperation } from '../api/types';
 
 interface UseConfirmFlowArgs {
-  onAccess: () => void;
+  /**
+   * Терминальное действие подтверждённой операции — параметр, потому что у каждого потока оно
+   * своё: вход открывает сессию, security-потоки зовут свой `apply-*`. Секрета не принимает: по
+   * полностью подтверждённой операции спека его не ждёт. Вернуло звено — цепочка продолжается,
+   * вернуло `void` — операция закрыта.
+   */
+  terminal: (token: string) => Promise<WaitingConfirmOperation | void>;
+  /** Операция закрыта: снимок уже сброшен, дальше навигация — забота вызывающего. */
+  onDone: () => void;
   onRevoked: () => void;
+  /**
+   * Запасной текст на случай, когда сорвался сам терминал, а сервер деталь не прислал. Он называет
+   * ШАГ, на котором сорвалось, а шаг у каждого потока свой: «не удалось завершить вход» на
+   * установке пароля отправило бы искать проблему совсем не там.
+   */
+  finishErrorKey?: string;
 }
 
 /**
  * Причины отказа 400, после которых операции больше нет: токен неизвестен, истёк или уже
- * использован (`OperationInvalid`) либо вышел её срок жизни (`OperationAlreadyExpired`). Спека
- * называет их и у подтверждения кода, и у открытия сессии, и у повторной отправки. Завершить такую
- * операцию нельзя ничем, поэтому исход тот же, что у 409/403, — тупик и новый вход.
+ * использован (`OperationInvalid`), вышел её срок жизни (`OperationAlreadyExpired`) либо она не
+ * подтверждена, а терминальный метод уже позвали (`OperationIsNotConfirmed` — спека называет его
+ * только у `POST /v1/security/apply-*`). Остальные спека называет и у подтверждения кода, и у
+ * открытия сессии, и у повторной отправки. Завершить такую операцию нельзя ничем, поэтому исход
+ * тот же, что у 409/403, — тупик и новая операция.
+ *
+ * `ConfirmCodeIsRequired/secret` (открытие сессии по не до конца подтверждённой операции) сюда
+ * намеренно НЕ входит: операция цела, попытка по спеке не расходуется, а тело несёт
+ * `operation_state` — снимок возвращается из `confirmed` в `active`, то есть к вводу секрета
+ * текущего звена. То же и с `ResendCodeIsNotSupported/token`: отправлять по звену второго фактора
+ * нечего, но сама операция жива.
  */
 const TERMINAL_OPERATION_REASONS: ReadonlySet<string> = new Set([
   'OperationInvalid',
   'OperationAlreadyExpired',
+  'OperationIsNotConfirmed',
 ]);
 
 function isOperationGone(e: ApiFieldError): boolean {
@@ -39,23 +62,30 @@ function isOperationGone(e: ApiFieldError): boolean {
 
 /**
  * Флоу подтверждения (auth-обвязка над generic-движком). После 204 выполняет терминальное
- * действие openSession({token}); 200 из confirm = следующее звено цепочки (задел под 2FA):
+ * действие, которое передал вызывающий; 200 из confirm = следующее звено цепочки (второй фактор):
  * у следующего звена свой токен, предыдущий сразу перестаёт действовать — поэтому все вызовы
  * идут с токеном из снимка, а он перезаписывается каждым ответом.
  * Счётчики/таймеры обновляются из ответов; неверный код читает operation_state из тела 400.
  *
- * 204 переводит снимок в фазу `confirmed` ДО открытия сессии. Если оно откажет по причине, которая
- * операцию не расходует (429 — лимит одновременных сессий), пользователь остаётся с подтверждённой
- * операцией: повторять надо ровно открытие сессии. Подтверждение переигрывать не нужно и незачем —
- * звено уже пройдено, и повторный confirm по спеке идемпотентен: он вернул бы тот же 204, не
- * сдвинув операцию ни на шаг. Поэтому вход один — confirm(secret), — но при `confirmed` он идёт
- * сразу в openSession, а secret не спрашиваем (вводить уже нечего).
+ * 204 переводит снимок в фазу `confirmed` ДО терминального действия. Если оно откажет по причине,
+ * которая операцию не расходует (429 — лимит одновременных сессий), пользователь остаётся с
+ * подтверждённой операцией: повторять надо ровно терминал. Подтверждение переигрывать не нужно и
+ * незачем — звено уже пройдено, и повторный confirm по спеке идемпотентен: он вернул бы тот же 204,
+ * не сдвинув операцию ни на шаг. Поэтому вход один — confirm(secret), — но при `confirmed` он идёт
+ * сразу в терминал, а secret не спрашиваем (вводить уже нечего).
  *
  * Отсюда же главное различие в разборе отказа: 429 повторяем (снимок цел), а 409, 403 и
  * TERMINAL_OPERATION_REASONS в теле 400 неисправимы — операция помечается мёртвой, и экран уводит
- * на новый вход.
+ * на новую операцию. Ветка 409/403 общая для всех терминалов: 409 отдают и открытие сессии, и
+ * `apply-*` (фактор включили или отключили уже после создания операции), 403 — чужая операция или
+ * операция не того типа.
  */
-export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
+export function useConfirmFlow({
+  terminal,
+  onDone,
+  onRevoked,
+  finishErrorKey = 'auth.errors.finish',
+}: UseConfirmFlowArgs) {
   const { t } = useTranslation();
   const snapshot = useOperationStore((s) => s.snapshot);
   const dispatch = useOperationStore((s) => s.dispatch);
@@ -91,22 +121,22 @@ export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
   );
 
   /**
-   * Терминальное действие подтверждённой операции. secret не передаём: подтверждать нечего, и по
-   * подтверждённой операции сервер это поле игнорирует. В схеме LoginByToken оно необязательное —
-   * нужно только там, где последнее звено подтверждается самим открытием сессии, мимо confirm.
+   * Запуск терминального действия. Оно может вернуть ещё одно звено — так открытие сессии по
+   * спеке отвечает 200, когда secret передали прямо в него и цепочка ещё не кончилась. Иначе
+   * операция закрыта: гасим снимок и отдаём управление вызывающему.
    */
-  const openConfirmedSession = useCallback(
+  const runTerminal = useCallback(
     async (token: string) => {
-      const result = await openSession({ token });
-      if (result.kind === 'access') {
-        dispatch({ type: 'DONE' });
-        reset();
-        onAccess();
-      } else {
-        startNextLink(result.operation);
+      const next = await terminal(token);
+      if (next) {
+        startNextLink(next);
+        return;
       }
+      dispatch({ type: 'DONE' });
+      reset();
+      onDone();
     },
-    [dispatch, reset, onAccess, startNextLink],
+    [terminal, dispatch, reset, onDone, startNextLink],
   );
 
   const confirm = useCallback(
@@ -121,7 +151,7 @@ export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
       try {
         // Повтор после отказа терминального действия: подтверждать нечего, операция цела.
         if (finishing) {
-          await openConfirmedSession(snapshot.token);
+          await runTerminal(snapshot.token);
           return;
         }
         const next = await confirmOperation({ token: snapshot.token, secret });
@@ -130,11 +160,11 @@ export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
           startNextLink(next);
           return;
         }
-        // 204 — операция подтверждена ПОЛНОСТЬЮ, дальше идёт терминальное действие: открыть сессию.
+        // 204 — операция подтверждена ПОЛНОСТЬЮ, дальше идёт терминальное действие.
         // Фазу двигаем ДО вызова: откажи он — повторять надо будет уже только его.
         dispatch({ type: 'CONFIRMED' });
         finishing = true;
-        await openConfirmedSession(snapshot.token);
+        await runTerminal(snapshot.token);
       } catch (e) {
         if (e instanceof ApiFieldError && isOperationGone(e)) {
           // Операции больше нет: её израсходовала соседняя вкладка либо вышел срок. Просить код
@@ -145,33 +175,31 @@ export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
           if (e.operationState) {
             dispatch({ type: 'CONFIRM_FAILED', state: e.operationState, now: Date.now() });
           }
-          setError(
-            e.fields[0]?.detail || t(finishing ? 'auth.errors.finish' : 'auth.errors.wrongCode'),
-          );
+          setError(e.fields[0]?.detail || t(finishing ? finishErrorKey : 'auth.errors.wrongCode'));
         } else if (e instanceof ApiProblemError && (e.status === 409 || e.status === 403)) {
           // Операцию больше нельзя завершить ничем. 409 — отпало условие, при котором она
-          // создавалась (2FA отключили уже после). 403 — открывать по ней сессию нельзя в
-          // принципе: токен не от входа/регистрации, привязка к realm'у снята, либо вкладка уже
-          // авторизована. Повтор не лечит ни то, ни другое, поэтому помечаем снимок мёртвым —
-          // экран уведёт на новый вход, а не будет просить код заново. Источник тут только один:
-          // у подтверждения кода ответа 403 по спеке нет вовсе.
+          // создавалась (второй фактор включили или отключили уже после). 403 — завершить её
+          // нельзя в принципе: токен не от того потока, привязка к realm'у снята, вкладка уже
+          // авторизована либо операция чужая. Повтор не лечит ни то, ни другое, поэтому помечаем
+          // снимок мёртвым — экран уведёт на новую операцию, а не будет просить код заново.
+          // Источник тут только терминал: у подтверждения кода ответа 403 по спеке нет вовсе.
           dispatch({ type: 'INVALIDATED' });
           setError(apiErrorText(e, t));
         } else if (e instanceof ApiRateLimitError || e instanceof ApiProblemError) {
-          // 429 на открытии сессии — лимит одновременных сессий. Подтверждённая операция при этом
-          // НЕ расходуется, поэтому снимок не сбрасываем: фаза `confirmed` уже выставлена, и
-          // повтор пойдёт сразу в openSession, пока не истёк срок жизни операции.
+          // 429 на терминале — например, лимит одновременных сессий на открытии. Подтверждённая
+          // операция при этом НЕ расходуется, поэтому снимок не сбрасываем: фаза `confirmed` уже
+          // выставлена, и повтор пойдёт сразу в терминал, пока не истёк срок жизни операции.
           setError(apiErrorText(e, t));
         } else {
           // Не ответ сервиса (сеть, сбой в самом клиенте) — здесь уместнее сказать про шаг,
           // на котором сорвалось, чем общее «что-то пошло не так» из apiErrorText.
-          setError(t(finishing ? 'auth.errors.finish' : 'auth.errors.confirm'));
+          setError(t(finishing ? finishErrorKey : 'auth.errors.confirm'));
         }
       } finally {
         setSubmitting(false);
       }
     },
-    [snapshot, startNextLink, openConfirmedSession, dispatch, t],
+    [snapshot, startNextLink, runTerminal, dispatch, finishErrorKey, t],
   );
 
   const resend = useCallback(async () => {
@@ -225,7 +253,7 @@ export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
     error,
     submitting,
     resending,
-    /** Код принят, сорвалось только открытие сессии: экрану нужен «Повторить», а не поле ввода. */
+    /** Код принят, сорвался только терминал: экрану нужен «Повторить», а не поле ввода. */
     awaitingFinish: snapshot?.phase === 'confirmed',
     expiresLeft: snapshot ? expiresSecondsLeft(snapshot, now) : 0,
     resendLeft: snapshot ? resendSecondsLeft(snapshot, now) : 0,
@@ -236,3 +264,6 @@ export function useConfirmFlow({ onAccess, onRevoked }: UseConfirmFlowArgs) {
     revoke,
   };
 }
+
+/** Состояние и действия подтверждения — то, чем питается презентационный OperationConfirm. */
+export type ConfirmFlow = ReturnType<typeof useConfirmFlow>;

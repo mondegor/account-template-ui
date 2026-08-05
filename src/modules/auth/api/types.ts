@@ -109,3 +109,36 @@ export interface UserSession {
 export type OpenSessionResult =
   | { kind: 'waiting'; operation: WaitingConfirmOperation }
   | { kind: 'access'; access: SuccessAccess };
+
+/** Тело POST /v1/security/password: пароль устанавливается вторым фактором (границы 8..32). */
+export interface ChangePasswordRequest {
+  new_password: string;
+}
+
+/**
+ * Тело завершающих методов операции (`apply-password`, `apply-recovery-codes`, `apply-operation`).
+ * Секрета здесь нет: операция подтверждена полностью, и сервер это поле не принимает.
+ */
+export interface ApplyByTokenRequest {
+  token: string;
+}
+
+/** Тело POST /v1/security/apply-totp: код из приложения подтверждает, что генератор заведён. */
+export interface ApplyTotpRequest {
+  token: string;
+  totp_code: string;
+}
+
+/**
+ * Аварийные коды, выданные при включении 2FA или при перевыпуске. Показываются ровно один раз —
+ * повторно сервер их не отдаёт.
+ */
+export interface RecoveryCodes {
+  recovery_codes: string[];
+}
+
+/** Заготовка генератора TOTP: Base32-секрет для ручного ввода и ссылка otpauth:// для приложения. */
+export interface TotpSecret {
+  secret: string;
+  otpauth_uri: string;
+}

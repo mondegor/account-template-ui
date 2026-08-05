@@ -3,12 +3,17 @@ import { authStore, realmProvider, tokenStorage, applyAccess } from '@core/auth'
 import { adoptProfileLanguage, buildTimeZoneHeader } from '@core/i18n';
 import { setSettingsOverride } from '@core/request-meta';
 import type {
+  ApplyByTokenRequest,
+  ApplyTotpRequest,
+  ChangePasswordRequest,
   ChangeUserSettingsRequest,
   ConfirmOperationRequest,
   LoginByTokenRequest,
   OpenSessionResult,
   OperationTokenRequest,
+  RecoveryCodes,
   SuccessAccess,
+  TotpSecret,
   UserInfo,
   UserSession,
   UserSettings,
@@ -161,4 +166,85 @@ export async function getUserSessions(realm?: string): Promise<UserSession[]> {
  */
 export async function closeUserSessions(sessionIds: string[]): Promise<void> {
   await authClient.post('/v1/sessions/close', { session_ids: sessionIds });
+}
+
+/**
+ * Методы тега Auth.Security — изменение защищённых свойств пользователя. Все авторизованные, и все
+ * идут одним сквозным паттерном: инициатор создаёт операцию (200 WaitingConfirmOperation), дальше
+ * общий цикл подтверждения, а закрывает её свой завершающий метод — токеном ПОСЛЕДНЕГО звена и уже
+ * без секрета. Сессий и токенов эти операции не затрагивают: после успеха достаточно перечитать
+ * профиль.
+ */
+
+/** Инициатор: установить пароль вторым фактором. 409 — 2FA уже включена (сначала отключить). */
+export async function startPasswordSetup(
+  req: ChangePasswordRequest,
+): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/password', req);
+  return res.data;
+}
+
+/** Завершение установки пароля: 200 с аварийными кодами (единственный их показ). */
+export async function applyPassword(req: ApplyByTokenRequest): Promise<RecoveryCodes> {
+  const res = await authClient.post<RecoveryCodes>('/v1/security/apply-password', req);
+  return res.data;
+}
+
+/** Инициатор: подключить генератор TOTP. Секрет создаётся в самой операции; тела у запроса нет. */
+export async function startTotpSetup(): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/totp');
+  return res.data;
+}
+
+/**
+ * Заготовка генератора текстом (по подтверждённой операции): Base32-секрет и ссылка otpauth://.
+ * Токен идёт path-параметром, поэтому коды ошибок приходят без имени поля — под поле их не
+ * положить, только общим уведомлением.
+ */
+export async function getTotpSecret(token: string): Promise<TotpSecret> {
+  const res = await authClient.get<TotpSecret>(`/v1/security/totp/${token}`);
+  return res.data;
+}
+
+/**
+ * Та же заготовка картинкой QR. Ответ бинарный, поэтому и запрос идёт arraybuffer'ом; тело отказа
+ * при этом остаётся неразобранным — читаемую причину даёт JSON-ручка выше, у неё те же коды.
+ */
+export async function getTotpQrCode(token: string): Promise<Blob> {
+  const res = await authClient.get<ArrayBuffer>(`/v1/security/totp/${token}/qrcode`, {
+    responseType: 'arraybuffer',
+  });
+  return new Blob([res.data], { type: 'image/png' });
+}
+
+/** Завершение привязки TOTP: код из приложения доказывает, что генератор заведён. */
+export async function applyTotp(req: ApplyTotpRequest): Promise<RecoveryCodes> {
+  const res = await authClient.post<RecoveryCodes>('/v1/security/apply-totp', req);
+  return res.data;
+}
+
+/** Инициатор: перевыпустить аварийные коды. 409 — 2FA выключена, перевыпускать нечего. */
+export async function startRecoveryCodesReissue(): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/recovery-codes');
+  return res.data;
+}
+
+/** Завершение перевыпуска: новые коды, старые сразу перестают действовать. */
+export async function applyRecoveryCodes(req: ApplyByTokenRequest): Promise<RecoveryCodes> {
+  const res = await authClient.post<RecoveryCodes>('/v1/security/apply-recovery-codes', req);
+  return res.data;
+}
+
+/** Инициатор: отключить 2FA. 409 — она уже выключена. */
+export async function startDisable2fa(): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/disable2fa');
+  return res.data;
+}
+
+/**
+ * Универсальное завершение операции (204) — им закрываются те потоки, у которых своего
+ * завершающего метода нет: отключение 2FA, смена email и телефона.
+ */
+export async function applyOperation(req: ApplyByTokenRequest): Promise<void> {
+  await authClient.post('/v1/security/apply-operation', req);
 }

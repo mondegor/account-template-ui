@@ -9,7 +9,7 @@ import { SessionsPage } from './pages/SessionsPage';
 import { ConfirmOperationNode } from './ui/ConfirmOperationNode';
 import { EmailFieldNode } from './ui/EmailFieldNode';
 import { authTranslations } from './i18n';
-import { registerAuthHandlers } from './register';
+import { initAuthModule } from './register';
 import signupSchema from './schemas/signup.json';
 import signinSchema from './schemas/signin.json';
 import confirmSchema from './schemas/confirm.json';
@@ -81,5 +81,5 @@ export const authModule: ModuleDefinition = {
     'auth.emailField': EmailFieldNode,
   },
   i18n: authTranslations,
-  onInit: () => registerAuthHandlers(),
+  onInit: () => initAuthModule(),
 };

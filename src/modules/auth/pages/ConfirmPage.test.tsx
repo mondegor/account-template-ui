@@ -9,6 +9,7 @@ import { registerBaseComponents } from '@core/renderer';
 import { registerModule } from '@core/module-registry';
 import { realmProvider, useAuthStore } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
+import { tr } from '../../../test/i18n';
 import { authModule } from '../module';
 import { saveConfirmReturn } from '../lib/confirmReturn';
 import { ConfirmPage } from './ConfirmPage';
@@ -70,7 +71,7 @@ describe('ConfirmPage — редирект при сбросе операции 
     saveConfirmReturn('/signup');
     useOperationStore.getState().dispatch(activeOp);
     renderConfirmPage();
-    expect(screen.getByText('Подтверждение')).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.confirm.title'))).toBeInTheDocument();
 
     act(() => {
       useOperationStore.getState().reset();
@@ -88,7 +89,7 @@ describe('ConfirmPage — редирект при сбросе операции 
     saveConfirmReturn('/signup');
     useOperationStore.getState().dispatch(activeOp);
     renderConfirmPage();
-    expect(screen.getByText('Подтверждение')).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.confirm.title'))).toBeInTheDocument();
 
     act(() => {
       useAuthStore.getState().setAccess('a'.repeat(32), 600);

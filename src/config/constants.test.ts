@@ -50,4 +50,18 @@ describe('ограничения полей соответствуют openapi',
       hasMinMax(schemaBlock('Auth.Operation.Request.Model.ConfirmOperation'), 'secret', 4, 32),
     ).toBe(true);
   });
+
+  it('new_password 8/32 (ChangePassword)', () => {
+    expect(limits.password).toEqual({ min: 8, max: 32 });
+    expect(
+      hasMinMax(schemaBlock('Auth.Security.Request.Model.ChangePassword'), 'new_password', 8, 32),
+    ).toBe(true);
+  });
+
+  it('totp_code 6/6 (ApplyTotpGenerator)', () => {
+    expect(limits.totpCode).toEqual({ min: 6, max: 6 });
+    expect(
+      hasMinMax(schemaBlock('Auth.Security.Request.Model.ApplyTotpGenerator'), 'totp_code', 6, 6),
+    ).toBe(true);
+  });
 });

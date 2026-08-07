@@ -13,6 +13,9 @@ import { useConfirmFlow } from './useConfirmFlow';
  * расходует операцию — снимок обязан пережить отказ и остаться подтверждённым, чтобы повтор пошёл
  * ровно в openSession. Переиграй он подтверждение — экран впустую попросил бы код ещё раз, а
  * ответом на него был бы тот же 204: операция от повторного confirm не сдвигается.
+ *
+ * Терминал у хука — параметр, поэтому кейсы гоняют ровно тот, что передаёт узел подтверждения
+ * входа: только так проверка остаётся про вход, а не про подставную функцию.
  */
 
 vi.mock('../api/authApi', () => ({
@@ -35,6 +38,12 @@ const activeOp = {
     expires_in: 600,
   },
   now: Date.now(),
+};
+
+/** Терминал входа — тот же, что передаёт ConfirmOperationNode: 201 закрывает операцию, 200 = звено. */
+const loginTerminal = async (token: string) => {
+  const result = await openSession({ token });
+  return result.kind === 'access' ? undefined : result.operation;
 };
 
 function rateLimited(retryAfterSec?: number) {
@@ -82,7 +91,9 @@ describe('useConfirmFlow: терминальное открытие сессии
     });
     useOperationStore.getState().dispatch(activeOp);
     const onAccess = vi.fn();
-    const { result } = renderHook(() => useConfirmFlow({ onAccess, onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: onAccess, onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -97,7 +108,9 @@ describe('useConfirmFlow: терминальное открытие сессии
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(rateLimited(30));
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -124,7 +137,9 @@ describe('useConfirmFlow: терминальное открытие сессии
       });
     useOperationStore.getState().dispatch(activeOp);
     const onAccess = vi.fn();
-    const { result } = renderHook(() => useConfirmFlow({ onAccess, onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: onAccess, onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -153,7 +168,9 @@ describe('useConfirmFlow: терминальное открытие сессии
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(rateLimited(30));
     useOperationStore.getState().dispatch({ ...activeOp, now: Date.now() });
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -180,7 +197,9 @@ describe('useConfirmFlow: терминальное открытие сессии
       }),
     );
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -206,7 +225,9 @@ describe('useConfirmFlow: терминальное открытие сессии
       }),
     );
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -235,7 +256,9 @@ describe('useConfirmFlow: терминальное открытие сессии
       }),
     );
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -262,7 +285,9 @@ describe('useConfirmFlow: терминальное открытие сессии
         ),
       );
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -278,6 +303,69 @@ describe('useConfirmFlow: терминальное открытие сессии
     expect(result.current.error).toBe('Токен операции неизвестен');
   });
 
+  /**
+   * `ConfirmCodeIsRequired/secret` — обратный случай: операция подтверждена НЕ полностью, и терминал
+   * позвали рано. Она цела, попытка по спеке не расходуется, а тело несёт operation_state — поэтому
+   * снимок обязан вернуться к вводу секрета текущего звена, а не умереть.
+   */
+  it('400 ConfirmCodeIsRequired на терминале: операция жива, снова просим секрет', async () => {
+    vi.mocked(confirmOperation).mockResolvedValue(null);
+    vi.mocked(openSession).mockRejectedValue(
+      new ApiFieldError(
+        [{ code: 'ConfirmCodeIsRequired/secret', detail: 'Операция подтверждена не полностью' }],
+        400,
+        // Счётчик отличается от стартового (3), иначе проверка ниже прошла бы и без применения
+        // состояния — а применить его хук обязан: снимок возвращается к вводу секрета.
+        { remaining_attempts: 2, remaining_resends: 1, resends_in: 30, expires_in: 600 },
+      ),
+    );
+    useOperationStore.getState().dispatch(activeOp);
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
+
+    await act(async () => {
+      await result.current.confirm('183947');
+    });
+
+    expect(useOperationStore.getState().snapshot?.phase).toBe('active');
+    expect(result.current.awaitingFinish).toBe(false);
+    expect(result.current.error).toBe('Операция подтверждена не полностью');
+    // Счётчики взяты из тела отказа, а не оставлены прежними.
+    expect(useOperationStore.getState().snapshot?.remainingAttempts).toBe(2);
+  });
+
+  /**
+   * `OperationIsNotConfirmed/token` спека называет только у `POST /v1/security/apply-*`: терминал
+   * позвали по операции, которую сервер подтверждённой не считает. Токен он больше не примет —
+   * тупик, как и у прочих терминальных причин.
+   */
+  it('400 OperationIsNotConfirmed от терминала: снимок мёртв', async () => {
+    vi.mocked(confirmOperation).mockResolvedValue(null);
+    useOperationStore.getState().dispatch(activeOp);
+    const { result } = renderHook(() =>
+      useConfirmFlow({
+        terminal: () =>
+          Promise.reject(
+            new ApiFieldError(
+              [{ code: 'OperationIsNotConfirmed/token', detail: 'Операция не подтверждена' }],
+              400,
+            ),
+          ),
+        onDone: vi.fn(),
+        onRevoked: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.confirm('183947');
+    });
+
+    expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
+    expect(result.current.awaitingFinish).toBe(false);
+    expect(result.current.error).toBe('Операция не подтверждена');
+  });
+
   it('409 на подтверждении кода: та же мёртвая операция', async () => {
     vi.mocked(confirmOperation).mockRejectedValue(
       new ApiProblemError({
@@ -289,7 +377,9 @@ describe('useConfirmFlow: терминальное открытие сессии
       }),
     );
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -309,7 +399,9 @@ describe('useConfirmFlow: отказ повторной отправки', () =>
   async function resendFailsWith(e: unknown) {
     vi.mocked(resendOperation).mockRejectedValue(e);
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
     await act(async () => {
       await result.current.resend();
     });
@@ -379,7 +471,9 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
       new ApiFieldError([{ code: 'ConfirmCodeIsIncorrect/secret', detail: '' }], 400),
     );
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('000000');
@@ -395,7 +489,9 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
     await i18next.changeLanguage(lng);
     vi.mocked(confirmOperation).mockRejectedValue(new Error('boom'));
     useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
 
     await act(async () => {
       await result.current.confirm('183947');
@@ -414,7 +510,9 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
       vi.mocked(confirmOperation).mockResolvedValue(null);
       vi.mocked(openSession).mockRejectedValue(e);
       useOperationStore.getState().dispatch(activeOp);
-      return renderHook(() => useConfirmFlow({ onAccess: vi.fn(), onRevoked: vi.fn() }));
+      return renderHook(() =>
+        useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+      );
     }
 
     it.each([
@@ -447,6 +545,31 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
         await result.current.confirm('');
       });
       expect(result.current.error).toBe('Не удалось завершить вход. Повторите попытку.');
+    });
+
+    /**
+     * Шаг называется в тексте, а шаг у каждого потока свой: у security-потоков терминал — это не
+     * вход, и «не удалось завершить вход» отправило бы искать проблему совсем не там. Поэтому ключ
+     * запасного текста задаёт вызывающий, а дефолт остаётся входовым.
+     */
+    it('свой finishErrorKey подменяет текст про вход', async () => {
+      vi.mocked(confirmOperation).mockResolvedValue(null);
+      vi.mocked(openSession).mockRejectedValue(new Error('boom'));
+      useOperationStore.getState().dispatch(activeOp);
+      const { result } = renderHook(() =>
+        useConfirmFlow({
+          terminal: loginTerminal,
+          onDone: vi.fn(),
+          onRevoked: vi.fn(),
+          finishErrorKey: 'auth.errors.resendUnavailable',
+        }),
+      );
+
+      await act(async () => {
+        await result.current.confirm('183947');
+      });
+
+      expect(result.current.error).toBe('Повтор пока недоступен');
     });
   });
 });

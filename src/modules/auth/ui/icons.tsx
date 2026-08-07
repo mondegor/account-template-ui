@@ -65,11 +65,84 @@ export function BriefcaseIcon({ size = 20 }: { size?: number }) {
   );
 }
 
-/** Щит — блок безопасности. */
-export function ShieldIcon({ size = 20 }: { size?: number }) {
+/** Контур щита — общий для всех трёх ступеней защиты: меняется только знак внутри. */
+const SHIELD_PLATE = 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z';
+
+/** Щит перечёркнут — 2FA выключена. Ступень не занята; знака тревоги здесь нет намеренно. */
+export function ShieldOffIcon({ size = 20 }: { size?: number }) {
   return (
     <Glyph size={size}>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d={SHIELD_PLATE} />
+      <path d="M8.8 14.4 15.2 8.6" />
+    </Glyph>
+  );
+}
+
+/** Щит с точками пароля — второй фактор есть, но это пароль. */
+export function ShieldDotsIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d={SHIELD_PLATE} />
+      <circle cx="8.7" cy="11.4" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="11.4" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15.3" cy="11.4" r="1.15" fill="currentColor" stroke="none" />
+    </Glyph>
+  );
+}
+
+/**
+ * Залитый щит с галочкой — верхняя ступень. Единственный глиф модуля не в line-стиле: заливка и
+ * есть та самая награда, ради которой на полосу и нажимают. Галочка вырезана цветом карточки,
+ * поэтому берётся из темы, а не из currentColor.
+ *
+ * Цвет приходит колбэком: пути палитры sx разбирает только у color/bgcolor и цветов рамок, а в
+ * stroke строка «background.paper» ушла бы в CSS как есть — объявление отбрасывается, и галочка
+ * наследует currentColor, то есть пропадает на заливке щита.
+ */
+export function ShieldCheckIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <Box component="path" d={SHIELD_PLATE} sx={{ fill: 'currentColor', stroke: 'none' }} />
+      <Box
+        component="path"
+        d="m8.6 11.6 2.6 2.6 4.4-4.7"
+        sx={{ stroke: (theme) => theme.palette.background.paper, strokeWidth: 2.2 }}
+      />
+    </Glyph>
+  );
+}
+
+/** Восклицание в круге — предупреждение об остатке аварийных кодов. */
+export function AlertCircleIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <circle cx="12" cy="12" r="9.2" />
+      <path d="M12 7.4v5.4" />
+      <path d="M12 16.3v.1" />
+    </Glyph>
+  );
+}
+
+/** Шеврон вправо — «здесь есть куда перейти». */
+export function ChevronRightIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d="m9 6 6 6-6 6" />
+    </Glyph>
+  );
+}
+
+/**
+ * Монитор — устройство сессии; одинаков для всех сессий. Тип устройства не угадываем: в контракте
+ * и название устройства, и приложение — свободные строки, разбирать их эвристикой значит дописывать
+ * контракт за серверную сторону.
+ */
+export function MonitorIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <rect x="2" y="3" width="20" height="13" rx="2" />
+      <path d="M8 21h8" />
+      <path d="M12 16v5" />
     </Glyph>
   );
 }

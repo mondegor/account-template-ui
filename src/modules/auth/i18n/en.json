@@ -61,14 +61,15 @@
       "phone": "Phone",
       "lang": "Language",
       "tz": "Time zone",
-      "security": "Security",
-      "recoveryCodesLeft": "Recovery codes",
-      "recoveryCodesEmpty": "None left",
+      "recoveryCodesEmpty": "No recovery codes left — reissue them",
+      "recoveryCodesLast": "One recovery code left — reissue now",
+      "recoveryCodesLow_other": "{{count}} recovery codes left — reissue them",
       "lastLogin": "Last login",
       "lastLoginJustNow": "just now",
       "lastLocation": "Last location",
       "registeredAt": "Registered",
       "accountKind": "Account type",
+      "currentRealm": "current account",
       "sessions": "Sessions",
       "sessionsOf": "Sessions of {{realm}}",
       "sessionsOfAccount": "Account sessions",
@@ -77,9 +78,21 @@
       "settingsAria": "Language and time zone settings",
       "tzUnsupported": "your browser does not know this zone, dates are shown in the device time zone",
       "twoFa": {
-        "NONE": "2FA: off",
-        "PASSWORD": "2FA: password",
-        "TOTP": "2FA: TOTP"
+        "NONE": {
+          "title": "Account is not protected by two-factor auth",
+          "hint": "Sign-in is confirmed by your email password only",
+          "cta": "Turn on"
+        },
+        "PASSWORD": {
+          "title": "Sign-in is confirmed by a password",
+          "hint": "An authenticator app is stronger — its code changes every 30 seconds",
+          "cta": "Strengthen"
+        },
+        "TOTP": {
+          "title": "Account is under two-factor protection",
+          "hint": "Sign-in is confirmed by an authenticator app",
+          "cta": "Manage"
+        }
       }
     },
     "settings": {
@@ -99,7 +112,7 @@
       "title": "Sessions",
       "realmTitle": "Sessions in workspace:",
       "realm": "Workspace",
-      "current": "Current",
+      "current": "current session",
       "otherSessions": "Other sessions ({{n}})",
       "allSessions": "Sessions ({{n}})",
       "terminateOthers": "Terminate all other sessions",

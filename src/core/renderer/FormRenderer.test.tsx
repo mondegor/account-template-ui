@@ -10,8 +10,13 @@ import {
   type HandlerEntry,
   type SchemaNode,
 } from '@core/schema';
+import { tr } from '../../test/i18n';
 import { registerBaseComponents } from './baseNodes';
 import { SchemaRenderer } from './SchemaRenderer';
+
+/** Detail от серверной стороны: свой текст, не из переводов, — форма показывает его как есть. */
+const EMAIL_TAKEN_DETAIL = 'Email already registered';
+const WRONG_PASSWORD_DETAIL = 'Wrong password';
 
 const emailSchema: SchemaNode = {
   id: 'test.form',
@@ -87,7 +92,7 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     setup();
     expect(screen.getByTestId('ui-button')).toBeDisabled();
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(screen.queryByText('Обязательное поле')).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('common.validation.required'))).not.toBeInTheDocument();
   });
 
   it('заполненное поле активирует кнопку отправки', () => {
@@ -105,18 +110,18 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     fireEvent.blur(input);
     // Ввод кривого email — не должно быть ошибки формата до сабмита.
     fireEvent.change(input, { target: { value: 'not-an-email-x' } });
-    expect(screen.queryByText('Обязательное поле')).not.toBeInTheDocument();
-    expect(screen.queryByText('Введите корректный email')).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('common.validation.required'))).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('common.validation.email'))).not.toBeInTheDocument();
     // Ошибка появляется только по нажатию кнопки.
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByText('Введите корректный email')).toBeInTheDocument();
+    expect(await screen.findByText(tr('common.validation.email'))).toBeInTheDocument();
   });
 
   it('невалидный email → ошибка формата', async () => {
     setup();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'not-an-email-x' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByText('Введите корректный email')).toBeInTheDocument();
+    expect(await screen.findByText(tr('common.validation.email'))).toBeInTheDocument();
   });
 
   it('показанная ошибка держится при фокусе, гаснет при вводе/стирании', async () => {
@@ -125,27 +130,27 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     // Непустое невалидное значение → кнопка активна, сабмит показывает формат-ошибку.
     fireEvent.change(input, { target: { value: 'not-an-email-x' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByText('Введите корректный email')).toBeInTheDocument();
+    expect(await screen.findByText(tr('common.validation.email'))).toBeInTheDocument();
     // Фокус сам по себе ошибку НЕ снимает.
     fireEvent.focus(input);
-    expect(screen.getByText('Введите корректный email')).toBeInTheDocument();
+    expect(screen.getByText(tr('common.validation.email'))).toBeInTheDocument();
     // Редактирование (ввод/стирание) — снимает.
     fireEvent.change(input, { target: { value: 'not-an-email-' } });
-    expect(screen.queryByText('Введите корректный email')).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('common.validation.email'))).not.toBeInTheDocument();
   });
 
   it('ApiFieldError с известным полем → setError под поле', async () => {
     setup({
       handler: async () => {
         throw new ApiFieldError(
-          [{ code: 'EmailAlreadyExists/user_email', detail: 'Этот email занят' }],
+          [{ code: 'EmailAlreadyExists/user_email', detail: EMAIL_TAKEN_DETAIL }],
           400,
         );
       },
     });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByText('Этот email занят')).toBeInTheDocument();
+    expect(await screen.findByText(EMAIL_TAKEN_DETAIL)).toBeInTheDocument();
   });
 
   it('ApiFieldError без суффикса (отказ по существу) → форменный алерт, а не тишина', async () => {
@@ -226,7 +231,7 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     const { container } = setupPassword({
       handler: async () => {
         throw new ApiFieldError(
-          [{ code: 'ValidateError/user_password', detail: 'Неверный пароль' }],
+          [{ code: 'ValidateError/user_password', detail: WRONG_PASSWORD_DETAIL }],
           400,
         );
       },
@@ -235,7 +240,7 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     fireEvent.change(input, { target: { value: 'secret123' } });
     fireEvent.click(screen.getByTestId('ui-button'));
     // Серверная ошибка поля показывается и НЕ затирается resetField({ keepError }) в finally.
-    expect(await screen.findByText('Неверный пароль')).toBeInTheDocument();
+    expect(await screen.findByText(WRONG_PASSWORD_DETAIL)).toBeInTheDocument();
     // При этом сам пароль очищен — секрет не остаётся в стейте формы.
     expect(input.value).toBe('');
   });

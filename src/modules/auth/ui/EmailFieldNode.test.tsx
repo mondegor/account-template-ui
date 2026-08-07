@@ -8,6 +8,7 @@ import { FormErrorContext } from '@core/renderer';
 import type { SchemaNode } from '@core/schema';
 import { authTranslations } from '../i18n';
 import { resetEmailAvailabilityCache } from '../lib/emailAvailability';
+import { tr } from '../../../test/i18n';
 import { EmailFieldNode } from './EmailFieldNode';
 
 // Живая проверка дёргает check-login — мокаем ручку, i18n-ветку auth подключаем напрямую.
@@ -53,7 +54,9 @@ describe('EmailFieldNode (живая проверка доступности)', 
     vi.mocked(checkLogin).mockResolvedValueOnce(true);
     render(<Harness />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
-    expect(await screen.findByText('Email свободен', {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText(tr('auth.field.emailFree'), {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
     expect(checkLogin).toHaveBeenCalledWith('user@example.com');
   });
 
@@ -67,7 +70,7 @@ describe('EmailFieldNode (живая проверка доступности)', 
     render(<Harness />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'taken@example.com' } });
     expect(
-      await screen.findByText('Этот email уже зарегистрирован', {}, { timeout: 2000 }),
+      await screen.findByText(tr('auth.field.emailTaken'), {}, { timeout: 2000 }),
     ).toBeInTheDocument();
   });
 
@@ -76,13 +79,17 @@ describe('EmailFieldNode (живая проверка доступности)', 
     render(<Harness />);
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'user@example.com' } });
-    expect(await screen.findByText('Email свободен', {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText(tr('auth.field.emailFree'), {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
     // Возникла форменная ошибка (сабмит-блок) — зелёное гаснет без правки поля.
     fireEvent.click(screen.getByText('cause-error'));
-    expect(screen.queryByText('Email свободен')).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.field.emailFree'))).not.toBeInTheDocument();
     // Правка поля вызывает clear() (алерт снят) → на новом свободном значении зелёное вернулось.
     fireEvent.change(input, { target: { value: 'user2@example.com' } });
-    expect(await screen.findByText('Email свободен', {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText(tr('auth.field.emailFree'), {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
   });
 
   it('под StrictMode свежая проверка резолвится (mount→unmount→remount не глушит результат)', async () => {
@@ -93,7 +100,9 @@ describe('EmailFieldNode (живая проверка доступности)', 
       </StrictMode>,
     );
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
-    expect(await screen.findByText('Email свободен', {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText(tr('auth.field.emailFree'), {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
   });
 
   it('невалидный формат → check-login не дёргаем', async () => {

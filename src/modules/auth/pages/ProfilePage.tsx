@@ -22,8 +22,10 @@ import { moduleQueryKey } from '@core/module-registry';
 import { getUserInfo } from '../api/authApi';
 import { fmtDate, useLocale, useNow } from '../lib/format';
 import { realmLabel, userKindLabel } from '../lib/realmLabel';
+import { CurrentMark } from '../ui/CurrentMark';
 import { Row } from '../ui/Row';
 import { TimeRow } from '../ui/TimeRow';
+import { TwoFaStrip } from '../ui/TwoFaStrip';
 import {
   BriefcaseIcon,
   CalendarIcon,
@@ -32,32 +34,30 @@ import {
   MailIcon,
   MapPinIcon,
   PhoneIcon,
-  ShieldIcon,
   TagIcon,
   UserIcon,
 } from '../ui/icons';
-import type { UserInfo, UserRealm, UserStatus } from '../api/types';
-
-const STATUS_COLOR: Record<UserStatus, 'default' | 'success' | 'warning' | 'error'> = {
-  DRAFT: 'default',
-  ENABLED: 'success',
-  DISABLED: 'warning',
-  BLOCKED: 'error',
-};
+import { titleLine } from '../ui/titleLine';
+import type { UserInfo, UserRealm } from '../api/types';
 
 /**
  * Заголовок карточки: глиф-якорь слева, справа — необязательное действие (ссылка «Сессии»).
  * Цвет держим на обёртке иконки, а не на Stack: Glyph рисует stroke="currentColor", и общий color
  * перекрасил бы заодно подпись, которая должна остаться text.primary.
+ *
+ * `caption` — мелкая строка под названием (признак текущего кабинета). Ради неё название и подпись
+ * лежат в общей колонке, а глиф и действие ростом со строку названия (titleLine).
  */
 function CardHeading({
   icon,
   title,
+  caption,
   action,
   mb = 1,
 }: {
   icon: ReactNode;
   title: string;
+  caption?: ReactNode;
   action?: ReactNode;
   mb?: number;
 }) {
@@ -67,7 +67,7 @@ function CardHeading({
       spacing={2}
       sx={{
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         mb,
       }}
     >
@@ -75,15 +75,46 @@ function CardHeading({
         direction="row"
         spacing={1}
         sx={{
-          alignItems: 'center',
+          alignItems: 'flex-start',
+          minWidth: 0,
         }}
       >
-        <Box sx={{ color: 'primary.main', display: 'flex', flexShrink: 0 }}>{icon}</Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          {title}
-        </Typography>
+        <Box
+          sx={{
+            color: 'primary.main',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+            height: titleLine('subtitle2'),
+          }}
+        >
+          {icon}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            {title}
+          </Typography>
+          {/* Подпись — своей строкой с мелкой типографикой: иначе строку разгоняет межстрочный
+              интервал колонки, и она отходит от названия дальше, чем на карточке сессии. */}
+          {caption && (
+            <Typography variant="caption" component="div">
+              {caption}
+            </Typography>
+          )}
+        </Box>
       </Stack>
-      {action}
+      {action && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+            height: titleLine('subtitle2'),
+          }}
+        >
+          {action}
+        </Box>
+      )}
     </Stack>
   );
 }
@@ -99,7 +130,7 @@ function RealmCard({
   realm: UserRealm;
   title: string;
   multiRealm: boolean;
-  /** Кабинет текущей сессии — акцентная рамка, как у текущей сессии на странице сессий.
+  /** Кабинет текущей сессии — подпись под названием, как у текущей сессии на странице сессий.
    *  Осмыслен только в мультиреалме: единственную карточку выделять не из чего. */
   isCurrent: boolean;
   /** Пояс профиля, уже проверенный на странице; undefined = рисуем в поясе браузера. */
@@ -112,14 +143,12 @@ function RealmCard({
   const kind = userKindLabel(t, realm.user_kind);
 
   return (
-    <Card
-      variant="outlined"
-      sx={isCurrent ? { borderColor: 'primary.main', borderWidth: 2 } : undefined}
-    >
+    <Card variant="outlined">
       <CardContent>
         <CardHeading
           icon={<BriefcaseIcon size={18} />}
           title={title}
+          caption={isCurrent ? <CurrentMark label={p('currentRealm')} /> : undefined}
           action={
             <Link
               component={RouterLink}
@@ -247,6 +276,9 @@ function ProfileView({ user }: { user: UserInfo }) {
           />
           <Row label={p('tz')} icon={<ClockIcon size={12} />} title={tzTitle} value={tzLabel} />
         </CardContent>
+        {/* Полоса стоит ЗА CardContent, а не в нём: так она сама дотягивается до краёв карточки —
+            без отрицательных отступов и без спора с увеличенным нижним паддингом контента. */}
+        <TwoFaStrip type={user.auth_2fa_type} recoveryCodesLeft={user.recovery_codes_left} />
       </Card>
       {user.realms.map((realm) => (
         <RealmCard
@@ -259,36 +291,6 @@ function ProfileView({ user }: { user: UserInfo }) {
           now={now}
         />
       ))}
-      <Card variant="outlined">
-        <CardContent>
-          <CardHeading icon={<ShieldIcon size={18} />} title={p('security')} mb={1.5} />
-          <Stack direction="row" spacing={1}>
-            <Chip size="small" label={p(`twoFa.${user.auth_2fa_type}`)} />
-            <Chip size="small" color={STATUS_COLOR[user.status]} label={user.status} />
-          </Stack>
-          {/* Остаток аварийных кодов приходит только при включённой 2FA — отсутствие поля значит
-              «показывать нечего», а не «ноль». Ноль же не рядовое число, а повод их перевыпустить,
-              поэтому он предупреждающий и словом: перевыпуск живёт в разделе безопасности, которого
-              в UI пока нет, и обещать кнопку тут нечем. */}
-          {user.recovery_codes_left !== undefined && (
-            <Row
-              label={p('recoveryCodesLeft')}
-              icon={<ShieldIcon size={12} />}
-              value={
-                <Chip
-                  size="small"
-                  color={user.recovery_codes_left === 0 ? 'warning' : 'default'}
-                  label={
-                    user.recovery_codes_left === 0
-                      ? p('recoveryCodesEmpty')
-                      : String(user.recovery_codes_left)
-                  }
-                />
-              }
-            />
-          )}
-        </CardContent>
-      </Card>
     </Stack>
   );
 }

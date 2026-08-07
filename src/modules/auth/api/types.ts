@@ -76,6 +76,7 @@ export interface UserInfo {
    */
   recovery_codes_left?: number;
   realms: UserRealm[];
+  /** Состояние учётной записи. Интерфейс его не показывает: распоряжается им не пользователь. */
   status: UserStatus;
 }
 

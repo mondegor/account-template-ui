@@ -11,6 +11,7 @@ import { realmProvider, useAuthStore } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
 import { cardWith, rowValue } from '../../../test/dom';
+import { tr } from '../../../test/i18n';
 import { getUserInfo } from '../api/authApi';
 import { ProfilePage } from './ProfilePage';
 
@@ -95,17 +96,17 @@ describe('ProfilePage (i18n)', () => {
   it('ru: подписи из auth.profile.*', async () => {
     await i18next.changeLanguage('ru');
     renderProfile();
-    expect(await screen.findByText('Личные данные')).toBeInTheDocument();
-    expect(screen.getByText('Учётная запись')).toBeInTheDocument();
-    expect(screen.getByText('Телефон')).toBeInTheDocument();
-    expect(screen.getByText('Безопасность')).toBeInTheDocument();
+    expect(await screen.findByText(tr('auth.profile.personalInfo'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.profile.account'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.profile.phone'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.profile.twoFa.NONE.title'))).toBeInTheDocument();
   });
 
   it('«Зарегистрирован» выводит только дату, в поясе профиля', async () => {
     await i18next.changeLanguage('ru');
     renderProfile();
-    await screen.findByText('Зарегистрирован');
-    expect(rowValue('Зарегистрирован')?.textContent).toBe(
+    await screen.findByText(tr('auth.profile.registeredAt'));
+    expect(rowValue(tr('auth.profile.registeredAt'))?.textContent).toBe(
       new Date('2026-07-01T10:00:00Z').toLocaleDateString('ru-RU', { timeZone: PROFILE_TZ }),
     );
   });
@@ -119,8 +120,8 @@ describe('ProfilePage (i18n)', () => {
     try {
       await i18next.changeLanguage('ru');
       renderProfile();
-      await screen.findByText('Последний вход');
-      const value = rowValue('Последний вход');
+      await screen.findByText(tr('auth.profile.lastLogin'));
+      const value = rowValue(tr('auth.profile.lastLogin'));
       expect(value?.textContent).toBe('5 минут назад');
       // Формат title — забота formatDateTimeLong и её тестов (relativeTime.test); здесь проверяем
       // только проводку значения, поэтому эталон берём из той же функции, а не собираем руками.
@@ -143,25 +144,30 @@ describe('ProfilePage (i18n)', () => {
     await i18next.changeLanguage('ru');
     renderProfile();
 
-    expect(await screen.findByText('Личные данные')).toBeInTheDocument();
+    expect(await screen.findByText(tr('auth.profile.personalInfo'))).toBeInTheDocument();
     // Даты отрисованы — в поясе браузера, как фолбэк.
-    expect(rowValue('Зарегистрирован')?.textContent).toBe(
+    expect(rowValue(tr('auth.profile.registeredAt'))?.textContent).toBe(
       new Date('2026-07-01T10:00:00Z').toLocaleDateString('ru-RU'),
     );
   });
 
   it('en: подписи переключаются на английский', async () => {
     await i18next.changeLanguage('en');
+    // Ключи те же, что и в ru-тесте: сравнение с русским словарём закрепляет, что подписи и правда
+    // разъезжаются по языкам, — иначе захардкоженная строка прошла бы обе проверки.
+    const ru = i18next.getFixedT('ru');
+    expect(tr('auth.profile.personalInfo')).not.toBe(ru('auth.profile.personalInfo'));
+
     renderProfile();
-    expect(await screen.findByText('Personal info')).toBeInTheDocument();
-    expect(screen.getByText('Account')).toBeInTheDocument();
-    expect(screen.getByText('Phone')).toBeInTheDocument();
-    expect(screen.getByText('Security')).toBeInTheDocument();
+    expect(await screen.findByText(tr('auth.profile.personalInfo'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.profile.account'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.profile.phone'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.profile.twoFa.NONE.title'))).toBeInTheDocument();
   });
 });
 
 describe('ProfilePage (язык и часовой пояс)', () => {
-  const personalCard = () => cardWith('Личные данные');
+  const personalCard = () => cardWith(tr('auth.profile.personalInfo'));
 
   beforeEach(async () => {
     setLanguage('ru');
@@ -170,20 +176,22 @@ describe('ProfilePage (язык и часовой пояс)', () => {
 
   it('язык показан названием, сырая локаль — в подсказке', async () => {
     renderProfile();
-    await screen.findByText('Личные данные');
+    await screen.findByText(tr('auth.profile.personalInfo'));
 
     // На экране «Русский», а не ru-RU: техническое значение прячем в title (он на обёртке
     // значения — у строки языка значение это узел с флагом, а не просто текст).
-    expect(rowValue('Язык')?.textContent).toBe('Русский');
+    expect(rowValue(tr('auth.profile.lang'))?.textContent).toBe('Русский');
     expect(within(personalCard() as HTMLElement).getByTitle('ru-RU')).toBeInTheDocument();
   });
 
   it('часовой пояс показан подписью из справочника, IANA-имя — в подсказке', async () => {
     renderProfile();
-    await screen.findByText('Личные данные');
+    await screen.findByText(tr('auth.profile.personalInfo'));
 
-    expect(rowValue('Часовой пояс')?.textContent).toBe('(UTC+03:00) Москва, Санкт-Петербург');
-    expect(rowValue('Часовой пояс')?.getAttribute('title')).toBe(PROFILE_TZ);
+    expect(rowValue(tr('auth.profile.tz'))?.textContent).toBe(
+      '(UTC+03:00) Москва, Санкт-Петербург',
+    );
+    expect(rowValue(tr('auth.profile.tz'))?.getAttribute('title')).toBe(PROFILE_TZ);
   });
 
   it('незнакомые фронту язык и зона: язык как есть, зона — с посчитанным смещением', async () => {
@@ -194,13 +202,13 @@ describe('ProfilePage (язык и часовой пояс)', () => {
       tz: 'Antarctica/Troll',
     });
     renderProfile();
-    await screen.findByText('Личные данные');
+    await screen.findByText(tr('auth.profile.personalInfo'));
 
     // Бэк мог завести язык или зону, которых во фронте ещё нет — врать про них нельзя.
     // Языку подписи взять неоткуда, поэтому сырая локаль; зоне смещение считает timeZoneLabel,
     // и выглядит она как остальные пункты — здесь и в селекте настроек одинаково.
-    expect(rowValue('Язык')?.textContent).toBe('de-DE');
-    expect(rowValue('Часовой пояс')?.textContent).toBe('(UTC+00:00) Antarctica/Troll');
+    expect(rowValue(tr('auth.profile.lang'))?.textContent).toBe('de-DE');
+    expect(rowValue(tr('auth.profile.tz'))?.textContent).toBe('(UTC+00:00) Antarctica/Troll');
   });
 
   it('зона, непригодная для Intl: подсказка честно говорит, в каком поясе даты', async () => {
@@ -209,38 +217,40 @@ describe('ProfilePage (язык и часовой пояс)', () => {
     const info = await vi.mocked(getUserInfo)();
     vi.mocked(getUserInfo).mockResolvedValueOnce({ ...info, tz: 'Foo/Bar' });
     renderProfile();
-    await screen.findByText('Личные данные');
+    await screen.findByText(tr('auth.profile.personalInfo'));
 
-    expect(rowValue('Часовой пояс')?.getAttribute('title')).toBe(
-      'Foo/Bar — этот пояс не знает браузер, даты показаны в поясе устройства',
+    expect(rowValue(tr('auth.profile.tz'))?.getAttribute('title')).toBe(
+      `Foo/Bar — ${tr('auth.profile.tzUnsupported')}`,
     );
   });
 
   it('ссылка «Настройки» из карточки ведёт на /settings', async () => {
     renderProfile();
-    await screen.findByText('Личные данные');
+    await screen.findByText(tr('auth.profile.personalInfo'));
 
     // Ищем внутри карточки: в навигации AppShell есть одноимённый пункт.
-    const link = within(personalCard() as HTMLElement).getByRole('link', { name: /Настройки/ });
+    const link = within(personalCard() as HTMLElement).getByRole('link', {
+      name: tr('auth.profile.settingsAria'),
+    });
     expect(link).toHaveAttribute('href', '/settings');
   });
 });
 
 describe('ProfilePage (данные кабинета)', () => {
-  const accountCard = () => cardWith('Учётная запись');
+  const accountCard = () => cardWith(tr('auth.profile.account'));
 
   it('один кабинет: его данные в «Учётной записи», имя реалма наружу не течёт', async () => {
     await i18next.changeLanguage('ru');
     renderProfile();
-    await screen.findByText('Учётная запись');
+    await screen.findByText(tr('auth.profile.account'));
 
     // Единственный кабинет — выбирать не из чего: заголовок нейтральный, названия кабинета нет.
     // Реалм фикстуры зовётся 'shop', перевода deploy.realmLabel.shop нет — значит регресс на
     // realmLabel для одиночного случая вывел бы сырое 'shop' заголовком. Зеркало проверки из
     // мультиреалм-теста, где наоборот запрещена нейтральная «Учётная запись».
     expect(screen.queryByText('shop')).toBeNull();
-    expect(within(accountCard()).getByText('Тип аккаунта')).toBeInTheDocument();
-    expect(within(accountCard()).getByText('Зарегистрирован')).toBeInTheDocument();
+    expect(within(accountCard()).getByText(tr('auth.profile.accountKind'))).toBeInTheDocument();
+    expect(within(accountCard()).getByText(tr('auth.profile.registeredAt'))).toBeInTheDocument();
     // user_kind 'customer' не переведён — показываем как есть, а не ключом deploy.userKind.customer.
     expect(within(accountCard()).getByText('customer')).toBeInTheDocument();
   });
@@ -248,8 +258,8 @@ describe('ProfilePage (данные кабинета)', () => {
   it('«Локация последнего входа» показывает значение реалма', async () => {
     await i18next.changeLanguage('ru');
     renderProfile();
-    await screen.findByText('Локация последнего входа');
-    expect(rowValue('Локация последнего входа')?.textContent).toBe('Moscow, RU');
+    await screen.findByText(tr('auth.profile.lastLocation'));
+    expect(rowValue(tr('auth.profile.lastLocation'))?.textContent).toBe('Moscow, RU');
   });
 
   it('нет last_location / last_logged_at → прочерки', async () => {
@@ -263,9 +273,9 @@ describe('ProfilePage (данные кабинета)', () => {
       },
     ]);
     renderProfile();
-    await screen.findByText('Локация последнего входа');
-    expect(rowValue('Локация последнего входа')?.textContent).toBe('—');
-    expect(rowValue('Последний вход')?.textContent).toBe('—');
+    await screen.findByText(tr('auth.profile.lastLocation'));
+    expect(rowValue(tr('auth.profile.lastLocation'))?.textContent).toBe('—');
+    expect(rowValue(tr('auth.profile.lastLogin'))?.textContent).toBe('—');
   });
 
   it('пустая строка в last_location → прочерк, а не пустое место', async () => {
@@ -280,21 +290,21 @@ describe('ProfilePage (данные кабинета)', () => {
       },
     ]);
     renderProfile();
-    await screen.findByText('Локация последнего входа');
-    expect(rowValue('Локация последнего входа')?.textContent).toBe('—');
+    await screen.findByText(tr('auth.profile.lastLocation'));
+    expect(rowValue(tr('auth.profile.lastLocation'))?.textContent).toBe('—');
   });
 
   it('тип аккаунта показывается чипом', async () => {
     await i18next.changeLanguage('ru');
     renderProfile();
-    await screen.findByText('Учётная запись');
+    await screen.findByText(tr('auth.profile.account'));
 
     const kind = within(accountCard()).getByText('customer');
     expect(kind.closest('.MuiChip-root')).not.toBeNull();
     expect(kind.textContent).toBe('customer');
   });
 
-  it('единственная карточка не выделяется рамкой, даже когда это кабинет деплоя', async () => {
+  it('единственная карточка не подписана «текущий», даже когда это кабинет деплоя', async () => {
     await i18next.changeLanguage('ru');
     // Кабинет совпадает с реалмом деплоя (config.realm) — но карточка одна, выделять не из чего.
     await withRealms([
@@ -306,18 +316,18 @@ describe('ProfilePage (данные кабинета)', () => {
       },
     ]);
     renderProfile();
-    await screen.findByText('Учётная запись');
-    expect(cardWith('Учётная запись')).not.toHaveStyle({ borderWidth: '2px' });
+    await screen.findByText(tr('auth.profile.account'));
+    expect(screen.queryByText(tr('auth.profile.currentRealm'))).toBeNull();
   });
 
   it('ссылка «Сессии» ведёт на сессии своего кабинета', async () => {
     await i18next.changeLanguage('ru');
     renderProfile();
-    await screen.findByText('Учётная запись');
+    await screen.findByText(tr('auth.profile.account'));
     // Доступное имя уточнено и в одиночном кабинете: видимый текст «Сессии» совпадает с пунктом
     // меню AppShell при другом href, и без aria-label скринридер видел бы две одинаковые ссылки.
     // Глобальный поиск по имени как раз закрепляет отсутствие коллизии.
-    const link = screen.getByRole('link', { name: 'Сессии учётной записи' });
+    const link = screen.getByRole('link', { name: tr('auth.profile.sessionsOfAccount') });
     expect(link).toHaveAttribute('href', '/sessions?realm=shop');
   });
 });
@@ -345,90 +355,166 @@ describe('ProfilePage (несколько кабинетов)', () => {
     await withRealms(REALMS);
 
     const { container } = renderProfile();
-    await screen.findByText('Клиентский');
+    await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
 
     const titles = [...container.querySelectorAll('.MuiCard-root')].map(
       (card) => card.querySelector('.MuiTypography-subtitle2')?.textContent,
     );
-    expect(titles).toEqual(['Личные данные', 'Клиентский', 'Служебный', 'Безопасность']);
+    expect(titles).toEqual([
+      tr('auth.profile.personalInfo'),
+      tr('deploy.realmLabel.print-shop/standard'),
+      tr('deploy.realmLabel.print-shop/admin'),
+    ]);
 
     // Нейтральный заголовок — только когда кабинет один; сырое имя реалма наружу не течёт.
-    expect(screen.queryByText('Учётная запись')).toBeNull();
+    expect(screen.queryByText(tr('auth.profile.account'))).toBeNull();
     expect(screen.queryByText('print-shop/admin')).toBeNull();
     // Тип аккаунта — из deploy.userKind, он свой у каждого кабинета и не перепутан между блоками.
-    expect(within(cardWith('Клиентский')).getByText('Стандартный')).toBeInTheDocument();
-    expect(within(cardWith('Служебный')).getByText('Сотрудник')).toBeInTheDocument();
+    expect(
+      within(cardWith(tr('deploy.realmLabel.print-shop/standard'))).getByText(
+        tr('deploy.userKind.standard'),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(cardWith(tr('deploy.realmLabel.print-shop/admin'))).getByText(
+        tr('deploy.userKind.staff'),
+      ),
+    ).toBeInTheDocument();
   });
 
-  it('карточка кабинета текущей сессии выделена рамкой, остальные — нет', async () => {
+  it('карточка кабинета текущей сессии подписана, остальные — нет', async () => {
     await i18next.changeLanguage('ru');
     await withRealms(REALMS);
     renderProfile();
-    await screen.findByText('Клиентский');
+    await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
 
     // «Клиентский» (print-shop/standard) — реалм деплоя, т.е. кабинет текущей сессии.
-    expect(cardWith('Клиентский')).toHaveStyle({ borderWidth: '2px' });
-    expect(cardWith('Служебный')).not.toHaveStyle({ borderWidth: '2px' });
+    expect(
+      within(cardWith(tr('deploy.realmLabel.print-shop/standard'))).getByText(
+        tr('auth.profile.currentRealm'),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(cardWith(tr('deploy.realmLabel.print-shop/admin'))).queryByText(
+        tr('auth.profile.currentRealm'),
+      ),
+    ).toBeNull();
   });
 
   it('ссылка «Сессии» в каждом блоке ведёт в свой кабинет', async () => {
     await i18next.changeLanguage('ru');
     await withRealms(REALMS);
     renderProfile();
-    await screen.findByText('Клиентский');
+    await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
 
     // Видимый текст ссылок один — «Сессии»; различает их доступное имя с названием кабинета, так
     // что глобальный поиск по роли находит каждую однозначно (иначе скринридеру — «Сессии, Сессии»).
-    expect(screen.getByRole('link', { name: 'Сессии кабинета «Клиентский»' })).toHaveAttribute(
+    const sessionsOf = (realm: string) =>
+      tr('auth.profile.sessionsOf', { realm: tr(`deploy.realmLabel.${realm}`) });
+
+    expect(screen.getByRole('link', { name: sessionsOf('print-shop/standard') })).toHaveAttribute(
       'href',
       '/sessions?realm=print-shop%2Fstandard',
     );
-    expect(screen.getByRole('link', { name: 'Сессии кабинета «Служебный»' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: sessionsOf('print-shop/admin') })).toHaveAttribute(
       'href',
       '/sessions?realm=print-shop%2Fadmin',
     );
   });
 });
 
-describe('ProfilePage (аварийные коды)', () => {
-  const securityCard = () => cardWith('Безопасность');
+/** Профиль с заданной ступенью защиты; остаток кодов приходит только при включённой 2FA. */
+async function with2fa(type: 'NONE' | 'PASSWORD' | 'TOTP', recoveryCodesLeft?: number) {
+  const info = await vi.mocked(getUserInfo)();
+  vi.mocked(getUserInfo).mockResolvedValueOnce({
+    ...info,
+    auth_2fa_type: type,
+    ...(recoveryCodesLeft === undefined ? {} : { recovery_codes_left: recoveryCodesLeft }),
+  });
+}
 
+describe('ProfilePage (защита аккаунта)', () => {
   beforeEach(async () => {
     setLanguage('ru');
     await i18next.changeLanguage('ru');
   });
 
-  /** Профиль с включённой 2FA: только при ней сервер и присылает остаток кодов. */
-  async function with2fa(recoveryCodesLeft?: number) {
-    const info = await vi.mocked(getUserInfo)();
-    vi.mocked(getUserInfo).mockResolvedValueOnce({
-      ...info,
-      auth_2fa_type: 'PASSWORD',
-      ...(recoveryCodesLeft === undefined ? {} : { recovery_codes_left: recoveryCodesLeft }),
-    });
-  }
+  // Полоса живёт в карточке «Личные данные», поэтому ищем внутри карточки, а не глобально.
+  const personalCard = () => cardWith(tr('auth.profile.personalInfo'));
 
-  it('остаток кодов показан числом', async () => {
-    await with2fa(8);
+  it.each(['NONE', 'PASSWORD', 'TOTP'] as const)(
+    '%s: своё состояние и свой призыв',
+    async (type) => {
+      await with2fa(type, type === 'NONE' ? undefined : 8);
+      renderProfile();
+      await screen.findByText(tr(`auth.profile.twoFa.${type}.title`));
+
+      expect(
+        within(personalCard()).getByText(tr(`auth.profile.twoFa.${type}.cta`)),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('полоса ведёт в настройки', async () => {
     renderProfile();
-    await screen.findByText('Безопасность');
+    await screen.findByText(tr('auth.profile.twoFa.NONE.title'));
 
-    expect(within(securityCard()).getByText('Аварийные коды')).toBeInTheDocument();
-    expect(within(securityCard()).getByText('8')).toBeInTheDocument();
+    // Адрес тот же, что у ссылки в заголовке карточки, поэтому идём от самого призыва: список
+    // ссылок карточки был бы полон и без полосы.
+    const cta = within(personalCard()).getByText(tr('auth.profile.twoFa.NONE.cta'));
+    expect(cta.closest('a')).toHaveAttribute('href', '/settings');
+  });
+});
+
+/** Строка предупреждения об остатке кодов: ищем её как элемент, а не по тексту подписи. */
+const WARNING = 'two-fa-codes-warning';
+
+describe('ProfilePage (остаток аварийных кодов)', () => {
+  beforeEach(async () => {
+    setLanguage('ru');
+    await i18next.changeLanguage('ru');
   });
 
-  it('ноль — не рядовое число: строка говорит, что коды кончились', async () => {
-    await with2fa(0);
-    renderProfile();
-    await screen.findByText('Безопасность');
+  /** Ждём саму полосу: её заголовок одинаков во всех случаях ниже, меняется только строка кодов. */
+  const findStrip = () => screen.findByText(tr('auth.profile.twoFa.TOTP.title'));
 
-    expect(within(securityCard()).getByText('Закончились')).toBeInTheDocument();
+  it.each([
+    [0, 'recoveryCodesEmpty'],
+    [1, 'recoveryCodesLast'],
+    [3, 'recoveryCodesLow'],
+  ] as const)('остаток %i — предупреждение показано', async (left, key) => {
+    await with2fa('TOTP', left);
+    renderProfile();
+    await findStrip();
+
+    expect(screen.getByTestId(WARNING).textContent).toBe(
+      tr(`auth.profile.${key}`, { count: left }),
+    );
   });
 
-  it('без поля (2FA выключена) строки нет вовсе — «нет данных» здесь не ноль', async () => {
+  // Порог проверяем по границе: 4 — первое значение, на котором предупреждать уже не о чем.
+  it.each([4, 8])('остаток %i — предупреждения нет вовсе', async (left) => {
+    await with2fa('TOTP', left);
     renderProfile();
-    await screen.findByText('Безопасность');
+    await findStrip();
 
-    expect(within(securityCard()).queryByText('Аварийные коды')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(WARNING)).toBeNull();
+  });
+
+  it('без поля (2FA выключена) — предупреждения нет: «нет данных» здесь не ноль', async () => {
+    renderProfile();
+    await screen.findByText(tr('auth.profile.twoFa.NONE.title'));
+
+    expect(screen.queryByTestId(WARNING)).toBeNull();
+  });
+
+  it('кончающиеся коды не меняют саму полосу — это другое событие', async () => {
+    await with2fa('TOTP', 0);
+    renderProfile();
+    await findStrip();
+
+    // Заголовок и призыв те же, что и при полном запасе: остаток кодов трогает только свою строку.
+    expect(screen.getByText(tr('auth.profile.twoFa.TOTP.hint'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.profile.twoFa.TOTP.cta'))).toBeInTheDocument();
   });
 });

@@ -20,6 +20,13 @@ import { SettingsPage } from './SettingsPage';
  * API мокаем целиком — транспорт проверяется отдельно (settingsTransport.test.ts).
  */
 
+/** Detail от серверной стороны: подсветка поля берёт его текст как есть, минуя переводы. */
+const TZ_DETAIL = 'Time zone is not supported';
+
+/** Плашки после сохранения ищем как элементы, а не по их длинным подписям. */
+const SAVED = 'settings-saved';
+const SUBSTITUTED = 'settings-substituted';
+
 /**
  * Зону ОС фиксируем: предупреждение о подменённой зоне сравнивает её с сохранённой, и без этого
  * результат зависел бы от часового пояса машины, на которой гоняют тесты. Остальной @core/i18n —
@@ -104,6 +111,12 @@ function save() {
 }
 
 /**
+ * Показанное в селекте значение. Эталон сравнения — литерал: посчитать его тем же timeZoneLabel,
+ * которым рисует форма, значит проверить, что функция равна себе.
+ */
+const selectValue = (label: string) => screen.getByRole('combobox', { name: label }).textContent;
+
+/**
  * Дождаться формы, а не заголовка: «Настройки» есть ещё и пунктом меню в AppShell, поэтому
  * findByText отработал бы мгновенно — до того, как приедет профиль.
  */
@@ -118,8 +131,8 @@ describe('SettingsPage', () => {
 
     // Селекты показывают сохранённые значения: форма правит профиль, значит показывает профиль.
     // Подпись зоны — как в системном списке и на языке интерфейса, а не IANA-имя.
-    expect(screen.getByText('Русский')).toBeInTheDocument();
-    expect(screen.getByText('(UTC+03:00) Москва, Санкт-Петербург')).toBeInTheDocument();
+    expect(selectValue('Язык')).toBe('Русский');
+    expect(selectValue('Часовой пояс')).toBe('(UTC+03:00) Москва, Санкт-Петербург');
   });
 
   it('«Авто» — это отсутствие поля в теле, а не пустая строка', async () => {
@@ -154,12 +167,11 @@ describe('SettingsPage', () => {
     // На входе плашки нет: она про только что сделанное сохранение, а не про состояние профиля.
     // Поэтому при следующем заходе на страницу её снова не будет — состояние мутации не переживает
     // перемонтирование, отдельного «закрыть» не нужно.
-    const text = /Настройки сохранены\. Отображение информации/;
-    expect(screen.queryByText(text)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(SAVED)).toBeNull();
 
     save();
 
-    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(await screen.findByTestId(SAVED)).toBeInTheDocument();
   });
 
   it('успешное сохранение патчит кэш профиля', async () => {
@@ -180,17 +192,14 @@ describe('SettingsPage', () => {
 
   it('400 по полю подсвечивает нужный селект его же текстом', async () => {
     vi.mocked(changeUserSettings).mockRejectedValue(
-      new ApiFieldError(
-        [{ code: 'ValidateError/tz', detail: 'Часовой пояс не поддерживается' }],
-        400,
-      ),
+      new ApiFieldError([{ code: 'ValidateError/tz', detail: TZ_DETAIL }], 400),
     );
     renderSettings();
     await formReady();
 
     save();
 
-    expect(await screen.findByText('Часовой пояс не поддерживается')).toBeInTheDocument();
+    expect(await screen.findByText(TZ_DETAIL)).toBeInTheDocument();
   });
 
   it('подменённая зона: предупреждаем, только когда часы реально расходятся', async () => {
@@ -202,7 +211,7 @@ describe('SettingsPage', () => {
     choose('Часовой пояс', /Авто/);
     save();
 
-    expect(await screen.findByText(/Сохранена ближайшая доступная зона/)).toBeInTheDocument();
+    expect(await screen.findByTestId(SUBSTITUTED)).toBeInTheDocument();
   });
 
   it('зона ответа, неизвестная ICU браузера, не роняет форму, а предупреждает', async () => {
@@ -216,7 +225,7 @@ describe('SettingsPage', () => {
     choose('Часовой пояс', /Авто/);
     save();
 
-    expect(await screen.findByText(/Сохранена ближайшая доступная зона/)).toBeInTheDocument();
+    expect(await screen.findByTestId(SUBSTITUTED)).toBeInTheDocument();
     // Форма на месте: рендер не свалился исключением.
     expect(screen.getByRole('button', { name: 'Сохранить' })).toBeInTheDocument();
   });
@@ -231,7 +240,7 @@ describe('SettingsPage', () => {
     save();
 
     await waitFor(() => expect(changeUserSettings).toHaveBeenCalled());
-    expect(screen.queryByText(/Сохранена ближайшая доступная зона/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(SUBSTITUTED)).toBeNull();
   });
 
   it('явно выбранная зона предупреждения не даёт — там сервер не подбирает', async () => {
@@ -245,7 +254,7 @@ describe('SettingsPage', () => {
     save();
 
     await waitFor(() => expect(changeUserSettings).toHaveBeenCalled());
-    expect(screen.queryByText(/Сохранена ближайшая доступная зона/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(SUBSTITUTED)).toBeNull();
   });
 
   it('правка формы снимает обе плашки прошлого сохранения разом', async () => {
@@ -255,15 +264,15 @@ describe('SettingsPage', () => {
 
     choose('Часовой пояс', /Авто/);
     save();
-    expect(await screen.findByText(/Настройки сохранены/)).toBeInTheDocument();
-    expect(screen.getByText(/Сохранена ближайшая доступная зона/)).toBeInTheDocument();
+    expect(await screen.findByTestId(SAVED)).toBeInTheDocument();
+    expect(screen.getByTestId(SUBSTITUTED)).toBeInTheDocument();
 
     // Обе плашки — про запрос, которого выбранные сейчас значения уже не касаются. Оставить одну
     // значило бы рассказывать про сервер на фоне формы, которая говорит другое.
     choose('Язык', 'English');
 
-    expect(screen.queryByText(/Настройки сохранены/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Сохранена ближайшая доступная зона/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(SAVED)).toBeNull();
+    expect(screen.queryByTestId(SUBSTITUTED)).toBeNull();
   });
 
   it('новая попытка сохранения снимает прошлое предупреждение', async () => {
@@ -273,28 +282,28 @@ describe('SettingsPage', () => {
 
     choose('Часовой пояс', /Авто/);
     save();
-    expect(await screen.findByText(/Сохранена ближайшая доступная зона/)).toBeInTheDocument();
+    expect(await screen.findByTestId(SUBSTITUTED)).toBeInTheDocument();
 
     // Теперь сервер отвечает равнозначной зоной — предупреждать больше не о чем.
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Africa/Abidjan' });
     choose('Часовой пояс', /Авто/);
     save();
 
-    await waitFor(() =>
-      expect(screen.queryByText(/Сохранена ближайшая доступная зона/)).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByTestId(SUBSTITUTED)).toBeNull());
   });
 
   it('профиль в кэше обновился — селекты идут за ним, а не застревают на старом', async () => {
     const client = renderSettings();
     await formReady();
-    expect(screen.getByText('(UTC+03:00) Москва, Санкт-Петербург')).toBeInTheDocument();
+    expect(selectValue('Часовой пояс')).toBe('(UTC+03:00) Москва, Санкт-Петербург');
 
     // Так выглядит фоновый рефетч того же ключа (или сохранение из соседней вкладки): форма
     // не перемонтируется, key на ней нет — значение должно подхватиться сравнением с прошлым.
     client.setQueryData<UserInfo>(moduleQueryKey('auth', 'user'), { ...PROFILE, tz: 'Asia/Tokyo' });
 
-    expect(await screen.findByText(/Осака, Саппоро, Токио/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(selectValue('Часовой пояс')).toBe('(UTC+09:00) Осака, Саппоро, Токио'),
+    );
   });
 
   it('en: подписи переключаются на английский', async () => {

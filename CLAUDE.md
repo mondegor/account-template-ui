@@ -88,6 +88,11 @@ entirely on React escaping — `dangerouslySetInnerHTML` is banned by lint acros
 model is spelled out in a comment in `eslint.config.js` and pinned by `src/test/eslintConfig.test.ts`;
 change the rule only together with that test.
 
+Tests look UI phrases up by key — `tr('auth.profile.tz')` from `src/test/i18n.ts`, never the phrase
+itself; lint flags the common forms. That covers what is **searched for** on screen. Everything a
+test makes up itself — fixtures, server `detail` values, props the component is handed — stays a
+literal, and those literals are English.
+
 ## Comments
 
 Comments describe the present state only. No "it used to be X, now it is Y", no references to

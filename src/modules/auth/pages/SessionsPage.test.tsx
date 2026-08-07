@@ -12,6 +12,7 @@ import { ApiTransportError } from '@core/api';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
 import { cardWith, rowValue } from '../../../test/dom';
+import { tr } from '../../../test/i18n';
 import { closeUserSessions, getUserInfo, getUserSessions } from '../api/authApi';
 import { SessionsPage } from './SessionsPage';
 import type { UserInfo, UserSession } from '../api/types';
@@ -37,8 +38,8 @@ function session(id: string, device: string, isCurrent = false): UserSession {
   };
 }
 
-const CURRENT = session('aaaaaaaa', 'Это устройство', true);
-const OTHERS = [session('bbbbbbbb', 'iPhone 14'), session('cccccccc', 'Домашний ПК')];
+const CURRENT = session('aaaaaaaa', 'This device', true);
+const OTHERS = [session('bbbbbbbb', 'iPhone 14'), session('cccccccc', 'Home PC')];
 const ADMIN_SESSIONS = [session('dddddddd', 'MacBook Pro')];
 
 /** Пояс профиля фикстуры: даты карточек считаются по нему, а не по зоне процесса. */
@@ -156,25 +157,35 @@ function renderSessions(url = '/sessions') {
   };
 }
 
-const trashButtons = () => screen.queryAllByRole('button', { name: /Завершить сессию/ });
+// Доступное имя корзины — подпись, а за ней имя устройства, поэтому сверяем начало строки.
+// Функцией, а не регуляркой: подпись приходит из переводов, и метасимвол в ней молча сломал бы
+// шаблон — совпадений не стало бы, а тест сказал бы «кнопок нет».
+const trashButtons = () =>
+  screen.queryAllByRole('button', {
+    name: (name: string) => name.startsWith(tr('auth.sessions.closeOne')),
+  });
 
 describe('SessionsPage', () => {
   it('текущая сессия — отдельным блоком и без корзины', async () => {
     renderSessions();
-    expect(await screen.findByText('Это устройство')).toBeInTheDocument();
-    expect(screen.getByText('Другие сессии (2)')).toBeInTheDocument();
+    expect(await screen.findByText('This device')).toBeInTheDocument();
+    expect(
+      screen.getByText(tr('auth.sessions.otherSessions', { n: OTHERS.length })),
+    ).toBeInTheDocument();
 
     // Корзин ровно столько, сколько чужих сессий: у текущей её нет.
     expect(trashButtons()).toHaveLength(OTHERS.length);
-    const currentCard = screen.getByText('Это устройство').closest('.MuiCard-root')!;
+    const currentCard = screen.getByText('This device').closest('.MuiCard-root')!;
     expect(within(currentCard as HTMLElement).queryByRole('button')).toBeNull();
-    expect(within(currentCard as HTMLElement).getByText('Текущая')).toBeInTheDocument();
+    expect(
+      within(currentCard as HTMLElement).getByText(tr('auth.sessions.current')),
+    ).toBeInTheDocument();
   });
 
   it('«Истекает» — абсолютная дата, формат как у «Открыта»', async () => {
     renderSessions();
-    await screen.findByText('Это устройство');
-    expect(rowValue('Истекает', cardWith('Это устройство'))?.textContent).toBe(
+    await screen.findByText('This device');
+    expect(rowValue(tr('auth.sessions.expiresAt'), cardWith('This device'))?.textContent).toBe(
       formatDateTimeLong(new Date('2026-08-11T10:00:00Z'), 'ru-RU', PROFILE_TZ),
     );
   });
@@ -182,8 +193,10 @@ describe('SessionsPage', () => {
   it('нет expires_at (поле опционально) → «Истекает» с прочерком', async () => {
     vi.mocked(getUserSessions).mockResolvedValue([{ ...CURRENT, expires_at: undefined }]);
     renderSessions();
-    await screen.findByText('Это устройство');
-    expect(rowValue('Истекает', cardWith('Это устройство'))?.textContent).toBe('—');
+    await screen.findByText('This device');
+    expect(rowValue(tr('auth.sessions.expiresAt'), cardWith('This device'))?.textContent).toBe(
+      '—',
+    );
   });
 
   it('местоположение без данных (нет поля или пустая строка) → прочерк, строка на месте', async () => {
@@ -193,31 +206,31 @@ describe('SessionsPage', () => {
       { ...OTHERS[1]!, location: '' },
     ]);
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     const locationOf = (device: string) =>
-      rowValue('Местоположение', cardWith(device))?.textContent;
-    expect(locationOf('Это устройство')).toBe('Moscow, Russia');
+      rowValue(tr('auth.sessions.location'), cardWith(device))?.textContent;
+    expect(locationOf('This device')).toBe('Moscow, Russia');
     // Как в профиле у «Локации последнего входа»: нет данных — прочерк, а не пропавшая строка.
     expect(locationOf('iPhone 14')).toBe('—');
-    expect(locationOf('Домашний ПК')).toBe('—');
+    expect(locationOf('Home PC')).toBe('—');
   });
 
   it('массовая кнопка идёт после карточки текущей сессии и до списка остальных', async () => {
     const { container } = renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
     const text = container.textContent ?? '';
-    expect(text.indexOf('Это устройство')).toBeLessThan(
-      text.indexOf('Завершить все другие сессии'),
+    expect(text.indexOf('This device')).toBeLessThan(
+      text.indexOf(tr('auth.sessions.terminateOthers')),
     );
-    expect(text.indexOf('Завершить все другие сессии')).toBeLessThan(
-      text.indexOf('Другие сессии (2)'),
+    expect(text.indexOf(tr('auth.sessions.terminateOthers'))).toBeLessThan(
+      text.indexOf(tr('auth.sessions.otherSessions', { n: OTHERS.length })),
     );
   });
 
   it('клик по корзине закрывает одну сессию', async () => {
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.click(trashButtons()[0]!);
     await waitFor(() => expect(closeUserSessions).toHaveBeenCalledWith([OTHERS[0]!.session_id]));
@@ -230,13 +243,15 @@ describe('SessionsPage', () => {
       () => new Promise<void>((resolve) => (release = resolve)),
     );
     const { invalidate } = renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.click(trashButtons()[0]!);
     await waitFor(() => expect(closeUserSessions).toHaveBeenCalledTimes(1));
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+    );
     release();
 
     // Ключ — префикс без реалма: иначе инвалидировался бы кабинет B, а список A остался бы в кэше
@@ -248,12 +263,12 @@ describe('SessionsPage', () => {
 
   it('массовое закрытие шлёт все id, кроме текущей — и только после подтверждения', async () => {
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
-    fireEvent.click(screen.getByRole('button', { name: /Завершить все другие сессии/ }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.sessions.terminateOthers') }));
     expect(closeUserSessions).not.toHaveBeenCalled(); // диалог ещё открыт
 
-    fireEvent.click(screen.getByRole('button', { name: 'Завершить' }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.sessions.confirm') }));
     await waitFor(() =>
       expect(closeUserSessions).toHaveBeenCalledWith(OTHERS.map((s) => s.session_id)),
     );
@@ -266,10 +281,10 @@ describe('SessionsPage', () => {
       () => new Promise<void>((resolve) => (release = resolve)),
     );
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
-    fireEvent.click(screen.getByRole('button', { name: /Завершить все другие сессии/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Завершить' }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.sessions.terminateOthers') }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.sessions.confirm') }));
     await waitFor(() => expect(closeUserSessions).toHaveBeenCalledTimes(1));
     // Пока диалог закрывается, MUI держит контент под ним aria-hidden — ждём, пока корзины вернутся.
     await waitFor(() => expect(trashButtons()).toHaveLength(OTHERS.length));
@@ -285,31 +300,37 @@ describe('SessionsPage', () => {
 
   it('смена кабинета перезапрашивает список, комбобокс остаётся на месте', async () => {
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+    );
 
     // Комбобокс переживает загрузку: страница не схлопывается целиком.
     expect(screen.getByRole('combobox')).toBeInTheDocument();
 
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(OTHER_REALM));
-    await waitFor(() => expect(screen.getByText('Сессии (1)')).toBeInTheDocument());
-    // В чужом кабинете «текущей» сессии не существует: ни карточки, ни чипа.
-    expect(screen.queryByText('Это устройство')).toBeNull();
-    expect(screen.queryByText('Текущая')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByText(tr('auth.sessions.allSessions', { n: 1 }))).toBeInTheDocument(),
+    );
+    // В чужом кабинете «текущей» сессии не существует: ни карточки, ни подписи.
+    expect(screen.queryByText('This device')).toBeNull();
+    expect(screen.queryByText(tr('auth.sessions.current'))).toBeNull();
     expect(
-      screen.getByRole('button', { name: /Завершить все сессии этого кабинета/ }),
+      screen.getByRole('button', { name: tr('auth.sessions.terminateAll') }),
     ).toBeInTheDocument();
   });
 
   it('выбор кабинета уезжает в URL — F5 и пересланная ссылка его сохранят', async () => {
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
     expect(locationNow()).toBe('/sessions');
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+    );
 
     await waitFor(() =>
       expect(locationNow()).toBe(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`),
@@ -318,14 +339,22 @@ describe('SessionsPage', () => {
 
   it('пункт меню «Сессии» (/sessions без параметра) откатывает на кабинет деплоя', async () => {
     renderSessions(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`);
-    await waitFor(() => expect(screen.getByRole('combobox').textContent).toBe('Служебный'));
+    await waitFor(() =>
+      expect(screen.getByRole('combobox').textContent).toBe(
+        tr('deploy.realmLabel.print-shop/admin'),
+      ),
+    );
 
     // Роут тот же — страница не размонтируется, инициализатор стейта не перезапустился бы. Пока
     // кабинет жил в useState, он тут залипал: адрес /sessions, а на экране служебный кабинет.
     fireEvent.click(screen.getByRole('link', { name: 'nav-sessions' }));
 
     await waitFor(() => expect(locationNow()).toBe('/sessions'));
-    await waitFor(() => expect(screen.getByRole('combobox').textContent).toBe('Клиентский'));
+    await waitFor(() =>
+      expect(screen.getByRole('combobox').textContent).toBe(
+        tr('deploy.realmLabel.print-shop/standard'),
+      ),
+    );
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(CURRENT_REALM));
   });
 
@@ -335,18 +364,22 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(OTHER_REALM));
     // Кабинет деплоя не должен запрашиваться даже мельком: ссылка ведёт сразу в нужный.
     expect(getUserSessions).not.toHaveBeenCalledWith(CURRENT_REALM);
-    await waitFor(() => expect(screen.getByText('Сессии (1)')).toBeInTheDocument());
-    expect(screen.getByRole('combobox').textContent).toBe('Служебный');
+    await waitFor(() =>
+      expect(screen.getByText(tr('auth.sessions.allSessions', { n: 1 }))).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('combobox').textContent).toBe(tr('deploy.realmLabel.print-shop/admin'));
   });
 
   it('чужой ?realm= игнорируется — откат на кабинет деплоя и чистка адреса', async () => {
     // URL правится руками: доступа к кабинету нет, запрос туда уходить не должен.
     renderSessions('/sessions?realm=print-shop%2Fsomebody-else');
 
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
     expect(getUserSessions).toHaveBeenCalledWith(CURRENT_REALM);
     expect(getUserSessions).not.toHaveBeenCalledWith('print-shop/somebody-else');
-    expect(screen.getByRole('combobox').textContent).toBe('Клиентский');
+    expect(screen.getByRole('combobox').textContent).toBe(
+      tr('deploy.realmLabel.print-shop/standard'),
+    );
     // Иначе адрес называл бы один кабинет, а экран показывал другой — и такую ссылку переслали бы.
     await waitFor(() => expect(locationNow()).toBe('/sessions'));
   });
@@ -354,16 +387,18 @@ describe('SessionsPage', () => {
   it('чужой realm не сносит соседние query-параметры', async () => {
     renderSessions('/sessions?realm=print-shop%2Fsomebody-else&keep=1');
 
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
     await waitFor(() => expect(locationNow()).toBe('/sessions?keep=1'));
   });
 
   it('выбор кабинета не сносит соседние query-параметры', async () => {
     renderSessions('/sessions?keep=1');
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+    );
 
     await waitFor(() =>
       expect(locationNow()).toBe(`/sessions?keep=1&realm=${encodeURIComponent(OTHER_REALM)}`),
@@ -373,18 +408,20 @@ describe('SessionsPage', () => {
   it('ошибка закрытия уходит вместе со списком, к которому относилась', async () => {
     vi.mocked(closeUserSessions).mockRejectedValue(new Error('500'));
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.click(trashButtons()[0]!);
-    expect(
-      await screen.findByText('Не удалось закрыть сессии. Попробуйте ещё раз.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(tr('auth.sessions.closeError'))).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+    );
 
-    await waitFor(() => expect(screen.getByText('Сессии (1)')).toBeInTheDocument());
-    expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByText(tr('auth.sessions.allSessions', { n: 1 }))).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
   });
 
   it('ошибка закрытия уходит и когда кабинет сменил не комбобокс, а пункт меню', async () => {
@@ -396,14 +433,12 @@ describe('SessionsPage', () => {
     await screen.findByText('MacBook Pro');
 
     fireEvent.click(trashButtons()[0]!);
-    expect(
-      await screen.findByText('Не удалось закрыть сессии. Попробуйте ещё раз.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(tr('auth.sessions.closeError'))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('link', { name: 'nav-sessions' }));
 
-    await waitFor(() => expect(screen.getByText('Это устройство')).toBeInTheDocument());
-    expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
+    await waitFor(() => expect(screen.getByText('This device')).toBeInTheDocument());
+    expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
   });
 
   it('кабинет сменили посреди запроса → ошибка не всплывает над чужим списком и не ждёт возврата', async () => {
@@ -414,34 +449,40 @@ describe('SessionsPage', () => {
       () => new Promise<void>((_, reject) => (fail = reject)),
     );
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.click(trashButtons()[0]!);
     await waitFor(() => expect(closeUserSessions).toHaveBeenCalledTimes(1));
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+    );
     await screen.findByText('MacBook Pro');
 
     // Ошибка приходит, когда на экране уже чужой кабинет. Оседания мутации ждём по корзине: пока
     // запрос в полёте, она выключена — включилась, значит error уже долетел до стейта.
     fail(new Error('500'));
     await waitFor(() => expect(trashButtons()[0]!).toBeEnabled());
-    expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
+    expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
 
     // И не всплывает при возврате: стейт мутации выброшен, а не просто спрятан условием рендера.
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Клиентский'));
-    await screen.findByText('Это устройство');
-    expect(screen.queryByText('Не удалось закрыть сессии. Попробуйте ещё раз.')).toBeNull();
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/standard')),
+    );
+    await screen.findByText('This device');
+    expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
   });
 
   it('кабинет пропал из профиля → выбор сбрасывается на кабинет деплоя', async () => {
     const { client } = renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Служебный'));
+    fireEvent.click(
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+    );
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(OTHER_REALM));
 
     // Доступ к «Служебному» отозвали — профиль перезапрашивается и приходит уже без него.
@@ -455,22 +496,24 @@ describe('SessionsPage', () => {
 
   it('в комбобоксе — человеческие названия, а не print-shop/*', async () => {
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     const options = within(screen.getByRole('listbox'));
-    expect(options.getByText('Клиентский')).toBeInTheDocument();
-    expect(options.getByText('Служебный')).toBeInTheDocument();
+    expect(options.getByText(tr('deploy.realmLabel.print-shop/standard'))).toBeInTheDocument();
+    expect(options.getByText(tr('deploy.realmLabel.print-shop/admin'))).toBeInTheDocument();
     expect(options.queryByText(CURRENT_REALM)).toBeNull();
   });
 
   it('нет чужих сессий → массовая кнопка disabled', async () => {
     vi.mocked(getUserSessions).mockResolvedValue([CURRENT]);
     renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
-    expect(screen.getByText('Других активных сессий нет.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Завершить все другие сессии/ })).toBeDisabled();
+    expect(screen.getByText(tr('auth.sessions.empty'))).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: tr('auth.sessions.terminateOthers') }),
+    ).toBeDisabled();
   });
 
   it('упал профиль → сообщение про профиль, а не про сессии', async () => {
@@ -482,7 +525,7 @@ describe('SessionsPage', () => {
     // Список сессий тут даже не запрашивался (реалмы неизвестны) — текст про него сбивал бы с толку.
     expect(
       await screen.findByText(
-        'Не удалось загрузить профиль: Нет связи с сервером. Проверьте подключение.',
+        tr('auth.profile.loadError', { message: tr('common.error.network') }),
       ),
     ).toBeInTheDocument();
     expect(getUserSessions).not.toHaveBeenCalled();
@@ -492,9 +535,7 @@ describe('SessionsPage', () => {
     vi.mocked(getUserInfo).mockResolvedValue(user([]));
     renderSessions();
 
-    expect(
-      await screen.findByText('У вас нет ни одного кабинета — показывать нечего.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(tr('auth.sessions.noRealms'))).toBeInTheDocument();
     // Реалма нет — запрашивать сессии не у чего.
     expect(getUserSessions).not.toHaveBeenCalled();
   });
@@ -502,10 +543,14 @@ describe('SessionsPage', () => {
   it('один кабинет → просто «Сессии», без комбобокса и слова «кабинет»', async () => {
     vi.mocked(getUserInfo).mockResolvedValue(ONE_REALM);
     const { container } = renderSessions();
-    await screen.findByText('Это устройство');
+    await screen.findByText('This device');
 
-    expect(screen.getByRole('heading', { name: 'Сессии' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: tr('auth.sessions.title') })).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).toBeNull();
-    expect(container.textContent).not.toMatch(/абинет/);
+    // Слово «кабинет» на экране одного кабинета неуместно — берём его из тех же переводов,
+    // где оно и живёт, а не пишем руками.
+    expect(container.textContent?.toLowerCase()).not.toContain(
+      tr('auth.sessions.realm').toLowerCase(),
+    );
   });
 });

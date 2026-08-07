@@ -4,7 +4,16 @@ import { addTranslations, initI18n, setLanguage } from '@core/i18n';
 import type { OperationSnapshot } from '@core/operation';
 import { authTranslations } from '../i18n';
 import type { ConfirmFlow } from '../hooks/useConfirmFlow';
+import { tr } from '../../../test/i18n';
 import { OperationConfirm } from './OperationConfirm';
+
+// Тексты, которые компонент получает пропами: они приходят от вызывающего экрана, поэтому в
+// тесте это фикстуры, а не подписи из переводов.
+const DEAD_END = 'Start the operation over.';
+const AWAITING_FINISH = 'Code accepted, try again.';
+const PASSWORD_HINT = 'The password is needed to turn the second factor off.';
+/** Причину аннулирования знает только сервер — она приходит текстом. */
+const REVOKED_DETAIL = 'Access to the realm was revoked';
 
 /**
  * Тупик «попытки кончились» на звене, где повторная отправка неприменима (второй фактор): нового
@@ -42,7 +51,7 @@ const flow: ConfirmFlow = {
 // Ветка auth.test.* — стенд под проп hintPrefix: в приложении её нет, а проверять подмену префикса
 // надо на ключах, которые действительно существуют, иначе кейс проверял бы только падение.
 const flowTranslations = {
-  ru: { auth: { test: { hint: { PASSWORD: 'Пароль нужен, чтобы отключить второй фактор.' } } } },
+  ru: { auth: { test: { hint: { PASSWORD: PASSWORD_HINT } } } },
 };
 
 beforeAll(() => {
@@ -56,16 +65,18 @@ describe('OperationConfirm — текст тупика', () => {
   it('без пропа берёт общий текст экрана подтверждения', () => {
     render(<OperationConfirm flow={flow} />);
 
-    expect(screen.getByText(/Начните вход заново/)).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.confirm.deadEnd'))).toBeInTheDocument();
     // Кнопки «запросить новый код» в тупике нет — предлагать нечего.
-    expect(screen.queryByText(/Запросить новый код/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(tr('auth.confirm.requestNewCode'), { exact: false }),
+    ).not.toBeInTheDocument();
   });
 
   it('проп подменяет его текстом потока', () => {
-    render(<OperationConfirm flow={flow} deadEndText="Начните операцию заново." />);
+    render(<OperationConfirm flow={flow} deadEndText={DEAD_END} />);
 
-    expect(screen.getByText('Начните операцию заново.')).toBeInTheDocument();
-    expect(screen.queryByText(/Начните вход заново/)).not.toBeInTheDocument();
+    expect(screen.getByText(DEAD_END)).toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.confirm.deadEnd'))).not.toBeInTheDocument();
   });
 });
 
@@ -80,14 +91,14 @@ describe('OperationConfirm — подсказка над полем', () => {
   it('без пропа берёт ключи экрана подтверждения', () => {
     render(<OperationConfirm flow={active} />);
 
-    expect(screen.getByText('Введите пароль для подтверждения.')).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
   });
 
   it('свой префикс даёт свой текст на том же методе', () => {
     render(<OperationConfirm flow={active} hintPrefix="auth.test.hint" />);
 
-    expect(screen.getByText('Пароль нужен, чтобы отключить второй фактор.')).toBeInTheDocument();
-    expect(screen.queryByText('Введите пароль для подтверждения.')).not.toBeInTheDocument();
+    expect(screen.getByText(PASSWORD_HINT)).toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.confirm.hint.PASSWORD'))).not.toBeInTheDocument();
   });
 
   /**
@@ -97,7 +108,7 @@ describe('OperationConfirm — подсказка над полем', () => {
   it('нет ключа под своим префиксом — берётся подсказка экрана, а не сырой ключ', () => {
     render(<OperationConfirm flow={active} hintPrefix="auth.test.missing" />);
 
-    expect(screen.getByText('Введите пароль для подтверждения.')).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
     expect(screen.queryByText(/auth\.test\.missing/)).not.toBeInTheDocument();
   });
 });
@@ -113,17 +124,17 @@ describe('OperationConfirm — тексты терминала', () => {
       snapshot: { ...snapshot, phase: 'confirmed' },
       awaitingFinish: true,
     };
-    render(<OperationConfirm flow={finishing} awaitingFinishText="Код принят, повторите." />);
+    render(<OperationConfirm flow={finishing} awaitingFinishText={AWAITING_FINISH} />);
 
-    expect(screen.getByText('Код принят, повторите.')).toBeInTheDocument();
-    expect(screen.queryByText(/войти не удалось/)).not.toBeInTheDocument();
+    expect(screen.getByText(AWAITING_FINISH)).toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.confirm.awaitingFinish'))).not.toBeInTheDocument();
   });
 
   it('проп подменяет запасной текст аннулированной операции', () => {
     const invalidated: ConfirmFlow = { ...flow, snapshot: { ...snapshot, phase: 'dead' } };
-    render(<OperationConfirm flow={invalidated} invalidatedText="Начните операцию заново." />);
+    render(<OperationConfirm flow={invalidated} invalidatedText={DEAD_END} />);
 
-    expect(screen.getByText('Начните операцию заново.')).toBeInTheDocument();
+    expect(screen.getByText(DEAD_END)).toBeInTheDocument();
   });
 
   /** Причина от сервера точнее любого запасного текста, поэтому проп ей не мешает. */
@@ -131,10 +142,10 @@ describe('OperationConfirm — тексты терминала', () => {
     const invalidated: ConfirmFlow = {
       ...flow,
       snapshot: { ...snapshot, phase: 'dead' },
-      error: 'Доступ к контуру отозван',
+      error: REVOKED_DETAIL,
     };
-    render(<OperationConfirm flow={invalidated} invalidatedText="Начните операцию заново." />);
+    render(<OperationConfirm flow={invalidated} invalidatedText={DEAD_END} />);
 
-    expect(screen.getByText('Доступ к контуру отозван')).toBeInTheDocument();
+    expect(screen.getByText(REVOKED_DETAIL)).toBeInTheDocument();
   });
 });

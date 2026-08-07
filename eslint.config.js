@@ -18,6 +18,64 @@ import globals from 'globals';
  *    (`@core/api`), глубокий `@core/api/errors` запрещён. Относительные импорты не трогаются.
  * prettier-config идёт последним — гасит стилевые правила (форматирование за Prettier).
  */
+
+/**
+ * Три селектора — все формы записи одного пропа: JSX-атрибут; ключ-идентификатор в
+ * объекте-литерале (createElement-пропсы, спреды, shorthand); строковый ключ. Якорь
+ * «ObjectExpression >» оставляет в покое ObjectPattern — деструктуризация-чтение
+ * (const { dangerouslySetInnerHTML, ...rest } = props) не источник HTML и не флагается.
+ */
+const NO_DANGEROUS_HTML = {
+  selector:
+    "JSXAttribute[name.name='dangerouslySetInnerHTML']," +
+    "ObjectExpression > Property[key.name='dangerouslySetInnerHTML']," +
+    "ObjectExpression > Property[key.value='dangerouslySetInnerHTML']",
+  message:
+    'dangerouslySetInnerHTML запрещён: переводы и данные попадают в JSX как текст, ' +
+    'экранирует React (на этом держится i18n escapeValue: false).',
+};
+
+/**
+ * Фразы интерфейса в тестах пишутся ключом, а не текстом: литерал дублирует файл переводов и
+ * падает от правки формулировки, то есть проверяет её, а не то, что на экране нужный ключ.
+ *
+ * Целятся только аргументы поиска по тексту — фикстуры и названия тестов не трогаем: имена
+ * устройств приходят от серверной стороны, а названия тестов это те же комментарии. Ожидаемое
+ * значение (`toBe`, `toEqual`) правило тоже не трогает: там литерал как раз к месту — эталон,
+ * посчитанный вызовом проверяемой функции, вырождается в «функция равна себе».
+ *
+ * Это подсказка на частой форме записи, а не непроходимый запрет: фраза, поднятая в константу,
+ * приходит в запрос идентификатором и правилу не видна. Так и задумано — именно этим приёмом
+ * пишутся фикстуры и тексты, которые компонент получает пропами.
+ */
+const TEXT_QUERIES = '/^(get|find|query)(All)?ByText$/';
+/** Хелперы src/test/dom.ts: первым аргументом им дают ту же искомую на экране фразу. */
+const TEXT_HELPERS = '/^(cardWith|rowValue)$/';
+const CYRILLIC = '/[А-Яа-яЁё]/';
+
+/** Обращения, чей аргумент — фраза с экрана: `screen.getByText`, голый `getByText`, хелперы. */
+const QUERY_CALLS = [
+  `CallExpression[callee.property.name=${TEXT_QUERIES}]`,
+  `CallExpression[callee.name=${TEXT_QUERIES}]`,
+  `CallExpression[callee.name=${TEXT_HELPERS}]`,
+];
+
+/**
+ * Формы записи самой фразы. Регулярке нужен отдельный селектор: у regex-литерала `value` — объект
+ * RegExp, и по нему сравнение с шаблоном не срабатывает, текст лежит в `regex.pattern`.
+ */
+const CYRILLIC_TEXT = [
+  `> Literal[value=${CYRILLIC}]`,
+  `> Literal[regex.pattern=${CYRILLIC}]`,
+  `TemplateElement[value.raw=${CYRILLIC}]`,
+];
+
+const NO_CYRILLIC_IN_QUERIES = {
+  selector: QUERY_CALLS.flatMap((call) => CYRILLIC_TEXT.map((text) => `${call} ${text}`)).join(','),
+  message:
+    'Фразу интерфейса в тесте не пишем текстом: берите её ключом через tr() (src/test/i18n.ts).',
+};
+
 export default tseslint.config(
   { ignores: ['dist', 'coverage', 'node_modules', 'public/mockServiceWorker.js'] },
 
@@ -138,34 +196,26 @@ export default tseslint.config(
   // компоненты — через customComponentNames) и тянет весь eslint-plugin-react ради одного
   // правила.
   //
-  // Три селектора — все формы записи одного пропа: JSX-атрибут; ключ-идентификатор в
-  // объекте-литерале (createElement-пропсы, спреды, shorthand); строковый ключ. Якорь
-  // «ObjectExpression >» оставляет в покое ObjectPattern — деструктуризация-чтение
-  // (const { dangerouslySetInnerHTML, ...rest } = props) не источник HTML и не флагается.
   // Контракт закреплён спекой src/test/eslintConfig.test.ts (гоняет этот конфиг через
   // ESLint API) — правило меняется только вместе с ней.
   {
     files: ['src/**/*.{ts,tsx,js,jsx}'],
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            "JSXAttribute[name.name='dangerouslySetInnerHTML']," +
-            "ObjectExpression > Property[key.name='dangerouslySetInnerHTML']," +
-            "ObjectExpression > Property[key.value='dangerouslySetInnerHTML']",
-          message:
-            'dangerouslySetInnerHTML запрещён: переводы и данные попадают в JSX как текст, ' +
-            'экранирует React (на этом держится i18n escapeValue: false).',
-        },
-      ],
+      'no-restricted-syntax': ['error', NO_DANGEROUS_HTML],
     },
   },
 
   // Тесты + setup — vitest globals в node-среде.
+  //
+  // NO_DANGEROUS_HTML повторён намеренно: опции no-restricted-syntax не складываются, и блок,
+  // задающий правило для тестов, целиком перекрыл бы предыдущий — запрет
+  // dangerouslySetInnerHTML молча перестал бы действовать в *.test.tsx. Спека это стережёт.
   {
     files: ['**/*.test.{ts,tsx}', 'src/test/**'],
     languageOptions: { globals: { ...globals.node } },
+    rules: {
+      'no-restricted-syntax': ['error', NO_DANGEROUS_HTML, NO_CYRILLIC_IN_QUERIES],
+    },
   },
 
   // Конфиги в корне — node-среда.

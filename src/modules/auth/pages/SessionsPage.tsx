@@ -191,7 +191,7 @@ export function SessionsPage() {
 
         {sessions.isSuccess && (
           <>
-            {/* Подписи над карточкой нет: её метит чип «Текущая» и акцентная рамка. */}
+            {/* Заголовка над карточкой нет: её метит подпись под названием устройства. */}
             {current && (
               <SessionCard session={current} variant="current" timeZone={timeZone} now={now} />
             )}

@@ -8,6 +8,7 @@ import type { SchemaNode } from '@core/schema';
 import { authTranslations } from '../i18n';
 import { confirmOperation, openSession } from '../api/authApi';
 import { saveConfirmReturn } from '../lib/confirmReturn';
+import { tr } from '../../../test/i18n';
 import { ConfirmOperationNode } from './ConfirmOperationNode';
 
 /**
@@ -21,6 +22,11 @@ vi.mock('../api/authApi', () => ({
   resendOperation: vi.fn(),
   revokeOperation: vi.fn().mockResolvedValue(undefined),
 }));
+
+/** Причину аннулирования знает только сервер — она приходит текстом и в переводах её нет. */
+const DISABLED_2FA_DETAIL = '2FA was disabled';
+/** Так же и причину отказа терминального действия: 429 приносит её своим detail. */
+const LIMIT_DETAIL = 'Concurrent session limit exceeded';
 
 const node: SchemaNode = { type: 'confirmOperation' };
 
@@ -103,7 +109,7 @@ describe('ConfirmOperationNode — отказ терминального дей�
         {
           title: 'Too Many Requests',
           status: 429,
-          detail: 'Превышен лимит одновременных сессий',
+          detail: LIMIT_DETAIL,
           instance: '',
           time: '',
         },
@@ -116,7 +122,8 @@ describe('ConfirmOperationNode — отказ терминального дей�
     // Ждём ТЕКСТ ОТКАЗА, а не кнопку «Повторить»: кнопку рисует уже фаза `confirmed`, то есть до
     // того, как приедет отказ openSession. На той ранней отрисовке сабмит ещё выключен (submitting),
     // и клик по «Повторить» ушёл бы в никуда. Отказ же приходит вместе со снятием submitting.
-    await screen.findByText(/Превышен лимит одновременных сессий/);
+    // Подстрокой: рядом с detail сервера экран говорит ещё и когда можно повторить.
+    await screen.findByText(LIMIT_DETAIL, { exact: false });
   }
 
   it('поле кода и повторная отправка уходят, остаётся «Повторить»', async () => {
@@ -124,8 +131,8 @@ describe('ConfirmOperationNode — отказ терминального дей�
 
     expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Отправить повторно')).not.toBeInTheDocument();
-    expect(screen.getByText(/Подтверждать заново не нужно/)).toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.confirm.resendLink'))).not.toBeInTheDocument();
+    expect(screen.getByText(tr('auth.confirm.awaitingFinish'))).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Повторить' })).toBeEnabled();
   });
 
@@ -151,8 +158,8 @@ describe('ConfirmOperationNode — отказ терминального дей�
       await vi.advanceTimersByTimeAsync(601_000);
     });
 
-    expect(screen.getByText(/Эту операцию больше нельзя завершить/)).toBeInTheDocument();
-    expect(screen.queryByText(/Превышен лимит одновременных сессий/)).not.toBeInTheDocument();
+    expect(screen.getByText(tr('auth.confirm.invalidated'))).toBeInTheDocument();
+    expect(screen.queryByText(LIMIT_DETAIL, { exact: false })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument();
   });
 });
@@ -169,7 +176,7 @@ describe('ConfirmOperationNode — операция аннулирована с�
       new ApiProblemError({
         title: 'Conflict',
         status: 409,
-        detail: '2FA была отключена',
+        detail: DISABLED_2FA_DETAIL,
         instance: '',
         time: '',
       }),
@@ -178,11 +185,13 @@ describe('ConfirmOperationNode — операция аннулирована с�
     fireEvent.change(screen.getByLabelText('Код подтверждения'), { target: { value: '183947' } });
     fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
 
-    expect(await screen.findByText('2FA была отключена')).toBeInTheDocument();
+    expect(await screen.findByText(DISABLED_2FA_DETAIL)).toBeInTheDocument();
     expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Запросить новый код/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(tr('auth.confirm.requestNewCode'), { exact: false }),
+    ).not.toBeInTheDocument();
     // Выход с экрана остаётся ровно один.
     expect(screen.getByRole('button', { name: 'Отменить' })).toBeInTheDocument();
   });
@@ -195,7 +204,7 @@ describe('ConfirmOperationNode — операция аннулирована с�
     useOperationStore.getState().dispatch({ type: 'INVALIDATED' });
     renderConfirm();
 
-    expect(await screen.findByText(/Эту операцию больше нельзя завершить/)).toBeInTheDocument();
+    expect(await screen.findByText(tr('auth.confirm.invalidated'))).toBeInTheDocument();
     expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
   });
 });

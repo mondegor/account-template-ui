@@ -1,7 +1,7 @@
 import {
+  Box,
   Card,
   CardContent,
-  Chip,
   CircularProgress,
   Divider,
   IconButton,
@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fmtLong, useLocale } from '../lib/format';
+import { CurrentMark } from './CurrentMark';
 import { Row } from './Row';
 import { TimeRow } from './TimeRow';
 import {
@@ -18,14 +19,16 @@ import {
   ClockIcon,
   HourglassIcon,
   MapPinIcon,
+  MonitorIcon,
   NetworkIcon,
   TrashIcon,
 } from './icons';
+import { titleLine } from './titleLine';
 import type { UserSession } from '../api/types';
 
 /**
- * Одна открытая сессия. `current` — акцентная рамка и чип вместо корзины: свою сессию закрывают
- * кнопкой «Выйти» в шапке, а не отсюда.
+ * Одна открытая сессия. `current` — подпись под именем устройства и отсутствие корзины: свою
+ * сессию закрывают кнопкой «Выйти» в шапке, а не отсюда, и подпись это заодно объясняет.
  */
 export function SessionCard({
   session,
@@ -54,10 +57,7 @@ export function SessionCard({
   const isCurrent = variant === 'current';
 
   return (
-    <Card
-      variant="outlined"
-      sx={isCurrent ? { borderColor: 'primary.main', borderWidth: 2 } : undefined}
-    >
+    <Card variant="outlined">
       <CardContent>
         <Stack
           direction="row"
@@ -67,22 +67,45 @@ export function SessionCard({
             justifyContent: 'space-between',
           }}
         >
-          <Stack sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-              {session.device_name}
-            </Typography>
-            <Typography
-              variant="caption"
+          {/* Глиф-якорь слева, как в заголовках карточек профиля: устройство одно на все сессии —
+              тип по названию не угадать, и выдумывать его за серверную сторону мы не будем. */}
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+            {/* Ростом со строку названия — глиф встаёт по её центру, а не по центру всей шапки:
+                метит он устройство, а подпись под названием живёт своей жизнью. */}
+            <Box
               sx={{
-                color: 'text.secondary',
+                color: 'primary.main',
+                display: 'flex',
+                alignItems: 'center',
+                flexShrink: 0,
+                height: titleLine('subtitle1'),
               }}
             >
-              {session.app_name}
-            </Typography>
+              <MonitorIcon size={18} />
+            </Box>
+            <Stack sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                {session.device_name}
+              </Typography>
+              {/* Строка под именем уже занята приложением, поэтому признак текущей сессии встаёт
+                  перед ним: зелёные — только точка и слово, название приложения остаётся вторичным. */}
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
+                {isCurrent && (
+                  <>
+                    <CurrentMark label={p('current')} />
+                    {' · '}
+                  </>
+                )}
+                {session.app_name}
+              </Typography>
+            </Stack>
           </Stack>
-          {isCurrent ? (
-            <Chip size="small" color="primary" label={p('current')} />
-          ) : (
+          {!isCurrent && (
             <Tooltip title={p('closeOne')}>
               {/* span — чтобы Tooltip работал и на disabled-кнопке (во время закрытия). */}
               <span>

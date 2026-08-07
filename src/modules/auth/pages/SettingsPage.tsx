@@ -202,6 +202,9 @@ function SettingsForm({ user }: { user: UserInfo }) {
         <Alert
           severity="success"
           icon={<ClockIcon size={20} />}
+          // Плашку тесты ищут как элемент: её текст — длинная оговорка про окно применения, и
+          // поиск по нему проверял бы формулировку, а не то, что плашка появилась и ушла.
+          data-testid="settings-saved"
           // MUI держит иконку у ВЕРХА сообщения (`.MuiAlert-icon` — flex с padding 7px 0), и на
           // двухстрочном тексте она заметно повисает над первой строкой. Выравниваем по этой
           // строке: коробке иконки задаём ровно её высоту — отступы сообщения (8px сверху и
@@ -280,8 +283,12 @@ function SettingsForm({ user }: { user: UserInfo }) {
             {otherError && (
               <Alert severity="error">{p('saveError', { message: otherError })}</Alert>
             )}
+            {/* Тоже с testid: подпись собирается из имени подобранной зоны, и искать плашку по
+                тексту значило бы повторять в тесте всю подстановку. */}
             {substituted && (
-              <Alert severity="warning">{p('substituted', { zone: substituted })}</Alert>
+              <Alert severity="warning" data-testid="settings-substituted">
+                {p('substituted', { zone: substituted })}
+              </Alert>
             )}
 
             <Button

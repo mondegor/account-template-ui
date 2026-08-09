@@ -36,7 +36,7 @@ function refreshHandler(patches: string[]) {
   });
 }
 
-describe('authClient: 401 → refresh → повтор', () => {
+describe('authClient: 401 → refresh → retry', () => {
   beforeEach(() => {
     useAuthStore.setState({ status: 'authenticated', accessToken: 'stale', expiresAt: null });
   });
@@ -46,7 +46,7 @@ describe('authClient: 401 → refresh → повтор', () => {
     forceLogout();
   });
 
-  it('401 на GET /v1/sessions продлевает сессию и повторяет запрос с новым access', async () => {
+  it('401 on GET /v1/sessions refreshes the session and retries with the new access token', async () => {
     const patches: string[] = [];
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('get', '/v1/sessions', calls));
@@ -58,7 +58,7 @@ describe('authClient: 401 → refresh → повтор', () => {
     expect(calls).toEqual(['Bearer stale', 'Bearer fresh']);
   });
 
-  it('401 на POST /v1/sessions/close тоже продлевается: это защищённый ресурс, а не выход', async () => {
+  it('401 on POST /v1/sessions/close refreshes too: it is a protected resource, not a sign-out', async () => {
     const patches: string[] = [];
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('post', '/v1/sessions/close', calls));
@@ -69,7 +69,7 @@ describe('authClient: 401 → refresh → повтор', () => {
     expect(calls).toEqual(['Bearer stale', 'Bearer fresh']);
   });
 
-  it('401 на POST /v1/session (открытие сессии) refresh НЕ запускает', async () => {
+  it('401 on POST /v1/session (opening a session) does NOT trigger a refresh', async () => {
     const patches: string[] = [];
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('post', '/v1/session', calls));
@@ -80,7 +80,7 @@ describe('authClient: 401 → refresh → повтор', () => {
     expect(calls).toEqual(['Bearer stale']);
   });
 
-  it('401 на PATCH /v1/operation/revoke продлевается: отзыв доступен авторизованному', async () => {
+  it('401 on PATCH /v1/operation/revoke refreshes: revoking is available to an authenticated user', async () => {
     const patches: string[] = [];
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('patch', '/v1/operation/revoke', calls));
@@ -91,7 +91,7 @@ describe('authClient: 401 → refresh → повтор', () => {
     expect(calls).toEqual(['Bearer stale', 'Bearer fresh']);
   });
 
-  it('401 на PATCH /v1/operation/confirm refresh НЕ запускает: у метода нет схемы безопасности', async () => {
+  it('401 on PATCH /v1/operation/confirm does NOT trigger a refresh: the method has no security scheme', async () => {
     const patches: string[] = [];
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('patch', '/v1/operation/confirm', calls));
@@ -102,7 +102,7 @@ describe('authClient: 401 → refresh → повтор', () => {
     expect(calls).toEqual(['Bearer stale']);
   });
 
-  it('401 на POST /v1/signin refresh НЕ запускает (guests-only)', async () => {
+  it('401 on POST /v1/signin does NOT trigger a refresh (guests-only)', async () => {
     const patches: string[] = [];
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('post', '/v1/signin', calls));

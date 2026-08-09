@@ -232,7 +232,7 @@ function waiting(op: MockOperation, message: string): WaitingConfirmOperation {
 function buildUser(op: MockOperation): UserInfo {
   const isEmail = op.login.includes('@');
   const registered = '2025-01-10T09:00:00.000+03:00';
-  const staffRegistered = '2025-03-02T14:30:00.000+03:00';
+  const employeeRegistered = '2025-03-02T14:30:00.000+03:00';
   return {
     email: isEmail ? op.login : 'user@example.com',
     phone: isEmail ? undefined : op.login,
@@ -261,9 +261,9 @@ function buildUser(op: MockOperation): UserInfo {
         ? [
             {
               name: SECOND_REALM,
-              user_kind: 'staff',
-              created_at: staffRegistered,
-              updated_at: staffRegistered,
+              user_kind: 'employee',
+              created_at: employeeRegistered,
+              updated_at: employeeRegistered,
             },
           ]
         : []),

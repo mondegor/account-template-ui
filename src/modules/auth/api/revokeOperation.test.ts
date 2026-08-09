@@ -42,7 +42,7 @@ describe('revokeOperation', () => {
     forceLogout();
   });
 
-  it('у авторизованного 401 — протухший access: сессия продлевается, отзыв повторяется', async () => {
+  it('for an authenticated user a 401 means a stale access token: the session is refreshed and the revoke retried', async () => {
     useAuthStore.setState({ status: 'authenticated', accessToken: 'stale', expiresAt: null });
     const patches: string[] = [];
     const calls: (string | null)[] = [];
@@ -54,7 +54,7 @@ describe('revokeOperation', () => {
     expect(calls).toEqual(['Bearer stale', 'Bearer fresh']);
   });
 
-  it('у гостя запроса нет вовсе: отзывать ему нечем, 401 был бы гарантирован', async () => {
+  it('for a guest there is no request at all: they have nothing to revoke with, a 401 would be guaranteed', async () => {
     useAuthStore.setState({ status: 'anonymous', accessToken: null, expiresAt: null });
     const patches: string[] = [];
     const calls: (string | null)[] = [];

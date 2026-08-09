@@ -24,21 +24,21 @@ afterEach(() => {
 });
 
 describe('config.enableMocks', () => {
-  it('флаг не задан — моки идут за режимом сборки (dev)', async () => {
+  it('flag unset: mocks follow the build mode (dev)', async () => {
     vi.stubEnv('VITE_ENABLE_MOCKS', undefined);
     vi.stubEnv('DEV', true);
 
     expect((await loadConfig()).enableMocks).toBe(true);
   });
 
-  it('флаг не задан, прод-сборка — моки выключены', async () => {
+  it('flag unset, production build: mocks are off', async () => {
     vi.stubEnv('VITE_ENABLE_MOCKS', undefined);
     vi.stubEnv('DEV', false);
 
     expect((await loadConfig()).enableMocks).toBe(false);
   });
 
-  it("'1' включает явно", async () => {
+  it("'1' turns them on explicitly", async () => {
     vi.stubEnv('VITE_ENABLE_MOCKS', '1');
     // DEV гасим: иначе обе ветки тернарника дают true и кейс не отличает явный флаг от дефолта.
     vi.stubEnv('DEV', false);
@@ -46,7 +46,7 @@ describe('config.enableMocks', () => {
     expect((await loadConfig()).enableMocks).toBe(true);
   });
 
-  it("'0' выключает явно — режим работы против живого бэкенда", async () => {
+  it("'0' turns them off explicitly: running against a live backend", async () => {
     vi.stubEnv('VITE_ENABLE_MOCKS', '0');
     vi.stubEnv('DEV', true);
 

@@ -4,12 +4,12 @@ import { resolveThemeMode, useThemeMode } from './themeMode';
 afterEach(() => useThemeMode.setState({ mode: 'system' }));
 
 describe('resolveThemeMode', () => {
-  it('system → следует за системным предпочтением', () => {
+  it('system follows the OS preference', () => {
     expect(resolveThemeMode('system', true)).toBe('dark');
     expect(resolveThemeMode('system', false)).toBe('light');
   });
 
-  it('явный режим игнорирует систему', () => {
+  it('an explicit mode ignores the OS', () => {
     expect(resolveThemeMode('light', true)).toBe('light');
     expect(resolveThemeMode('dark', false)).toBe('dark');
   });
@@ -26,7 +26,7 @@ describe('useThemeMode', () => {
     expect(useThemeMode.getState().mode).toBe('system');
   });
 
-  it('выбор режима персистится в localStorage', () => {
+  it('the chosen mode is persisted in localStorage', () => {
     useThemeMode.getState().setMode('dark');
     expect(localStorage.getItem('ui.themeMode')).toContain('dark');
   });

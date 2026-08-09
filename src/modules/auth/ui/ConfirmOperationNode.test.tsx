@@ -47,7 +47,7 @@ function renderConfirm() {
 }
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   const i18n = initI18n();
   for (const [lng, res] of Object.entries(authTranslations)) {
     i18n.addResourceBundle(lng, 'translation', res, true, true);
@@ -78,20 +78,20 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('ConfirmOperationNode — «Отменить» возвращает на исходный экран', () => {
-  it('поток signup (returnTo=/signup) → Отменить ведёт на /signup', async () => {
+describe('ConfirmOperationNode: «revoke» returns to the screen the flow started from', () => {
+  it('the signup flow (returnTo=/signup): revoke goes to /signup', async () => {
     saveConfirmReturn('/signup');
     renderConfirm();
-    fireEvent.click(screen.getByRole('button', { name: 'Отменить' }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.revoke') }));
     await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/signup'));
     // Запись НЕ чистим на «Отменить»: reset() снапшота в revoke() успевает дать ConfirmPage
     // редиректнуть по тому же loadConfirmReturn(); очистка до навигации вернула бы дефолт /signin.
     expect(sessionStorage.getItem('auth:confirmReturn')).toBe('/signup');
   });
 
-  it('без запомненного origin (прямой заход) → Отменить ведёт на /signin (дефолт)', async () => {
+  it('with no remembered origin (a direct visit): revoke goes to /signin, the default', async () => {
     renderConfirm();
-    fireEvent.click(screen.getByRole('button', { name: 'Отменить' }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.revoke') }));
     await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/signin'));
   });
 });
@@ -101,7 +101,7 @@ describe('ConfirmOperationNode — «Отменить» возвращает н�
  * и повторять надо ровно открытие сессии: экран не должен просить код заново — звено уже пройдено,
  * и повторное подтверждение вернуло бы тот же 204, не приблизив пользователя ко входу.
  */
-describe('ConfirmOperationNode — отказ терминального действия', () => {
+describe('ConfirmOperationNode: the terminal action is refused', () => {
   async function failOpenSession() {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(
@@ -117,8 +117,8 @@ describe('ConfirmOperationNode — отказ терминального дей�
       ),
     );
     renderConfirm();
-    fireEvent.change(screen.getByLabelText('Код подтверждения'), { target: { value: '183947' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+    fireEvent.change(screen.getByLabelText(tr('auth.field.code')), { target: { value: '183947' } });
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.submit') }));
     // Ждём ТЕКСТ ОТКАЗА, а не кнопку «Повторить»: кнопку рисует уже фаза `confirmed`, то есть до
     // того, как приедет отказ openSession. На той ранней отрисовке сабмит ещё выключен (submitting),
     // и клик по «Повторить» ушёл бы в никуда. Отказ же приходит вместе со снятием submitting.
@@ -126,20 +126,22 @@ describe('ConfirmOperationNode — отказ терминального дей�
     await screen.findByText(LIMIT_DETAIL, { exact: false });
   }
 
-  it('поле кода и повторная отправка уходят, остаётся «Повторить»', async () => {
+  it('the code field and resend go away, «retry» stays', async () => {
     await failOpenSession();
 
-    expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(tr('auth.field.code'))).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: tr('auth.confirm.submit') }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(tr('auth.confirm.resendLink'))).not.toBeInTheDocument();
     expect(screen.getByText(tr('auth.confirm.awaitingFinish'))).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Повторить' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: tr('auth.confirm.retryFinish') })).toBeEnabled();
   });
 
-  it('«Повторить» дёргает только открытие сессии — подтверждение не переигрывается', async () => {
+  it('«retry» touches only the session opening: the confirmation is not replayed', async () => {
     await failOpenSession();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.retryFinish') }));
 
     await waitFor(() => expect(vi.mocked(openSession)).toHaveBeenCalledTimes(2));
     expect(vi.mocked(confirmOperation)).toHaveBeenCalledTimes(1);
@@ -150,7 +152,7 @@ describe('ConfirmOperationNode — отказ терминального дей�
    * экрана, а не это: повторять больше негде, и обещание «через 30 секунд» звало бы в кнопку,
    * которой уже нет. Экран обязан говорить про саму операцию.
    */
-  it('срок вышел, пока ждали повтора: текст про операцию, а не прошлый отказ', async () => {
+  it('the operation expired while the retry was pending: the text is about the operation, not the past refusal', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await failOpenSession();
 
@@ -160,7 +162,9 @@ describe('ConfirmOperationNode — отказ терминального дей�
 
     expect(screen.getByText(tr('auth.confirm.invalidated'))).toBeInTheDocument();
     expect(screen.queryByText(LIMIT_DETAIL, { exact: false })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: tr('auth.confirm.retryFinish') }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -170,8 +174,8 @@ describe('ConfirmOperationNode — отказ терминального дей�
  * нечего, единственный выход отсюда — начать вход заново. Объяснить это может только сервер:
  * свой текст про «начните заново» говорит, что делать, но не почему.
  */
-describe('ConfirmOperationNode — операция аннулирована сервером', () => {
-  it('экран сводится к тупику с причиной от сервера', async () => {
+describe('ConfirmOperationNode: the server invalidated the operation', () => {
+  it('the screen collapses into a dead end carrying the server reason', async () => {
     vi.mocked(confirmOperation).mockRejectedValue(
       new ApiProblemError({
         title: 'Conflict',
@@ -182,29 +186,33 @@ describe('ConfirmOperationNode — операция аннулирована с�
       }),
     );
     renderConfirm();
-    fireEvent.change(screen.getByLabelText('Код подтверждения'), { target: { value: '183947' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+    fireEvent.change(screen.getByLabelText(tr('auth.field.code')), { target: { value: '183947' } });
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.submit') }));
 
     expect(await screen.findByText(DISABLED_2FA_DETAIL)).toBeInTheDocument();
-    expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(tr('auth.field.code'))).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: tr('auth.confirm.submit') }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: tr('auth.confirm.retryFinish') }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText(tr('auth.confirm.requestNewCode'), { exact: false }),
     ).not.toBeInTheDocument();
     // Выход с экрана остаётся ровно один.
-    expect(screen.getByRole('button', { name: 'Отменить' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: tr('auth.confirm.revoke') })).toBeInTheDocument();
   });
 
   /**
    * В `dead` приводит и локальный таймер — истечением уже подтверждённой операции. Отказа сервера
    * там не было, объяснять нечем, и вместо пустого места экран говорит свой текст.
    */
-  it('без отказа сервера (операция истекла подтверждённой) — свой текст про тупик', async () => {
+  it('with no server refusal (a confirmed operation expired): our own dead-end text', async () => {
     useOperationStore.getState().dispatch({ type: 'INVALIDATED' });
     renderConfirm();
 
     expect(await screen.findByText(tr('auth.confirm.invalidated'))).toBeInTheDocument();
-    expect(screen.queryByLabelText('Код подтверждения')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(tr('auth.field.code'))).not.toBeInTheDocument();
   });
 });

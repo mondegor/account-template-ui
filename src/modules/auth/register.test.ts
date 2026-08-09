@@ -18,8 +18,8 @@ beforeEach(() => {
   useOperationStore.getState().reset();
 });
 
-describe('модуль auth: очистка при принудительном разлогине', () => {
-  it('снимок операции, признак потока и аварийные коды уходят вместе с сессией', () => {
+describe('the auth module: cleanup on a forced sign-out', () => {
+  it('the operation snapshot, the flow marker and the recovery codes leave together with the session', () => {
     initAuthModule();
     useOperationStore.getState().dispatch({
       type: 'START',

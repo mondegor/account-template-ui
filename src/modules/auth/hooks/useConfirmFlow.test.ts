@@ -6,6 +6,7 @@ import { authTranslations } from '../i18n';
 import { useOperationStore } from '@core/operation';
 import { confirmOperation, openSession, resendOperation } from '../api/authApi';
 import { useConfirmFlow } from './useConfirmFlow';
+import { tr } from '../../../test/i18n';
 
 /**
  * Терминальный шаг подтверждения. Проверяется контракт спеки: после 204 сессия открывается БЕЗ
@@ -51,7 +52,7 @@ function rateLimited(retryAfterSec?: number) {
     {
       title: 'Too Many Requests',
       status: 429,
-      detail: 'Превышен лимит одновременных сессий',
+      detail: 'Concurrent session limit exceeded',
       instance: '',
       time: '',
     },
@@ -60,7 +61,7 @@ function rateLimited(retryAfterSec?: number) {
 }
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   // Ветку auth.* в приложении регистрирует registerModule(authModule) — для хука хватит её одной.
   addTranslations(authTranslations);
@@ -74,7 +75,7 @@ beforeEach(async () => {
   vi.mocked(confirmOperation).mockReset();
   vi.mocked(openSession).mockReset();
   vi.mocked(resendOperation).mockReset();
-  await i18next.changeLanguage('ru');
+  await i18next.changeLanguage('en');
 });
 
 afterEach(() => {
@@ -82,8 +83,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('useConfirmFlow: терминальное открытие сессии', () => {
-  it('после 204 открывает сессию только по токену — secret туда уже не идёт', async () => {
+describe('useConfirmFlow: the terminal session opening', () => {
+  it('after a 204 the session is opened by the token alone: the secret no longer travels there', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockResolvedValue({
       kind: 'access',
@@ -104,7 +105,7 @@ describe('useConfirmFlow: терминальное открытие сессии
     expect(onAccess).toHaveBeenCalled();
   });
 
-  it('429 на открытии сессии: показываем отказ, но операцию не теряем', async () => {
+  it('a 429 while opening the session: we show the refusal but keep the operation', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(rateLimited(30));
     useOperationStore.getState().dispatch(activeOp);
@@ -118,7 +119,7 @@ describe('useConfirmFlow: терминальное открытие сессии
 
     // Серверная деталь + срок из Retry-After: пауза короче минуты называется секундами.
     expect(result.current.error).toBe(
-      'Превышен лимит одновременных сессий Повторить можно через 30 секунд.',
+      `Concurrent session limit exceeded ${tr('common.error.retryAfterSec', { count: 30 })}`,
     );
     // Снимок на месте и тем же токеном — повторяется ТОТ ЖЕ запрос, новая операция не нужна.
     expect(useOperationStore.getState().snapshot?.token).toBe(TOKEN);
@@ -127,7 +128,7 @@ describe('useConfirmFlow: терминальное открытие сессии
     expect(result.current.awaitingFinish).toBe(true);
   });
 
-  it('повтор после 429 идёт сразу в openSession — второго confirm нет', async () => {
+  it('the retry after a 429 goes straight to openSession: there is no second confirm', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession)
       .mockRejectedValueOnce(rateLimited(30))
@@ -163,7 +164,7 @@ describe('useConfirmFlow: терминальное открытие сессии
    * негде — кнопка исчезает вместе с фазой `confirmed`. Текст обязан уйти, чтобы экран сказал про
    * саму операцию, а не звал в несуществующую кнопку.
    */
-  it('подтверждённая операция истекла — отказ 429 из сообщения уходит', async () => {
+  it('the confirmed operation expired: the 429 refusal leaves the message', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(rateLimited(30));
@@ -175,7 +176,7 @@ describe('useConfirmFlow: терминальное открытие сессии
     await act(async () => {
       await result.current.confirm('183947');
     });
-    expect(result.current.error).toContain('Превышен лимит одновременных сессий');
+    expect(result.current.error).toContain('Concurrent session limit exceeded');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(601_000);
@@ -185,7 +186,7 @@ describe('useConfirmFlow: терминальное открытие сессии
     expect(result.current.error).toBeNull();
   });
 
-  it('429 без detail в теле — общий текст, а не пустой алерт', async () => {
+  it('a 429 with no detail in the body gives the generic text, not an empty alert', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(
       new ApiRateLimitError({
@@ -205,7 +206,7 @@ describe('useConfirmFlow: терминальное открытие сессии
       await result.current.confirm('183947');
     });
 
-    expect(result.current.error).toBe('Слишком много попыток. Повторите позже.');
+    expect(result.current.error).toBe(tr('common.error.rateLimited'));
   });
 
   /**
@@ -213,13 +214,13 @@ describe('useConfirmFlow: терминальное открытие сессии
    * В отличие от 429 повторять нечего: снимок обязан стать мёртвым, иначе экран продолжил бы
    * просить код по токену, который сервер больше не примет.
    */
-  it('409 на открытии сессии: операция помечена мёртвой', async () => {
+  it('a 409 while opening the session marks the operation dead', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(
       new ApiProblemError({
         title: 'Conflict',
         status: 409,
-        detail: '2FA была отключена после создания операции',
+        detail: '2FA was disabled after the operation was created',
         instance: '',
         time: '',
       }),
@@ -234,7 +235,7 @@ describe('useConfirmFlow: терминальное открытие сессии
     });
 
     expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
-    expect(result.current.error).toBe('2FA была отключена после создания операции');
+    expect(result.current.error).toBe('2FA was disabled after the operation was created');
     // Повтор невозможен: экран увёл в тупик, а не в «Повторить».
     expect(result.current.awaitingFinish).toBe(false);
   });
@@ -244,13 +245,13 @@ describe('useConfirmFlow: терминальное открытие сессии
    * терминальные (токен не от входа/регистрации, привязка к realm'у снята, вкладка уже
    * авторизована). Разбирается заодно с 409, потому что у подтверждения кода 403 нет вовсе.
    */
-  it('403 на открытии сессии: операция помечена мёртвой, повтора не предлагаем', async () => {
+  it('a 403 while opening the session marks the operation dead and offers no retry', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(
       new ApiProblemError({
         title: 'Forbidden',
         status: 403,
-        detail: 'Доступ к контуру отозван',
+        detail: 'Access to the realm has been revoked',
         instance: '',
         time: '',
       }),
@@ -265,7 +266,7 @@ describe('useConfirmFlow: терминальное открытие сессии
     });
 
     expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
-    expect(result.current.error).toBe('Доступ к контуру отозван');
+    expect(result.current.error).toBe('Access to the realm has been revoked');
     expect(result.current.awaitingFinish).toBe(false);
   });
 
@@ -274,13 +275,13 @@ describe('useConfirmFlow: терминальное открытие сессии
    * после 429. Токен сервер больше не примет, поэтому «Повторить» предлагать нельзя: снимок
    * обязан стать мёртвым, как при 409, — иначе экран зовёт в кнопку, которая всегда откажет.
    */
-  it('400 OperationInvalid на повторе входа: снимок мёртв, «Повторить» пропадает', async () => {
+  it('400 OperationInvalid on a sign-in retry: the snapshot is dead and «Retry» disappears', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession)
       .mockRejectedValueOnce(rateLimited(30))
       .mockRejectedValueOnce(
         new ApiFieldError(
-          [{ code: 'OperationInvalid/token', detail: 'Токен операции неизвестен' }],
+          [{ code: 'OperationInvalid/token', detail: 'Unknown operation token' }],
           400,
         ),
       );
@@ -300,7 +301,7 @@ describe('useConfirmFlow: терминальное открытие сессии
 
     expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
     expect(result.current.awaitingFinish).toBe(false);
-    expect(result.current.error).toBe('Токен операции неизвестен');
+    expect(result.current.error).toBe('Unknown operation token');
   });
 
   /**
@@ -308,11 +309,11 @@ describe('useConfirmFlow: терминальное открытие сессии
    * позвали рано. Она цела, попытка по спеке не расходуется, а тело несёт operation_state — поэтому
    * снимок обязан вернуться к вводу секрета текущего звена, а не умереть.
    */
-  it('400 ConfirmCodeIsRequired на терминале: операция жива, снова просим секрет', async () => {
+  it('400 ConfirmCodeIsRequired at the terminal step: the operation is alive, we ask for the secret again', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     vi.mocked(openSession).mockRejectedValue(
       new ApiFieldError(
-        [{ code: 'ConfirmCodeIsRequired/secret', detail: 'Операция подтверждена не полностью' }],
+        [{ code: 'ConfirmCodeIsRequired/secret', detail: 'The operation is not fully confirmed' }],
         400,
         // Счётчик отличается от стартового (3), иначе проверка ниже прошла бы и без применения
         // состояния — а применить его хук обязан: снимок возвращается к вводу секрета.
@@ -330,7 +331,7 @@ describe('useConfirmFlow: терминальное открытие сессии
 
     expect(useOperationStore.getState().snapshot?.phase).toBe('active');
     expect(result.current.awaitingFinish).toBe(false);
-    expect(result.current.error).toBe('Операция подтверждена не полностью');
+    expect(result.current.error).toBe('The operation is not fully confirmed');
     // Счётчики взяты из тела отказа, а не оставлены прежними.
     expect(useOperationStore.getState().snapshot?.remainingAttempts).toBe(2);
   });
@@ -340,7 +341,7 @@ describe('useConfirmFlow: терминальное открытие сессии
    * позвали по операции, которую сервер подтверждённой не считает. Токен он больше не примет —
    * тупик, как и у прочих терминальных причин.
    */
-  it('400 OperationIsNotConfirmed от терминала: снимок мёртв', async () => {
+  it('400 OperationIsNotConfirmed from the terminal step: the snapshot is dead', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
     useOperationStore.getState().dispatch(activeOp);
     const { result } = renderHook(() =>
@@ -348,7 +349,7 @@ describe('useConfirmFlow: терминальное открытие сессии
         terminal: () =>
           Promise.reject(
             new ApiFieldError(
-              [{ code: 'OperationIsNotConfirmed/token', detail: 'Операция не подтверждена' }],
+              [{ code: 'OperationIsNotConfirmed/token', detail: 'The operation is not confirmed' }],
               400,
             ),
           ),
@@ -363,15 +364,15 @@ describe('useConfirmFlow: терминальное открытие сессии
 
     expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
     expect(result.current.awaitingFinish).toBe(false);
-    expect(result.current.error).toBe('Операция не подтверждена');
+    expect(result.current.error).toBe('The operation is not confirmed');
   });
 
-  it('409 на подтверждении кода: та же мёртвая операция', async () => {
+  it('a 409 on code confirmation: the same dead operation', async () => {
     vi.mocked(confirmOperation).mockRejectedValue(
       new ApiProblemError({
         title: 'Conflict',
         status: 409,
-        detail: 'Подтверждать больше нечего',
+        detail: 'There is nothing left to confirm',
         instance: '',
         time: '',
       }),
@@ -395,7 +396,7 @@ describe('useConfirmFlow: терминальное открытие сессии
  * `OperationAlreadyExpired`, `OperationAlreadyConfirmed`) приходят 400-кой БЕЗ `operation_state`:
  * счётчиков там нет, а деталь сервера объясняет отказ точнее любого нашего запасного текста.
  */
-describe('useConfirmFlow: отказ повторной отправки', () => {
+describe('useConfirmFlow: a failed resend', () => {
   async function resendFailsWith(e: unknown) {
     vi.mocked(resendOperation).mockRejectedValue(e);
     useOperationStore.getState().dispatch(activeOp);
@@ -408,64 +409,69 @@ describe('useConfirmFlow: отказ повторной отправки', () =>
     return result;
   }
 
-  it('400 без operation_state доносит деталь сервера, а не общий текст', async () => {
+  it('a 400 without operation_state carries the server detail, not the generic text', async () => {
     // Код подтверждённой операции слать повторно незачем, но сама она цела — по ней ещё открывают
     // сессию, поэтому снимок остаётся живым.
     const result = await resendFailsWith(
       new ApiFieldError(
-        [{ code: 'OperationAlreadyConfirmed/token', detail: 'Операция уже подтверждена' }],
+        [{ code: 'OperationAlreadyConfirmed/token', detail: 'The operation is already confirmed' }],
         400,
       ),
     );
 
-    expect(result.current.error).toBe('Операция уже подтверждена');
+    expect(result.current.error).toBe('The operation is already confirmed');
     // Счётчиков в теле не было — снимок трогать нечем.
     expect(useOperationStore.getState().snapshot?.remainingAttempts).toBe(3);
     expect(useOperationStore.getState().snapshot?.phase).toBe('active');
   });
 
-  it('операции больше нет → снимок мёртв, новый код просить не у чего', async () => {
+  it('the operation is gone: the snapshot is dead, there is nothing left to ask a new code from', async () => {
     const result = await resendFailsWith(
       new ApiFieldError(
-        [{ code: 'OperationAlreadyExpired/token', detail: 'Срок жизни операции истёк' }],
+        [{ code: 'OperationAlreadyExpired/token', detail: 'The operation has expired' }],
         400,
       ),
     );
 
     expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
-    expect(result.current.error).toBe('Срок жизни операции истёк');
+    expect(result.current.error).toBe('The operation has expired');
   });
 
-  it('ответ сервиса не по форме полей (5xx) — деталь сервера по общему правилу', async () => {
+  it('a service answer outside the field shape (5xx) carries the server detail by the general rule', async () => {
     const result = await resendFailsWith(
       new ApiProblemError({
         title: 'Internal Server Error',
         status: 500,
-        detail: 'Сервис временно недоступен',
+        detail: 'The service is temporarily unavailable',
         instance: '',
         time: '',
       }),
     );
 
-    expect(result.current.error).toBe('Сервис временно недоступен');
+    expect(result.current.error).toBe('The service is temporarily unavailable');
   });
 
-  it('не ответ сервиса (сеть) — текст про шаг, на котором сорвалось', async () => {
+  it('not a service answer (the network) gives the text about the step that broke', async () => {
     const result = await resendFailsWith(new Error('boom'));
 
-    expect(result.current.error).toBe('Не удалось отправить код повторно.');
+    expect(result.current.error).toBe(tr('auth.errors.resend'));
   });
 });
 
 /**
  * Запасные тексты ошибок берутся из переводов, а не из литералов в коде: иначе англоязычный
  * пользователь получал бы в одном и том же слоте то английский текст (429), то русский.
+ *
+ * Оба языка гоняются одним кейсом, а эталон берётся ключом. Сам по себе такой эталон вырождался
+ * бы в сравнение перевода с собой, поэтому рядом закреплено, что словари по этому ключу и правда
+ * расходятся: захардкоженная в коде строка совпала бы только с одним языком из двух.
  */
-describe('useConfirmFlow: запасные тексты ошибок переведены', () => {
-  it.each([
-    ['ru', 'Неверный код'],
-    ['en', 'Wrong code'],
-  ])('400 без detail на языке %s → %s', async (lng, expected) => {
+describe('useConfirmFlow: the fallback error texts are translated', () => {
+  const differsByLanguage = (key: string) =>
+    expect(i18next.getFixedT('ru')(key)).not.toBe(i18next.getFixedT('en')(key));
+
+  it.each(['ru', 'en'])('a 400 with no detail is translated (%s)', async (lng) => {
+    differsByLanguage('auth.errors.wrongCode');
     await i18next.changeLanguage(lng);
     vi.mocked(confirmOperation).mockRejectedValue(
       new ApiFieldError([{ code: 'ConfirmCodeIsIncorrect/secret', detail: '' }], 400),
@@ -479,13 +485,11 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
       await result.current.confirm('000000');
     });
 
-    expect(result.current.error).toBe(expected);
+    expect(result.current.error).toBe(tr('auth.errors.wrongCode'));
   });
 
-  it.each([
-    ['ru', 'Не удалось подтвердить код. Попробуйте ещё раз.'],
-    ['en', 'Could not confirm the code. Please try again.'],
-  ])('неизвестная ошибка на языке %s → %s', async (lng, expected) => {
+  it.each(['ru', 'en'])('an unknown error is translated (%s)', async (lng) => {
+    differsByLanguage('auth.errors.confirm');
     await i18next.changeLanguage(lng);
     vi.mocked(confirmOperation).mockRejectedValue(new Error('boom'));
     useOperationStore.getState().dispatch(activeOp);
@@ -497,14 +501,14 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
       await result.current.confirm('183947');
     });
 
-    expect(result.current.error).toBe(expected);
+    expect(result.current.error).toBe(tr('auth.errors.confirm'));
   });
 
   /**
    * Запасной текст называет ШАГ, на котором сорвалось. На открытии сессии кода не вводили вовсе:
    * «Неверный код» назвал бы неверным то, чего не было, и отправил бы искать ошибку в письме.
    */
-  describe('сорвалось открытие сессии — текст не про код', () => {
+  describe('the session opening broke: the text is not about the code', () => {
     /** 204 прошло, дальше падает openSession: тот же вызов confirm(), но шаг уже другой. */
     function failFinishWith(e: unknown) {
       vi.mocked(confirmOperation).mockResolvedValue(null);
@@ -515,10 +519,10 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
       );
     }
 
-    it.each([
-      ['ru', 'Не удалось завершить вход. Повторите попытку.'],
-      ['en', 'Could not complete sign-in. Please try again.'],
-    ])('400 без detail на языке %s → %s', async (lng, expected) => {
+    it.each(['ru', 'en'])('a 400 with no detail is translated (%s)', async (lng) => {
+      expect(i18next.getFixedT('ru')('auth.errors.finish')).not.toBe(
+        i18next.getFixedT('en')('auth.errors.finish'),
+      );
       await i18next.changeLanguage(lng);
       const { result } = failFinishWith(
         new ApiFieldError([{ code: 'ErrorCode', detail: '' }], 400),
@@ -528,23 +532,23 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
         await result.current.confirm('183947');
       });
 
-      expect(result.current.error).toBe(expected);
+      expect(result.current.error).toBe(tr('auth.errors.finish'));
     });
 
-    it('сеть на повторе входа — тоже про вход, а не про подтверждение кода', async () => {
+    it('a network failure on a sign-in retry is about the sign-in too, not about confirming the code', async () => {
       const { result } = failFinishWith(new Error('boom'));
 
       // Первый заход: 204 прошло, упало открытие сессии.
       await act(async () => {
         await result.current.confirm('183947');
       });
-      expect(result.current.error).toBe('Не удалось завершить вход. Повторите попытку.');
+      expect(result.current.error).toBe(tr('auth.errors.finish'));
 
       // Повтор с фазы `confirmed` — секрета нет вовсе, текст обязан остаться тем же.
       await act(async () => {
         await result.current.confirm('');
       });
-      expect(result.current.error).toBe('Не удалось завершить вход. Повторите попытку.');
+      expect(result.current.error).toBe(tr('auth.errors.finish'));
     });
 
     /**
@@ -552,7 +556,7 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
      * вход, и «не удалось завершить вход» отправило бы искать проблему совсем не там. Поэтому ключ
      * запасного текста задаёт вызывающий, а дефолт остаётся входовым.
      */
-    it('свой finishErrorKey подменяет текст про вход', async () => {
+    it('a custom finishErrorKey replaces the sign-in text', async () => {
       vi.mocked(confirmOperation).mockResolvedValue(null);
       vi.mocked(openSession).mockRejectedValue(new Error('boom'));
       useOperationStore.getState().dispatch(activeOp);
@@ -569,7 +573,7 @@ describe('useConfirmFlow: запасные тексты ошибок перев�
         await result.current.confirm('183947');
       });
 
-      expect(result.current.error).toBe('Повтор пока недоступен');
+      expect(result.current.error).toBe(tr('auth.errors.resendUnavailable'));
     });
   });
 });

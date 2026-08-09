@@ -50,7 +50,7 @@ function renderConfirmPage() {
 }
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   registerBaseComponents();
   registerModule(authModule, {
@@ -66,8 +66,8 @@ beforeEach(() => {
   useAuthStore.getState().setAnonymous();
 });
 
-describe('ConfirmPage — редирект при сбросе операции ведёт на исходный экран', () => {
-  it('origin=/signup: сброс снапшота (как при «Отменить») → /signup, а не /signin', () => {
+describe('ConfirmPage: on an operation reset the redirect goes to the screen the flow started from', () => {
+  it('origin=/signup: resetting the snapshot (as «revoke» does) goes to /signup, not /signin', () => {
     saveConfirmReturn('/signup');
     useOperationStore.getState().dispatch(activeOp);
     renderConfirmPage();
@@ -79,12 +79,12 @@ describe('ConfirmPage — редирект при сбросе операции 
     expect(screen.getByTestId('loc')).toHaveTextContent('/signup');
   });
 
-  it('без origin (прямой заход без операции) → /signin (дефолт)', () => {
+  it('with no origin (a direct visit without an operation): /signin, the default', () => {
     renderConfirmPage();
     expect(screen.getByTestId('loc')).toHaveTextContent('/signin');
   });
 
-  it('успех: сессия открыта (authenticated) + сброс снапшота → /profile, а не loadConfirmReturn', () => {
+  it('success: the session is open (authenticated) and the snapshot reset goes to /profile, not loadConfirmReturn', () => {
     // openSession на access-переходе выставляет status='authenticated' ДО reset() снапшота.
     saveConfirmReturn('/signup');
     useOperationStore.getState().dispatch(activeOp);

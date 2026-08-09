@@ -34,7 +34,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     vi.useRealTimers();
   });
 
-  it('успешный вход открывает сессию и отдаёт профиль', async () => {
+  it('a successful sign-in opens a session and returns the profile', async () => {
     const op = await signin('user@example.com');
     expect(op.token).toHaveLength(64);
     expect(op.confirm_method).toBe('EMAIL');
@@ -54,7 +54,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(user.status).toBe('ENABLED');
   });
 
-  it('неверный код → ApiFieldError с operation_state и уменьшенным счётчиком', async () => {
+  it('a wrong code gives an ApiFieldError with operation_state and a decremented counter', async () => {
     const op = await signin('user@example.com');
     await expect(confirmOperation({ token: op.token, secret: '000000' })).rejects.toSatisfy(
       (e: unknown) =>
@@ -69,7 +69,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
    * каждого ответа, и полное значение отматывало бы таймер назад на каждом неверном коде. Тогда
    * операция умирала бы, пока на экране ещё остаются минуты.
    */
-  it('операция не молодеет: 400 несёт остаток срока, а не полный', async () => {
+  it('the operation does not get younger: a 400 carries the remaining lifetime, not the full one', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const op = await signin('user@example.com');
     expect(op.expires_in).toBe(600);
@@ -90,7 +90,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     );
   });
 
-  it('регистрация создаёт операцию с confirm_method EMAIL и открывает сессию', async () => {
+  it('signup creates an operation with confirm_method EMAIL and opens a session', async () => {
     const op = await signup('newuser@example.com');
     expect(op.token).toHaveLength(64);
     expect(op.confirm_method).toBe('EMAIL');
@@ -106,24 +106,24 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(user.email).toBe('newuser@example.com');
   });
 
-  it('check-login: свободный email → true (204)', async () => {
+  it('check-login: a free email gives true (204)', async () => {
     await expect(checkLogin('brand-new@example.com')).resolves.toBe(true);
   });
 
-  it('check-login: занятый email → ApiFieldError (400) с деталью под поле', async () => {
+  it('check-login: a taken email gives an ApiFieldError (400) with a per-field detail', async () => {
     await expect(checkLogin('taken@example.com')).rejects.toSatisfy(
       (e: unknown) =>
         e instanceof ApiFieldError && e.fields[0]?.code === 'EmailAlreadyExists/user_login',
     );
   });
 
-  it('signup с активным локом регистрации → 429 с Retry-After (анти-спам троттл)', async () => {
+  it('signup while the registration lock is active gives a 429 with Retry-After (the anti-spam throttle)', async () => {
     await expect(signup('inprogress@example.com')).rejects.toSatisfy(
       (e: unknown) => e instanceof ApiRateLimitError && e.retryAfterSec === 600,
     );
   });
 
-  it('открытая сессия видна в /v1/sessions как текущая, closeUserSessions её убирает', async () => {
+  it('an opened session shows up in /v1/sessions as the current one, and closeUserSessions removes it', async () => {
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
     await openSession({ token: op.token });
@@ -143,7 +143,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(after.some((s) => s.is_current)).toBe(true);
   });
 
-  it('getUserInfo применяет язык профиля к интерфейсу — но не поверх выбора в шелле', async () => {
+  it('getUserInfo applies the profile language to the interface, but never over a choice made in the shell', async () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
@@ -161,7 +161,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(getLanguageSource()).toBe('local');
   });
 
-  it('сохранение настроек: профиль обгоняет токен, продление сессии их сводит', async () => {
+  it('saving settings: the profile runs ahead of the token, and a session refresh brings them together', async () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
@@ -200,7 +200,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     await changeUserSettings({ lang: 'ru-RU', tz: 'Europe/Moscow' });
   });
 
-  it('значения, которых нет у сервера, → 400 по своему полю', async () => {
+  it('values the server does not know give a 400 on their own field', async () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
@@ -224,7 +224,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(after.lang).toBe('ru-RU');
   });
 
-  it('«Авто» подбирает пояс по заголовку, незнакомое имя — по смещению', async () => {
+  it('«Auto» matches the zone by the header, and an unknown name by the offset', async () => {
     localStorage.clear();
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
@@ -237,7 +237,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(TIME_ZONES.some((z) => z.id === saved.tz)).toBe(true);
   });
 
-  it('resend возвращает новый WaitingConfirmOperation со сброшенными счётчиками', async () => {
+  it('resend returns a fresh WaitingConfirmOperation with the counters reset', async () => {
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '000000' }).catch(() => undefined);
     const resent = await resendOperation({ token: op.token });
@@ -245,7 +245,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(resent.remaining_resends).toBe(1);
   });
 
-  it('повторный выход: закрывать уже нечего, метод идемпотентен', async () => {
+  it('signing out twice: there is nothing left to close, the method is idempotent', async () => {
     const op = await signin('user@example.com');
     await confirmOperation({ token: op.token, secret: '183947' });
     await openSession({ token: op.token });

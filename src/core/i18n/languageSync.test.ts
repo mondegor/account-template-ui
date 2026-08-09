@@ -19,7 +19,7 @@ describe('adoptProfileLanguage', () => {
     vi.resetModules();
   });
 
-  it('кладёт в ui.lang код языка (ru), а не серверную локаль (ru-RU)', async () => {
+  it('stores the language code (ru) in ui.lang, not the server locale (ru-RU)', async () => {
     const { adoptProfileLanguage, getLanguage, i18next } = await load();
     adoptProfileLanguage('ru-RU');
 
@@ -30,7 +30,7 @@ describe('adoptProfileLanguage', () => {
     expect(i18next.language).toBe('ru');
   });
 
-  it('значение переживает перезагрузку модуля (persist, а не только память)', async () => {
+  it('the value survives a module reload (persisted, not just in memory)', async () => {
     const { adoptProfileLanguage } = await load();
     adoptProfileLanguage('en-US');
     vi.resetModules();
@@ -40,7 +40,7 @@ describe('adoptProfileLanguage', () => {
     expect(getLanguageSource()).toBe('profile');
   });
 
-  it('при локальном выборе в навигации — no-op: локальный выбор побеждает', async () => {
+  it('a no-op when the shell holds a local choice: the local choice wins', async () => {
     const { adoptProfileLanguage, setLanguage, getLanguage, getLanguageSource, i18next } =
       await load();
     setLanguage('en');
@@ -53,7 +53,7 @@ describe('adoptProfileLanguage', () => {
     expect(i18next.language).toBe('en');
   });
 
-  it('незнакомая локаль бэка — no-op, интерфейс не трогаем', async () => {
+  it('an unknown server locale is a no-op: the interface is left alone', async () => {
     const { adoptProfileLanguage, getLanguageSource, i18next } = await load();
     const before = i18next.language;
 

@@ -13,31 +13,31 @@ beforeEach(() => {
 });
 
 describe('securityFlow', () => {
-  it('без записи — null (операция принадлежит входу, а не security-потоку)', () => {
+  it('with no record it is null: the operation belongs to the sign-in, not to a security flow', () => {
     expect(loadSecurityFlow()).toBeNull();
   });
 
-  it('сохранённая запись читается целиком, вместе с токеном', () => {
+  it('a stored record is read in full, token included', () => {
     saveSecurityFlow({ kind: 'totp', token: 't'.repeat(64) });
 
     expect(loadSecurityFlow()).toEqual({ kind: 'totp', token: 't'.repeat(64) });
   });
 
-  it('токен необязателен: до подтверждения хватает вида потока', () => {
+  it('the token is optional: before confirmation the flow kind is enough', () => {
     saveSecurityFlow({ kind: 'disable2fa' });
 
     expect(loadSecurityFlow()).toEqual({ kind: 'disable2fa' });
   });
 
-  it('очистка снимает признак потока', () => {
+  it('clearing removes the flow marker', () => {
     saveSecurityFlow({ kind: 'password' });
     clearSecurityFlow();
 
     expect(loadSecurityFlow()).toBeNull();
   });
 
-  it('испорченное хранилище не роняет чтение и не остаётся мусором', () => {
-    sessionStorage.setItem('auth:securityFlow', '{не json');
+  it('corrupted storage neither breaks the read nor leaves garbage behind', () => {
+    sessionStorage.setItem('auth:securityFlow', '{not json');
 
     expect(loadSecurityFlow()).toBeNull();
     expect(sessionStorage.getItem('auth:securityFlow')).toBeNull();
@@ -47,7 +47,7 @@ describe('securityFlow', () => {
    * Разобравшаяся, но чужая запись опаснее битой: по `kind` выбирается терминальное действие, и
    * неизвестный вид увёл бы на экран подтверждения, закрывать который нечем.
    */
-  it('неизвестный вид потока записью не считается', () => {
+  it('an unknown flow kind does not count as a record', () => {
     sessionStorage.setItem('auth:securityFlow', JSON.stringify({ kind: 'wire-transfer' }));
 
     expect(loadSecurityFlow()).toBeNull();

@@ -39,7 +39,7 @@ function Harness() {
 }
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   const i18n = initI18n();
   for (const [lng, res] of Object.entries(authTranslations)) {
     i18n.addResourceBundle(lng, 'translation', res, true, true);
@@ -49,8 +49,8 @@ beforeAll(() => {
 // Кэш исходов — общий на сессию; между тестами чистим, чтобы каждый прогонял реальный async-путь.
 beforeEach(resetEmailAvailabilityCache);
 
-describe('EmailFieldNode (живая проверка доступности)', () => {
-  it('валидный свободный email → «Email свободен»', async () => {
+describe('EmailFieldNode (live availability check)', () => {
+  it('a valid, free email shows the «email is free» hint', async () => {
     vi.mocked(checkLogin).mockResolvedValueOnce(true);
     render(<Harness />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
@@ -60,10 +60,10 @@ describe('EmailFieldNode (живая проверка доступности)', 
     expect(checkLogin).toHaveBeenCalledWith('user@example.com');
   });
 
-  it('занятый email (ApiFieldError) → текст ошибки под полем', async () => {
+  it('a taken email (ApiFieldError) puts the error text under the field', async () => {
     vi.mocked(checkLogin).mockRejectedValueOnce(
       new ApiFieldError(
-        [{ code: 'EmailAlreadyExists/user_login', detail: 'Этот email уже зарегистрирован' }],
+        [{ code: 'EmailAlreadyExists/user_login', detail: 'This email is already registered' }],
         400,
       ),
     );
@@ -74,7 +74,7 @@ describe('EmailFieldNode (живая проверка доступности)', 
     ).toBeInTheDocument();
   });
 
-  it('форменная ошибка гасит зелёное; правка поля убирает алерт и возвращает зелёное', async () => {
+  it('a form-wide error clears the green hint; editing the field drops the alert and brings it back', async () => {
     vi.mocked(checkLogin).mockResolvedValue(true);
     render(<Harness />);
     const input = screen.getByRole('textbox');
@@ -92,7 +92,7 @@ describe('EmailFieldNode (живая проверка доступности)', 
     ).toBeInTheDocument();
   });
 
-  it('под StrictMode свежая проверка резолвится (mount→unmount→remount не глушит результат)', async () => {
+  it('under StrictMode a fresh check still resolves (mount→unmount→remount does not swallow it)', async () => {
     vi.mocked(checkLogin).mockResolvedValueOnce(true);
     render(
       <StrictMode>
@@ -105,7 +105,7 @@ describe('EmailFieldNode (живая проверка доступности)', 
     ).toBeInTheDocument();
   });
 
-  it('невалидный формат → check-login не дёргаем', async () => {
+  it('an invalid format does not reach check-login', async () => {
     vi.mocked(checkLogin).mockClear();
     render(<Harness />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'not-an-email' } });

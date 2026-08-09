@@ -6,12 +6,12 @@ import { DEFAULT_LANGUAGE, LANGUAGES, findLanguage, fromApiLocale, toLocale } fr
  * поэтому инварианты файлов закреплены здесь.
  */
 
-describe('справочник языков', () => {
-  it('default есть в списке — на него опирается DEFAULT_LANGUAGE', () => {
+describe('language registry', () => {
+  it('the default is in the list: DEFAULT_LANGUAGE leans on it', () => {
     expect(LANGUAGES.some((l) => l.code === DEFAULT_LANGUAGE.code)).toBe(true);
   });
 
-  it('коды уникальны, локали заполнены', () => {
+  it('codes are unique, locales are filled in', () => {
     const codes = LANGUAGES.map((l) => l.code);
     expect(new Set(codes).size).toBe(codes.length);
     for (const lang of LANGUAGES) {
@@ -21,7 +21,7 @@ describe('справочник языков', () => {
     }
   });
 
-  it('findLanguage понимает код, локаль и диалект; чужой язык — не знает', () => {
+  it('findLanguage understands a code, a locale and a dialect; an unknown language it does not', () => {
     expect(findLanguage('ru')?.code).toBe('ru');
     expect(findLanguage('ru-RU')?.code).toBe('ru');
     expect(findLanguage('ru-BY')?.code).toBe('ru');
@@ -30,14 +30,14 @@ describe('справочник языков', () => {
     expect(findLanguage(undefined)).toBeUndefined();
   });
 
-  it('toLocale даёт локаль, незнакомый язык — локаль по умолчанию', () => {
+  it('toLocale returns a locale; an unknown language falls back to the default one', () => {
     expect(toLocale('en')).toBe('en-US');
     expect(toLocale('ru')).toBe('ru-RU');
     expect(toLocale('de-DE')).toBe(DEFAULT_LANGUAGE.locale);
     expect(toLocale(undefined)).toBe(DEFAULT_LANGUAGE.locale);
   });
 
-  it('fromApiLocale сводит локаль бэка к коду, незнакомую — к undefined', () => {
+  it('fromApiLocale maps a server locale to a code, an unknown one to undefined', () => {
     expect(fromApiLocale('ru-RU')).toBe('ru');
     expect(fromApiLocale('en-US')).toBe('en');
     expect(fromApiLocale('de-DE')).toBeUndefined();

@@ -55,14 +55,14 @@ const flowTranslations = {
 };
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   addTranslations(authTranslations);
   addTranslations(flowTranslations);
 });
 
-describe('OperationConfirm — текст тупика', () => {
-  it('без пропа берёт общий текст экрана подтверждения', () => {
+describe('OperationConfirm: the dead-end text', () => {
+  it('with no prop it takes the shared confirmation-screen text', () => {
     render(<OperationConfirm flow={flow} />);
 
     expect(screen.getByText(tr('auth.confirm.deadEnd'))).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('OperationConfirm — текст тупика', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('проп подменяет его текстом потока', () => {
+  it('the prop replaces it with the flow text', () => {
     render(<OperationConfirm flow={flow} deadEndText={DEAD_END} />);
 
     expect(screen.getByText(DEAD_END)).toBeInTheDocument();
@@ -85,16 +85,16 @@ describe('OperationConfirm — текст тупика', () => {
  * потоках объясняется по-разному, поэтому префикс ключа задаёт вызывающий, а метод к нему
  * добавляет сам экран.
  */
-describe('OperationConfirm — подсказка над полем', () => {
+describe('OperationConfirm: the hint above the field', () => {
   const active: ConfirmFlow = { ...flow, snapshot: { ...snapshot, phase: 'active' } };
 
-  it('без пропа берёт ключи экрана подтверждения', () => {
+  it('with no prop it takes the confirmation-screen keys', () => {
     render(<OperationConfirm flow={active} />);
 
     expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
   });
 
-  it('свой префикс даёт свой текст на том же методе', () => {
+  it('an own prefix gives an own text for the same method', () => {
     render(<OperationConfirm flow={active} hintPrefix="auth.test.hint" />);
 
     expect(screen.getByText(PASSWORD_HINT)).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('OperationConfirm — подсказка над полем', () => {
    * Ключа под чужим префиксом может не оказаться — на экран должен уехать текст, а не сам ключ.
    * Падаем на подсказку экрана подтверждения: метод тот же, объяснение остаётся осмысленным.
    */
-  it('нет ключа под своим префиксом — берётся подсказка экрана, а не сырой ключ', () => {
+  it('no key under the own prefix: the screen hint is used, not the raw key', () => {
     render(<OperationConfirm flow={active} hintPrefix="auth.test.missing" />);
 
     expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
@@ -117,8 +117,8 @@ describe('OperationConfirm — подсказка над полем', () => {
  * Формулировки про вход в общий экран не зашиты: у security-потоков терминал — не вход, и «войти
  * не удалось» / «начните вход заново» отправили бы искать проблему совсем не там.
  */
-describe('OperationConfirm — тексты терминала', () => {
-  it('проп подменяет подсказку ожидания терминала', () => {
+describe('OperationConfirm: the terminal texts', () => {
+  it('the prop replaces the terminal-waiting hint', () => {
     const finishing: ConfirmFlow = {
       ...flow,
       snapshot: { ...snapshot, phase: 'confirmed' },
@@ -130,7 +130,7 @@ describe('OperationConfirm — тексты терминала', () => {
     expect(screen.queryByText(tr('auth.confirm.awaitingFinish'))).not.toBeInTheDocument();
   });
 
-  it('проп подменяет запасной текст аннулированной операции', () => {
+  it('the prop replaces the fallback text of an invalidated operation', () => {
     const invalidated: ConfirmFlow = { ...flow, snapshot: { ...snapshot, phase: 'dead' } };
     render(<OperationConfirm flow={invalidated} invalidatedText={DEAD_END} />);
 
@@ -138,7 +138,7 @@ describe('OperationConfirm — тексты терминала', () => {
   });
 
   /** Причина от сервера точнее любого запасного текста, поэтому проп ей не мешает. */
-  it('причина от сервера сильнее пропа', () => {
+  it('the server reason outweighs the prop', () => {
     const invalidated: ConfirmFlow = {
       ...flow,
       snapshot: { ...snapshot, phase: 'dead' },

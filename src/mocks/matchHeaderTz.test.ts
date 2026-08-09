@@ -18,7 +18,7 @@ const JAN = new Date('2026-01-15T12:00:00Z');
 const JUL = new Date('2026-07-15T12:00:00Z');
 
 describe('matchHeaderTz', () => {
-  it('знакомое имя берётся как есть, без подбора', () => {
+  it('a known name is taken as is, without matching', () => {
     expect(matchHeaderTz(buildTimeZoneHeader('Europe/Istanbul', JUL))).toBe('Europe/Istanbul');
   });
 
@@ -29,13 +29,13 @@ describe('matchHeaderTz', () => {
     // Зона с переходом — летом: dst=1 отсекает варианты без перехода.
     ['Europe/Vienna', JUL],
     ['America/Edmonton', JUL],
-  ])('%s: подобранная зона ведёт себя так же', (zone, at) => {
+  ])('%s: the matched zone behaves the same way', (zone, at) => {
     const picked = matchHeaderTz(buildTimeZoneHeader(zone, at))!;
-    expect(picked, 'ничего не подобралось').toBeTruthy();
+    expect(picked, 'nothing matched').toBeTruthy();
     expect(sameZoneBehaviour(zone, picked), `${zone} → ${picked}`).toBe(true);
   });
 
-  it('зимой зона с переходом неотличима от зоны без перехода — предел метода, не дефект', () => {
+  it('in winter a DST zone is indistinguishable from a non-DST one: a limit of the method, not a defect', () => {
     // Вена в январе шлёт (+01:00, dst=0) — ровно то же, что зона вообще без перехода. В заголовке
     // один замер, у бэка данных столько же, и он ведёт себя так же. Летом (кейс выше) подбор точен.
     const picked = matchHeaderTz(buildTimeZoneHeader('Europe/Vienna', JAN))!;
@@ -43,17 +43,17 @@ describe('matchHeaderTz', () => {
     expect(sameZoneBehaviour('Europe/Vienna', picked)).toBe(false);
   });
 
-  it('UTC забирает (+00:00, dst=0) — он регистрируется после всего списка, как у бэка', () => {
+  it('UTC takes (+00:00, dst=0): it is registered after the whole list, as on the server side', () => {
     expect(matchHeaderTz('Foo/Bar;offset=+00:00;dst=0')).toBe('UTC');
   });
 
-  it('без dst смещение не принимается — иначе подбор дал бы зону наугад', () => {
+  it('an offset without dst is not accepted: matching would otherwise pick a zone at random', () => {
     // То же правило в ParseAcceptTimeZone: смещение годно, только когда годны ОБА параметра.
     expect(matchHeaderTz('Foo/Bar;offset=+03:00')).toBeUndefined();
     expect(matchHeaderTz('Foo/Bar;dst=1')).toBeUndefined();
   });
 
-  it('мусор в заголовке — не подбираем ничего', () => {
+  it('garbage in the header matches nothing', () => {
     expect(matchHeaderTz('Foo/Bar;offset=abc;dst=0')).toBeUndefined();
     expect(matchHeaderTz(null)).toBeUndefined();
   });

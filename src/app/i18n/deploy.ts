@@ -16,7 +16,7 @@ export const deployTranslations = {
       },
       userKind: {
         standard: 'Стандартный',
-        staff: 'Сотрудник',
+        employee: 'Сотрудник',
       },
     },
   },
@@ -24,11 +24,11 @@ export const deployTranslations = {
     deploy: {
       realmLabel: {
         'print-shop/standard': 'Client',
-        'print-shop/admin': 'Staff',
+        'print-shop/admin': 'Admin area',
       },
       userKind: {
         standard: 'Standard',
-        staff: 'Staff',
+        employee: 'Employee',
       },
     },
   },

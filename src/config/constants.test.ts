@@ -19,7 +19,7 @@ const spec = readFileSync(resolve(__dirname, '../../contracts/auth/openapi.yaml'
 function schemaBlock(name: string): string {
   const lines = spec.split('\n');
   const start = lines.findIndex((l) => l === `    ${name}:`);
-  expect(start, `схема ${name} не найдена в openapi.yaml`).toBeGreaterThan(-1);
+  expect(start, `schema ${name} not found in openapi.yaml`).toBeGreaterThan(-1);
   let end = start + 1;
   while (end < lines.length && (lines[end]!.startsWith('      ') || lines[end]!.trim() === '')) {
     end += 1;
@@ -36,7 +36,7 @@ function hasMinMax(block: string, field: string, min: number, max: number): bool
   return re.test(block);
 }
 
-describe('ограничения полей соответствуют openapi', () => {
+describe('field limits match the openapi contract', () => {
   it('user_login 7/64 (AuthorizeUser)', () => {
     expect(limits.userLogin).toEqual({ min: 7, max: 64 });
     expect(hasMinMax(schemaBlock('Auth.Request.Model.AuthorizeUser'), 'user_login', 7, 64)).toBe(
@@ -44,7 +44,7 @@ describe('ограничения полей соответствуют openapi',
     );
   });
 
-  it('secret/код 4/32 (ConfirmOperation)', () => {
+  it('secret/code 4/32 (ConfirmOperation)', () => {
     expect(limits.secret).toEqual({ min: 4, max: 32 });
     expect(
       hasMinMax(schemaBlock('Auth.Operation.Request.Model.ConfirmOperation'), 'secret', 4, 32),

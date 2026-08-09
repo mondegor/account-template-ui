@@ -83,26 +83,26 @@ function setupPassword(handler: HandlerEntry) {
 }
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
 });
 
-describe('FormRenderer (zod из validation + маппинг ошибок)', () => {
-  it('пустое обязательное поле → кнопка отключена, ошибки required нет', () => {
+describe('FormRenderer (zod built from validation, plus error mapping)', () => {
+  it('an empty required field disables the button and shows no required error', () => {
     setup();
     expect(screen.getByTestId('ui-button')).toBeDisabled();
     fireEvent.click(screen.getByTestId('ui-button'));
     expect(screen.queryByText(tr('common.validation.required'))).not.toBeInTheDocument();
   });
 
-  it('заполненное поле активирует кнопку отправки', () => {
+  it('a filled field enables the submit button', () => {
     setup();
     expect(screen.getByTestId('ui-button')).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     expect(screen.getByTestId('ui-button')).not.toBeDisabled();
   });
 
-  it('до сабмита ошибок нет: фокус/blur/ввод не подсвечивают поле', async () => {
+  it('no errors before submit: focus, blur and typing do not highlight the field', async () => {
     setup();
     const input = screen.getByRole('textbox');
     // Автофокус + уход с пустого поля — не должно быть «required».
@@ -117,14 +117,14 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     expect(await screen.findByText(tr('common.validation.email'))).toBeInTheDocument();
   });
 
-  it('невалидный email → ошибка формата', async () => {
+  it('an invalid email gives a format error', async () => {
     setup();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'not-an-email-x' } });
     fireEvent.click(screen.getByTestId('ui-button'));
     expect(await screen.findByText(tr('common.validation.email'))).toBeInTheDocument();
   });
 
-  it('показанная ошибка держится при фокусе, гаснет при вводе/стирании', async () => {
+  it('a shown error survives focus and clears on typing or deleting', async () => {
     setup();
     const input = screen.getByRole('textbox');
     // Непустое невалидное значение → кнопка активна, сабмит показывает формат-ошибку.
@@ -139,7 +139,7 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     expect(screen.queryByText(tr('common.validation.email'))).not.toBeInTheDocument();
   });
 
-  it('ApiFieldError с известным полем → setError под поле', async () => {
+  it('ApiFieldError with a known field lands on that field via setError', async () => {
     setup({
       handler: async () => {
         throw new ApiFieldError(
@@ -153,18 +153,18 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     expect(await screen.findByText(EMAIL_TAKEN_DETAIL)).toBeInTheDocument();
   });
 
-  it('ApiFieldError без суффикса (отказ по существу) → форменный алерт, а не тишина', async () => {
+  it('ApiFieldError without a suffix (a refusal on the merits) gives a form-wide alert, not silence', async () => {
     setup({
       handler: async () => {
-        throw new ApiFieldError([{ code: 'ErrorCode', detail: 'Отказано по существу' }], 400);
+        throw new ApiFieldError([{ code: 'ErrorCode', detail: 'Refused on the merits' }], 400);
       },
     });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Отказано по существу');
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Refused on the merits');
   });
 
-  it('ApiFieldError без суффикса и с пустым detail → перевод, а не пустой алерт', async () => {
+  it('ApiFieldError without a suffix and with an empty detail falls back to a translation, not an empty alert', async () => {
     // Сервер обязан прислать detail, но если он пуст — молчать нельзя: кнопка просто перестала бы
     // крутиться, ничего не объяснив.
     setup({
@@ -174,30 +174,28 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByTestId('ui-alert')).toHaveTextContent(
-      'Что-то пошло не так. Попробуйте позже.',
-    );
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent(tr('common.error.generic'));
   });
 
-  it('ApiFieldError с суффиксом чужого поля → форменный алерт: под что класть, нечего', async () => {
+  it('ApiFieldError with a suffix of a foreign field gives a form-wide alert: there is no field to put it under', async () => {
     setup({
       handler: async () => {
-        throw new ApiFieldError([{ code: 'ValidateError/realm', detail: 'Realm не найден' }], 400);
+        throw new ApiFieldError([{ code: 'ValidateError/realm', detail: 'Realm not found' }], 400);
       },
     });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Realm не найден');
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Realm not found');
   });
 
-  it('ApiRateLimitError (429) → форменный алерт с деталью сервера', async () => {
+  it('ApiRateLimitError (429) gives a form-wide alert carrying the server detail', async () => {
     setup({
       handler: async () => {
         throw new ApiRateLimitError(
           {
             title: 'Too Many Requests',
             status: 429,
-            detail: 'Заявка уже обрабатывается',
+            detail: 'The request is already being processed',
             instance: '',
             time: '',
           },
@@ -207,16 +205,18 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Заявка уже обрабатывается');
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent(
+      'The request is already being processed',
+    );
   });
 
-  it('ApiProblemError → форменный алерт (глобальное уведомление)', async () => {
+  it('ApiProblemError gives a form-wide alert (a global notification)', async () => {
     setup({
       handler: async () => {
         throw new ApiProblemError({
           title: 'Forbidden',
           status: 403,
-          detail: 'Нет доступа',
+          detail: 'No access',
           instance: '',
           time: '',
         });
@@ -224,10 +224,10 @@ describe('FormRenderer (zod из validation + маппинг ошибок)', () 
     });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
     fireEvent.click(screen.getByTestId('ui-button'));
-    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('Нет доступа');
+    expect(await screen.findByTestId('ui-alert')).toHaveTextContent('No access');
   });
 
-  it('регресс: ApiFieldError на password-поле держится, значение поля очищается', async () => {
+  it('an ApiFieldError on a password field survives while the field value is cleared', async () => {
     const { container } = setupPassword({
       handler: async () => {
         throw new ApiFieldError(

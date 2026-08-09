@@ -33,7 +33,7 @@ function deleteHandler(calls: (string | null)[], validAccess = 'fresh') {
 }
 
 describe('applyAccess', () => {
-  it('снимает оверрайд настроек: новый токен несёт язык и пояс сам', () => {
+  it('drops the settings override: the new token carries the language and time zone itself', () => {
     setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
 
     applyAccess({ access_token: 'fresh', expires_in: 1800 });
@@ -44,7 +44,7 @@ describe('applyAccess', () => {
 });
 
 describe('forceLogout', () => {
-  it('забывает язык профиля — иначе письмо следующему уйдёт на языке ушедшего', () => {
+  it("forgets the profile language: otherwise the next user's email goes out in the language of the one who left", () => {
     setProfileLanguage('en');
 
     forceLogout();
@@ -52,7 +52,7 @@ describe('forceLogout', () => {
     expect(getLanguageSource()).toBe('auto');
   });
 
-  it('снимает оверрайд настроек: окно рассинхрона принадлежит ушедшей сессии', () => {
+  it('drops the settings override: the drift window belongs to the session that ended', () => {
     setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
 
     forceLogout();
@@ -60,7 +60,7 @@ describe('forceLogout', () => {
     expect(getSettingsOverride()).toEqual({ lang: null, tz: null });
   });
 
-  it('выбор языка в шелле выход переживает: он про устройство, а не про пользователя', () => {
+  it('the shell language choice survives sign-out: it is about the device, not the user', () => {
     setLanguage('en');
 
     forceLogout();
@@ -77,7 +77,7 @@ describe('forceLogout', () => {
  * не говорят ничего: серверная сессия жива, и ронять из-за них вкладку нельзя — продление идёт
  * фоном, по таймеру, так что пользователь потерял бы страницу на ровном месте.
  */
-describe('продление сессии: разбор отказа', () => {
+describe('session refresh: how a failure is read', () => {
   /** Отказ `PATCH /v1/session`; тела с кодом ошибки не-400 ответы не несут. */
   function patchFails(status: number, calls: string[]) {
     return http.patch(`${BASE}/v1/session`, () => {
@@ -106,7 +106,7 @@ describe('продление сессии: разбор отказа', () => {
     vi.useRealTimers();
   });
 
-  it('401 → разлогин сразу, без повторов', async () => {
+  it('401: sign out at once, no retries', async () => {
     const calls: string[] = [];
     vi.useFakeTimers({ shouldAdvanceTime: true });
     server.use(patchFails(401, calls));
@@ -118,7 +118,7 @@ describe('продление сессии: разбор отказа', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('5xx → сессию не роняем, повторяем позже и доводим до успеха', async () => {
+  it('5xx: we keep the session, retry later and see it through', async () => {
     const calls: string[] = [];
     let broken = true;
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -152,7 +152,7 @@ describe('продление сессии: разбор отказа', () => {
     expect(useAuthStore.getState().accessToken).toBe('fresh');
   });
 
-  it('сеть недоступна — тоже транзиентный отказ, а не разлогин', async () => {
+  it('no network is a transient failure too, not a sign-out', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     server.use(http.patch(`${BASE}/v1/session`, () => HttpResponse.error()));
 
@@ -160,7 +160,7 @@ describe('продление сессии: разбор отказа', () => {
     expect(useAuthStore.getState().status).toBe('authenticated');
   });
 
-  it('цикл обрывается, когда refresh протух, пока сервер лежал', async () => {
+  it('the loop stops once the refresh token expires while the server was down', async () => {
     const calls: string[] = [];
     let status = 503;
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -189,7 +189,7 @@ describe('продление сессии: разбор отказа', () => {
    * нужен и вреден: восстанавливать нечего, а поздний успех залогинил бы гостя, который уже стоит
    * на /signin и, возможно, набирает чужой логин.
    */
-  it('стартовая проба без access цикл повторов не заводит', async () => {
+  it('the initial probe without an access token does not start the retry loop', async () => {
     const calls: string[] = [];
     useAuthStore.setState({ status: 'unknown', accessToken: null, expiresAt: null });
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -201,7 +201,7 @@ describe('продление сессии: разбор отказа', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('успешное продление сбрасывает счётчик пауз', async () => {
+  it('a successful refresh resets the backoff counter', async () => {
     const calls: string[] = [];
     vi.useFakeTimers({ shouldAdvanceTime: true });
     server.use(patchRenews(calls));
@@ -217,8 +217,8 @@ describe('продление сессии: разбор отказа', () => {
    * Их результат осел у вызывающего (react-query, retry выключен) как ошибка и сам не переиграется,
    * поэтому о возвращении сессии нужно сказать наружу. Штатное продление молчит: там терять нечего.
    */
-  describe('оповещение о восстановлении', () => {
-    it('успех ПОСЛЕ цикла повторов оповещает ровно один раз', async () => {
+  describe('recovery notification', () => {
+    it('success AFTER a retry loop notifies exactly once', async () => {
       let broken = true;
       const recovered = vi.fn();
       const off = onSessionRecovered(recovered);
@@ -246,7 +246,7 @@ describe('продление сессии: разбор отказа', () => {
       off();
     });
 
-    it('продление с первой попытки никого не будит', async () => {
+    it('a first-try refresh wakes nobody', async () => {
       const recovered = vi.fn();
       const off = onSessionRecovered(recovered);
       vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -265,7 +265,7 @@ describe('logout', () => {
     useAuthStore.setState({ status: 'authenticated', accessToken: 'stale', expiresAt: null });
   });
 
-  it('401 на DELETE → продление и повтор: серверная сессия не переживает выход', async () => {
+  it('401 on DELETE: refresh and retry, the server-side session must not outlive the sign-out', async () => {
     const deletes: (string | null)[] = [];
     const patches: string[] = [];
     server.use(
@@ -284,7 +284,7 @@ describe('logout', () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
-  it('живой access → один DELETE, без лишнего продления', async () => {
+  it('a live access token: a single DELETE, no extra refresh', async () => {
     const deletes: (string | null)[] = [];
     const patches: string[] = [];
     server.use(
@@ -302,7 +302,7 @@ describe('logout', () => {
     expect(useAuthStore.getState().status).toBe('anonymous');
   });
 
-  it('продлить не удалось → повторного DELETE нет, но вкладка всё равно анонимна', async () => {
+  it('refresh failed: no second DELETE, but the tab still becomes anonymous', async () => {
     const deletes: (string | null)[] = [];
     server.use(
       // Продление отказывает по 401: refresh токен неизвестен, истёк или уже использован. Тела с
@@ -322,7 +322,7 @@ describe('logout', () => {
     expect(useAuthStore.getState().status).toBe('anonymous');
   });
 
-  it('401 в параллельном запросе во время выхода не продлевает сессию', async () => {
+  it('a 401 from a parallel request during sign-out does not refresh the session', async () => {
     const patches: string[] = [];
     server.use(
       http.patch(`${BASE}/v1/session`, () => {
@@ -354,7 +354,7 @@ describe('logout', () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
-  it('сервер недоступен → клиентскую очистку всё равно доводим до конца', async () => {
+  it('the server is unreachable: the client-side cleanup is still carried through', async () => {
     server.use(http.delete(`${BASE}/v1/session`, () => HttpResponse.error()));
 
     await logout();

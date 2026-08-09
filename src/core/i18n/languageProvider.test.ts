@@ -10,32 +10,32 @@ describe('languageProvider', () => {
     vi.resetModules();
   });
 
-  it('setLanguage персистит выбор, getLanguage его возвращает', async () => {
+  it('setLanguage persists the choice, getLanguage returns it', async () => {
     const { setLanguage, getLanguage } = await import('./languageProvider');
     setLanguage('en');
     expect(getLanguage()).toBe('en');
     expect(localStorage.getItem('ui.lang')).toBe('en');
   });
 
-  it('getLanguage читает сохранённый язык из localStorage (после reload)', async () => {
+  it('getLanguage reads the stored language from localStorage (after a reload)', async () => {
     localStorage.setItem('ui.lang', 'en');
     const { getLanguage } = await import('./languageProvider');
     expect(getLanguage()).toBe('en');
   });
 
-  it('битый/неподдерживаемый ui.lang игнорируется → язык браузера', async () => {
+  it('a broken or unsupported ui.lang is ignored: the browser language wins', async () => {
     localStorage.setItem('ui.lang', 'de');
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('ru-RU');
     const { getLanguage } = await import('./languageProvider');
     expect(getLanguage()).toBe('ru-RU');
   });
 
-  it('без выбора источник auto — язык берётся из браузера', async () => {
+  it('with no choice the source is auto: the language comes from the browser', async () => {
     const { getLanguageSource } = await import('./languageProvider');
     expect(getLanguageSource()).toBe('auto');
   });
 
-  it('выбор в шелле даёт источник local, язык профиля — profile', async () => {
+  it('a choice in the shell gives the local source, the profile language gives profile', async () => {
     const { setLanguage, setProfileLanguage, getLanguageSource } =
       await import('./languageProvider');
     setLanguage('en');
@@ -44,7 +44,7 @@ describe('languageProvider', () => {
     expect(getLanguageSource()).toBe('profile');
   });
 
-  it('источник переживает reload вместе со значением', async () => {
+  it('the source survives a reload together with the value', async () => {
     const first = await import('./languageProvider');
     first.setProfileLanguage('en');
     vi.resetModules();
@@ -54,7 +54,7 @@ describe('languageProvider', () => {
     expect(second.getLanguageSource()).toBe('profile');
   });
 
-  it('значение без источника (запись старой версии) считается выбором пользователя', async () => {
+  it("a value without a source (a record from an older version) counts as the user's choice", async () => {
     localStorage.setItem('ui.lang', 'en');
     const { getLanguageSource } = await import('./languageProvider');
     expect(getLanguageSource()).toBe('local');

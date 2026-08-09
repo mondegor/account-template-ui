@@ -2,7 +2,14 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { addTranslations, formatDateTimeLong, i18next, initI18n, setLanguage } from '@core/i18n';
+import {
+  addTranslations,
+  formatDateTimeLong,
+  i18next,
+  initI18n,
+  setLanguage,
+  toLocale,
+} from '@core/i18n';
 import { deployTranslations } from '@app';
 import { registerBaseComponents } from '@core/renderer';
 import { registerModule, resetRegistry } from '@core/module-registry';
@@ -51,7 +58,7 @@ vi.mock('../api/authApi', () => ({
 }));
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   // Подписи кабинетов живут в deploy-слое (в проде их ставит registerAllModules).
   addTranslations(deployTranslations);
@@ -93,8 +100,8 @@ async function withRealms(realms: unknown[]) {
 // AppShell есть своя одноимённая ссылка на /sessions, и глобальный поиск по роли захватил бы обе.
 
 describe('ProfilePage (i18n)', () => {
-  it('ru: подписи из auth.profile.*', async () => {
-    await i18next.changeLanguage('ru');
+  it('the labels come from auth.profile.*', async () => {
+    await i18next.changeLanguage('en');
     renderProfile();
     expect(await screen.findByText(tr('auth.profile.personalInfo'))).toBeInTheDocument();
     expect(screen.getByText(tr('auth.profile.account'))).toBeInTheDocument();
@@ -102,61 +109,68 @@ describe('ProfilePage (i18n)', () => {
     expect(screen.getByText(tr('auth.profile.twoFa.NONE.title'))).toBeInTheDocument();
   });
 
-  it('«Зарегистрирован» выводит только дату, в поясе профиля', async () => {
-    await i18next.changeLanguage('ru');
+  it('«registered» shows the date alone, in the profile time zone', async () => {
+    await i18next.changeLanguage('en');
     renderProfile();
     await screen.findByText(tr('auth.profile.registeredAt'));
     expect(rowValue(tr('auth.profile.registeredAt'))?.textContent).toBe(
-      new Date('2026-07-01T10:00:00Z').toLocaleDateString('ru-RU', { timeZone: PROFILE_TZ }),
+      new Date('2026-07-01T10:00:00Z').toLocaleDateString(toLocale(i18next.language), {
+        timeZone: PROFILE_TZ,
+      }),
     );
   });
 
-  it('«Последний вход» выводит относительное время + точное в title', async () => {
-    // now = last_logged_at (2026-07-01T10:00:00Z) + 5 минут → «5 минут назад».
+  it('«last login» shows relative time, with the exact one in the title', async () => {
+    // now = last_logged_at (2026-07-01T10:00:00Z) + 5 минут → «5 минут назад» на языке интерфейса.
     // Мокаем только Date.now (его читает useNow), чтобы не ломать поллинг findByText fake-таймерами.
     const nowSpy = vi
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-07-01T10:05:00Z').getTime());
     try {
-      await i18next.changeLanguage('ru');
+      await i18next.changeLanguage('en');
       renderProfile();
       await screen.findByText(tr('auth.profile.lastLogin'));
       const value = rowValue(tr('auth.profile.lastLogin'));
-      expect(value?.textContent).toBe('5 минут назад');
+      expect(value?.textContent).toBe('5 minutes ago');
       // Формат title — забота formatDateTimeLong и её тестов (relativeTime.test); здесь проверяем
       // только проводку значения, поэтому эталон берём из той же функции, а не собираем руками.
       // Пояс — из профиля (не браузера): в этом и смысл проводки timeZone до TimeRow.
       expect(value?.getAttribute('title')).toBe(
-        formatDateTimeLong(new Date('2026-07-01T10:00:00Z'), 'ru-RU', PROFILE_TZ),
+        formatDateTimeLong(
+          new Date('2026-07-01T10:00:00Z'),
+          toLocale(i18next.language),
+          PROFILE_TZ,
+        ),
       );
     } finally {
       nowSpy.mockRestore();
     }
   });
 
-  it('зона профиля, неизвестная ICU браузера, не роняет страницу', async () => {
+  it('a profile zone unknown to the browser ICU does not break the page', async () => {
     // Имя приходит из справочника сервера, а форматирует ICU браузера — списки не обязаны
     // совпадать (переименования приезжают с задержкой). Без resolveTimeZone одна такая зона
     // роняла бы RangeError-ом весь профиль, а не одну строку.
     const info = await vi.mocked(getUserInfo)();
     vi.mocked(getUserInfo).mockResolvedValueOnce({ ...info, tz: 'Foo/Bar' });
 
-    await i18next.changeLanguage('ru');
+    await i18next.changeLanguage('en');
     renderProfile();
 
     expect(await screen.findByText(tr('auth.profile.personalInfo'))).toBeInTheDocument();
     // Даты отрисованы — в поясе браузера, как фолбэк.
     expect(rowValue(tr('auth.profile.registeredAt'))?.textContent).toBe(
-      new Date('2026-07-01T10:00:00Z').toLocaleDateString('ru-RU'),
+      new Date('2026-07-01T10:00:00Z').toLocaleDateString(toLocale(i18next.language)),
     );
   });
 
-  it('en: подписи переключаются на английский', async () => {
-    await i18next.changeLanguage('en');
-    // Ключи те же, что и в ru-тесте: сравнение с русским словарём закрепляет, что подписи и правда
-    // разъезжаются по языкам, — иначе захардкоженная строка прошла бы обе проверки.
-    const ru = i18next.getFixedT('ru');
-    expect(tr('auth.profile.personalInfo')).not.toBe(ru('auth.profile.personalInfo'));
+  it('the labels follow a language switch', async () => {
+    await i18next.changeLanguage('ru');
+    // Ключи те же, что и в кейсе выше: сравнение с фиксированным словарём другого языка
+    // закрепляет, что подписи и правда разъезжаются, — иначе захардкоженная строка прошла бы
+    // обе проверки.
+    const en = i18next.getFixedT('en');
+    expect(tr('auth.profile.personalInfo')).not.toBe(en('auth.profile.personalInfo'));
 
     renderProfile();
     expect(await screen.findByText(tr('auth.profile.personalInfo'))).toBeInTheDocument();
@@ -166,35 +180,35 @@ describe('ProfilePage (i18n)', () => {
   });
 });
 
-describe('ProfilePage (язык и часовой пояс)', () => {
+describe('ProfilePage (language and time zone)', () => {
   const personalCard = () => cardWith(tr('auth.profile.personalInfo'));
 
   beforeEach(async () => {
-    setLanguage('ru');
-    await i18next.changeLanguage('ru');
+    setLanguage('en');
+    await i18next.changeLanguage('en');
   });
 
-  it('язык показан названием, сырая локаль — в подсказке', async () => {
+  it('the language is shown by name, the raw locale sits in the tooltip', async () => {
     renderProfile();
     await screen.findByText(tr('auth.profile.personalInfo'));
 
     // На экране «Русский», а не ru-RU: техническое значение прячем в title (он на обёртке
     // значения — у строки языка значение это узел с флагом, а не просто текст).
+    // «Русский» — эндоним: справочник языков хранит подпись каждого языка на нём самом, поэтому
+    // она остаётся кириллицей при любом языке интерфейса и переводу не подлежит.
     expect(rowValue(tr('auth.profile.lang'))?.textContent).toBe('Русский');
     expect(within(personalCard() as HTMLElement).getByTitle('ru-RU')).toBeInTheDocument();
   });
 
-  it('часовой пояс показан подписью из справочника, IANA-имя — в подсказке', async () => {
+  it('the time zone is shown by its registry label, the IANA name sits in the tooltip', async () => {
     renderProfile();
     await screen.findByText(tr('auth.profile.personalInfo'));
 
-    expect(rowValue(tr('auth.profile.tz'))?.textContent).toBe(
-      '(UTC+03:00) Москва, Санкт-Петербург',
-    );
+    expect(rowValue(tr('auth.profile.tz'))?.textContent).toBe('(UTC+03:00) Moscow, St. Petersburg');
     expect(rowValue(tr('auth.profile.tz'))?.getAttribute('title')).toBe(PROFILE_TZ);
   });
 
-  it('незнакомые фронту язык и зона: язык как есть, зона — с посчитанным смещением', async () => {
+  it('a language and a zone unknown to the client: the language as is, the zone with a computed offset', async () => {
     const info = await vi.mocked(getUserInfo)();
     vi.mocked(getUserInfo).mockResolvedValueOnce({
       ...info,
@@ -211,7 +225,7 @@ describe('ProfilePage (язык и часовой пояс)', () => {
     expect(rowValue(tr('auth.profile.tz'))?.textContent).toBe('(UTC+00:00) Antarctica/Troll');
   });
 
-  it('зона, непригодная для Intl: подсказка честно говорит, в каком поясе даты', async () => {
+  it('a zone Intl cannot use: the tooltip states honestly which zone the dates are in', async () => {
     // Строка показывает зону профиля, а даты рядом уходят в пояс браузера — молчать об этом
     // нельзя, иначе страница утверждает один пояс, а рисует время в другом.
     const info = await vi.mocked(getUserInfo)();
@@ -224,7 +238,7 @@ describe('ProfilePage (язык и часовой пояс)', () => {
     );
   });
 
-  it('ссылка «Настройки» из карточки ведёт на /settings', async () => {
+  it('the «settings» link in the card goes to /settings', async () => {
     renderProfile();
     await screen.findByText(tr('auth.profile.personalInfo'));
 
@@ -236,11 +250,11 @@ describe('ProfilePage (язык и часовой пояс)', () => {
   });
 });
 
-describe('ProfilePage (данные кабинета)', () => {
+describe('ProfilePage (realm data)', () => {
   const accountCard = () => cardWith(tr('auth.profile.account'));
 
-  it('один кабинет: его данные в «Учётной записи», имя реалма наружу не течёт', async () => {
-    await i18next.changeLanguage('ru');
+  it('a single realm: its data sits in «account», the realm name does not leak out', async () => {
+    await i18next.changeLanguage('en');
     renderProfile();
     await screen.findByText(tr('auth.profile.account'));
 
@@ -255,15 +269,15 @@ describe('ProfilePage (данные кабинета)', () => {
     expect(within(accountCard()).getByText('customer')).toBeInTheDocument();
   });
 
-  it('«Локация последнего входа» показывает значение реалма', async () => {
-    await i18next.changeLanguage('ru');
+  it('«last login location» shows the realm value', async () => {
+    await i18next.changeLanguage('en');
     renderProfile();
     await screen.findByText(tr('auth.profile.lastLocation'));
     expect(rowValue(tr('auth.profile.lastLocation'))?.textContent).toBe('Moscow, RU');
   });
 
-  it('нет last_location / last_logged_at → прочерки', async () => {
-    await i18next.changeLanguage('ru');
+  it('no last_location or last_logged_at: dashes', async () => {
+    await i18next.changeLanguage('en');
     await withRealms([
       {
         name: 'shop',
@@ -278,8 +292,8 @@ describe('ProfilePage (данные кабинета)', () => {
     expect(rowValue(tr('auth.profile.lastLogin'))?.textContent).toBe('—');
   });
 
-  it('пустая строка в last_location → прочерк, а не пустое место', async () => {
-    await i18next.changeLanguage('ru');
+  it('an empty string in last_location gives a dash, not a blank', async () => {
+    await i18next.changeLanguage('en');
     await withRealms([
       {
         name: 'shop',
@@ -294,8 +308,8 @@ describe('ProfilePage (данные кабинета)', () => {
     expect(rowValue(tr('auth.profile.lastLocation'))?.textContent).toBe('—');
   });
 
-  it('тип аккаунта показывается чипом', async () => {
-    await i18next.changeLanguage('ru');
+  it('the account kind is shown as a chip', async () => {
+    await i18next.changeLanguage('en');
     renderProfile();
     await screen.findByText(tr('auth.profile.account'));
 
@@ -304,8 +318,8 @@ describe('ProfilePage (данные кабинета)', () => {
     expect(kind.textContent).toBe('customer');
   });
 
-  it('единственная карточка не подписана «текущий», даже когда это кабинет деплоя', async () => {
-    await i18next.changeLanguage('ru');
+  it('a lone card is not marked «current», even when it is the deployment realm', async () => {
+    await i18next.changeLanguage('en');
     // Кабинет совпадает с реалмом деплоя (config.realm) — но карточка одна, выделять не из чего.
     await withRealms([
       {
@@ -320,8 +334,8 @@ describe('ProfilePage (данные кабинета)', () => {
     expect(screen.queryByText(tr('auth.profile.currentRealm'))).toBeNull();
   });
 
-  it('ссылка «Сессии» ведёт на сессии своего кабинета', async () => {
-    await i18next.changeLanguage('ru');
+  it('the «sessions» link goes to the sessions of its own realm', async () => {
+    await i18next.changeLanguage('en');
     renderProfile();
     await screen.findByText(tr('auth.profile.account'));
     // Доступное имя уточнено и в одиночном кабинете: видимый текст «Сессии» совпадает с пунктом
@@ -332,7 +346,7 @@ describe('ProfilePage (данные кабинета)', () => {
   });
 });
 
-describe('ProfilePage (несколько кабинетов)', () => {
+describe('ProfilePage (several realms)', () => {
   const REALMS = [
     {
       name: 'print-shop/standard',
@@ -344,14 +358,14 @@ describe('ProfilePage (несколько кабинетов)', () => {
     },
     {
       name: 'print-shop/admin',
-      user_kind: 'staff',
+      user_kind: 'employee',
       created_at: '2025-03-02T14:30:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     },
   ];
 
-  it('на каждый кабинет свой блок, заголовок — пользовательское название кабинета', async () => {
-    await i18next.changeLanguage('ru');
+  it('every realm gets its own block, titled with the user-facing realm name', async () => {
+    await i18next.changeLanguage('en');
     await withRealms(REALMS);
 
     const { container } = renderProfile();
@@ -377,13 +391,13 @@ describe('ProfilePage (несколько кабинетов)', () => {
     ).toBeInTheDocument();
     expect(
       within(cardWith(tr('deploy.realmLabel.print-shop/admin'))).getByText(
-        tr('deploy.userKind.staff'),
+        tr('deploy.userKind.employee'),
       ),
     ).toBeInTheDocument();
   });
 
-  it('карточка кабинета текущей сессии подписана, остальные — нет', async () => {
-    await i18next.changeLanguage('ru');
+  it('the realm card of the current session is marked, the others are not', async () => {
+    await i18next.changeLanguage('en');
     await withRealms(REALMS);
     renderProfile();
     await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
@@ -401,8 +415,8 @@ describe('ProfilePage (несколько кабинетов)', () => {
     ).toBeNull();
   });
 
-  it('ссылка «Сессии» в каждом блоке ведёт в свой кабинет', async () => {
-    await i18next.changeLanguage('ru');
+  it('the «sessions» link in each block goes to its own realm', async () => {
+    await i18next.changeLanguage('en');
     await withRealms(REALMS);
     renderProfile();
     await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
@@ -433,17 +447,17 @@ async function with2fa(type: 'NONE' | 'PASSWORD' | 'TOTP', recoveryCodesLeft?: n
   });
 }
 
-describe('ProfilePage (защита аккаунта)', () => {
+describe('ProfilePage (account protection)', () => {
   beforeEach(async () => {
-    setLanguage('ru');
-    await i18next.changeLanguage('ru');
+    setLanguage('en');
+    await i18next.changeLanguage('en');
   });
 
   // Полоса живёт в карточке «Личные данные», поэтому ищем внутри карточки, а не глобально.
   const personalCard = () => cardWith(tr('auth.profile.personalInfo'));
 
   it.each(['NONE', 'PASSWORD', 'TOTP'] as const)(
-    '%s: своё состояние и свой призыв',
+    '%s: its own state and its own call to action',
     async (type) => {
       await with2fa(type, type === 'NONE' ? undefined : 8);
       renderProfile();
@@ -455,7 +469,7 @@ describe('ProfilePage (защита аккаунта)', () => {
     },
   );
 
-  it('полоса ведёт в настройки', async () => {
+  it('the strip leads to the settings', async () => {
     renderProfile();
     await screen.findByText(tr('auth.profile.twoFa.NONE.title'));
 
@@ -469,10 +483,10 @@ describe('ProfilePage (защита аккаунта)', () => {
 /** Строка предупреждения об остатке кодов: ищем её как элемент, а не по тексту подписи. */
 const WARNING = 'two-fa-codes-warning';
 
-describe('ProfilePage (остаток аварийных кодов)', () => {
+describe('ProfilePage (recovery codes left)', () => {
   beforeEach(async () => {
-    setLanguage('ru');
-    await i18next.changeLanguage('ru');
+    setLanguage('en');
+    await i18next.changeLanguage('en');
   });
 
   /** Ждём саму полосу: её заголовок одинаков во всех случаях ниже, меняется только строка кодов. */
@@ -482,7 +496,7 @@ describe('ProfilePage (остаток аварийных кодов)', () => {
     [0, 'recoveryCodesEmpty'],
     [1, 'recoveryCodesLast'],
     [3, 'recoveryCodesLow'],
-  ] as const)('остаток %i — предупреждение показано', async (left, key) => {
+  ] as const)('%i left: the warning is shown', async (left, key) => {
     await with2fa('TOTP', left);
     renderProfile();
     await findStrip();
@@ -493,7 +507,7 @@ describe('ProfilePage (остаток аварийных кодов)', () => {
   });
 
   // Порог проверяем по границе: 4 — первое значение, на котором предупреждать уже не о чем.
-  it.each([4, 8])('остаток %i — предупреждения нет вовсе', async (left) => {
+  it.each([4, 8])('%i left: no warning at all', async (left) => {
     await with2fa('TOTP', left);
     renderProfile();
     await findStrip();
@@ -501,14 +515,14 @@ describe('ProfilePage (остаток аварийных кодов)', () => {
     expect(screen.queryByTestId(WARNING)).toBeNull();
   });
 
-  it('без поля (2FA выключена) — предупреждения нет: «нет данных» здесь не ноль', async () => {
+  it('with the field absent (2FA off) there is no warning: «no data» is not zero here', async () => {
     renderProfile();
     await screen.findByText(tr('auth.profile.twoFa.NONE.title'));
 
     expect(screen.queryByTestId(WARNING)).toBeNull();
   });
 
-  it('кончающиеся коды не меняют саму полосу — это другое событие', async () => {
+  it('running-low codes do not change the strip itself: that is a different event', async () => {
     await with2fa('TOTP', 0);
     renderProfile();
     await findStrip();

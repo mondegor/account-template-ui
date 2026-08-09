@@ -4,7 +4,8 @@ Account-area frontend template: React 19 + TypeScript + Vite, MUI, react-router,
 zustand, i18next.
 
 **Write code comments and user-facing strings in Russian** — that is the language of this
-repository. Identifiers, `Error.message` values thrown by `@core/*`, and this file are English.
+repository. Identifiers, `Error.message` values thrown by `@core/*`, this file, and everything
+tests say in their own voice — `describe`/`it` titles and string literals — are English.
 
 ## Commands
 
@@ -89,9 +90,24 @@ model is spelled out in a comment in `eslint.config.js` and pinned by `src/test/
 change the rule only together with that test.
 
 Tests look UI phrases up by key — `tr('auth.profile.tz')` from `src/test/i18n.ts`, never the phrase
-itself; lint flags the common forms. That covers what is **searched for** on screen. Everything a
-test makes up itself — fixtures, server `detail` values, props the component is handed — stays a
-literal, and those literals are English.
+itself, in any language. Lint covers these query forms: `*ByText`, `*ByLabelText`, the `name` option
+of `*ByRole`, `toHaveTextContent`, and the `cardWith`/`rowValue`/`selectValue`/`choose` helpers.
+The rest — `*ByPlaceholderText`, `*ByTitle`, `*ByDisplayValue`, `*ByAltText`,
+`toHaveAccessibleName` — the rule does not see; the first test to reach for one extends the
+selector in `eslint.config.js`. Everything a test makes up itself — fixtures, server `detail`
+values, props the component is handed — stays a literal, and those literals are English.
+
+UI tests run with the interface in **English** (`setLanguage('en')`), so expected values fall out
+English on their own. Where the language itself is the subject, the test switches explicitly and
+pins the contrast through `i18next.getFixedT` rather than a literal. Cyrillic literals are allowed
+in exactly three places, each carrying a comment saying why:
+
+- `src/test/eslintConfig.test.ts` — the fragments fed to ESLint; Cyrillic is the rule's input;
+- the language endonyms (`'Русский'`) — registry data, identical in every interface language;
+- the stripped `г.` suffix in `dateTime.test.ts` — the suffix is what the assertion is about.
+
+The lint rule matches Cyrillic, so on an English suite it guards only against Russian literals
+coming back; a forgotten `getByText('Save')` still needs review to catch.
 
 ## Comments
 

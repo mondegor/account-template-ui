@@ -6,7 +6,7 @@ import { validateSchema, SchemaValidationError } from './validate';
  * ключи отклоняются; неизвестный type — fail-closed; enum-пропсы строгие.
  */
 describe('validateSchema', () => {
-  it('принимает корректную схему page → form → field', () => {
+  it('accepts a valid page → form → field schema', () => {
     const node = validateSchema({
       id: 'auth.signup',
       type: 'page',
@@ -30,11 +30,11 @@ describe('validateSchema', () => {
     expect(node.children?.[0].children?.[0].name).toBe('user_email');
   });
 
-  it('fail-closed на неизвестный тип узла', () => {
+  it('fail-closed on an unknown node type', () => {
     expect(() => validateSchema({ type: 'iframe' })).toThrow(SchemaValidationError);
   });
 
-  it('отклоняет сырое оформление (sx/style/className)', () => {
+  it('rejects raw styling (sx/style/className)', () => {
     expect(() => validateSchema({ type: 'text', sx: { color: 'red' } })).toThrow(
       SchemaValidationError,
     );
@@ -44,7 +44,7 @@ describe('validateSchema', () => {
     );
   });
 
-  it('отклоняет dangerouslySetInnerHTML и прочие посторонние ключи', () => {
+  it('rejects dangerouslySetInnerHTML and any other foreign keys', () => {
     expect(() =>
       // Единственное легальное упоминание пропа: это данные для валидатора, а не рендер. Тест и
       // проверяет, что схема с ним не проходит, — то есть охраняет тот же инвариант, что и линт.
@@ -56,19 +56,19 @@ describe('validateSchema', () => {
     );
   });
 
-  it('отклоняет не-enum значение props.variant', () => {
+  it('rejects a props.variant value outside the enum', () => {
     expect(() =>
       validateSchema({ type: 'button', label: 'x', props: { variant: 'ghost' } }),
     ).toThrow(SchemaValidationError);
   });
 
-  it('отклоняет неизвестный format в validation', () => {
+  it('rejects an unknown format in validation', () => {
     expect(() =>
       validateSchema({ type: 'field.text', name: 'x', validation: { format: 'ipv4' } }),
     ).toThrow(SchemaValidationError);
   });
 
-  it('buttonType: принимает submit/button, отклоняет прочее', () => {
+  it('buttonType: accepts submit/button and rejects the rest', () => {
     expect(validateSchema({ type: 'button', label: 'x', buttonType: 'submit' }).buttonType).toBe(
       'submit',
     );

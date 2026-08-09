@@ -39,25 +39,46 @@ const NO_DANGEROUS_HTML = {
  * Фразы интерфейса в тестах пишутся ключом, а не текстом: литерал дублирует файл переводов и
  * падает от правки формулировки, то есть проверяет её, а не то, что на экране нужный ключ.
  *
- * Целятся только аргументы поиска по тексту — фикстуры и названия тестов не трогаем: имена
- * устройств приходят от серверной стороны, а названия тестов это те же комментарии. Ожидаемое
- * значение (`toBe`, `toEqual`) правило тоже не трогает: там литерал как раз к месту — эталон,
- * посчитанный вызовом проверяемой функции, вырождается в «функция равна себе».
+ * Целятся аргументы поиска по экрану в тех формах, что перечислены ниже: текст, подпись поля,
+ * доступное имя у ByRole, содержимое в toHaveTextContent и хелперы карточек и селектов. Формы,
+ * до которых селектор не достаёт (`*ByPlaceholderText`, `*ByTitle`, `*ByDisplayValue`,
+ * `*ByAltText`, `toHaveAccessibleName`), в тестах сейчас не встречаются; понадобится такая —
+ * расширяем селектор вместе с eslintConfig.test.ts. Названия тестов не трогаем — это не аргумент
+ * поиска. Ожидаемое значение (`toBe`, `toEqual`) правило тоже не трогает: там литерал как раз к
+ * месту — эталон, посчитанный вызовом проверяемой функции, вырождается в «функция равна себе».
  *
  * Это подсказка на частой форме записи, а не непроходимый запрет: фраза, поднятая в константу,
  * приходит в запрос идентификатором и правилу не видна. Так и задумано — именно этим приёмом
  * пишутся фикстуры и тексты, которые компонент получает пропами.
+ *
+ * Ограничение, о котором надо помнить: сторожит правило кириллицу, а UI-тесты идут на английском
+ * языке интерфейса. Значит забытый `getByText('Save')` оно не увидит — гарантией оно служит
+ * только против возврата русских литералов, остальное держится на ревью.
  */
-const TEXT_QUERIES = '/^(get|find|query)(All)?ByText$/';
-/** Хелперы src/test/dom.ts: первым аргументом им дают ту же искомую на экране фразу. */
-const TEXT_HELPERS = '/^(cardWith|rowValue)$/';
+const TEXT_QUERIES = '/^(get|find|query)(All)?By(Text|LabelText)$/';
+/** Подпись доступного имени у ByRole лежит не в аргументе, а в опции `name`. */
+const ROLE_QUERIES = '/^(get|find|query)(All)?ByRole$/';
+/** Матчер содержимого: аргумент у него — та же фраза с экрана, что и у запроса. */
+const CONTENT_MATCHERS = '/^toHaveTextContent$/';
+/** Хелперы src/test/dom.ts и локальные обёртки селектов: первым аргументом им дают ту же фразу. */
+const TEXT_HELPERS = '/^(cardWith|rowValue|selectValue|choose)$/';
 const CYRILLIC = '/[А-Яа-яЁё]/';
 
-/** Обращения, чей аргумент — фраза с экрана: `screen.getByText`, голый `getByText`, хелперы. */
+/**
+ * Обращения, чей аргумент — фраза с экрана: `screen.getByText`, голый `getByText`, хелперы,
+ * а также `toHaveTextContent` — у него аргумент такой же.
+ */
 const QUERY_CALLS = [
   `CallExpression[callee.property.name=${TEXT_QUERIES}]`,
   `CallExpression[callee.name=${TEXT_QUERIES}]`,
   `CallExpression[callee.name=${TEXT_HELPERS}]`,
+  `CallExpression[callee.property.name=${CONTENT_MATCHERS}]`,
+];
+
+/** Обращения, у которых фраза лежит в опции `name`, а не прямым аргументом. */
+const ROLE_CALLS = [
+  `CallExpression[callee.property.name=${ROLE_QUERIES}]`,
+  `CallExpression[callee.name=${ROLE_QUERIES}]`,
 ];
 
 /**
@@ -70,8 +91,18 @@ const CYRILLIC_TEXT = [
   `TemplateElement[value.raw=${CYRILLIC}]`,
 ];
 
+/** Те же формы, но на один уровень глубже — внутри `{ name: ... }`. */
+const CYRILLIC_NAME = [
+  `Property[key.name="name"] > Literal[value=${CYRILLIC}]`,
+  `Property[key.name="name"] > Literal[regex.pattern=${CYRILLIC}]`,
+  `Property[key.name="name"] TemplateElement[value.raw=${CYRILLIC}]`,
+];
+
 const NO_CYRILLIC_IN_QUERIES = {
-  selector: QUERY_CALLS.flatMap((call) => CYRILLIC_TEXT.map((text) => `${call} ${text}`)).join(','),
+  selector: [
+    ...QUERY_CALLS.flatMap((call) => CYRILLIC_TEXT.map((text) => `${call} ${text}`)),
+    ...ROLE_CALLS.flatMap((call) => CYRILLIC_NAME.map((text) => `${call} ${text}`)),
+  ].join(','),
   message:
     'Фразу интерфейса в тесте не пишем текстом: берите её ключом через tr() (src/test/i18n.ts).',
 };

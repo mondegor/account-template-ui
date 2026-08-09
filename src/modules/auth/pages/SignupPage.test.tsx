@@ -9,6 +9,7 @@ import { realmProvider } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '../module';
 import { SignupPage } from './SignupPage';
+import { tr } from '../../../test/i18n';
 
 /**
  * Сквозная проверка schema-driven обвязки в процессе: реальная регистрация модуля через реестр
@@ -16,7 +17,7 @@ import { SignupPage } from './SignupPage';
  * SignupPage рендерит форму из JSON. Правка signup.json меняет эту страницу без правок React.
  */
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   registerBaseComponents();
   registerModule(authModule, {
@@ -27,14 +28,14 @@ beforeAll(() => {
 });
 
 describe('SignupPage (schema-driven)', () => {
-  it('рендерит схему auth.signup: заголовок, email-поле и submit', () => {
+  it('renders the auth.signup schema: the heading, the email field and submit', () => {
     render(
       <MemoryRouter>
         <SignupPage />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('ui-page')).toHaveTextContent('Создание аккаунта');
+    expect(screen.getByTestId('ui-page')).toHaveTextContent(tr('auth.signup.title'));
     expect(screen.getByRole('textbox')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Зарегистрироваться' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: tr('auth.signup.submit') })).toBeInTheDocument();
   });
 });

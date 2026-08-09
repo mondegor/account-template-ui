@@ -51,8 +51,8 @@ async function load(saved: { lang: string; tz: string }) {
   return { ...i18n, ...requestMeta, changeUserSettings, sent };
 }
 
-describe('changeUserSettings: что уходит на сервер', () => {
-  it('«Авто» по поясу → поля tz в теле нет, пояс уезжает заголовком', async () => {
+describe('changeUserSettings: what goes to the server', () => {
+  it('«Auto» for the time zone: no tz field in the body, the zone travels in a header', async () => {
     const { changeUserSettings, sent } = await load({ lang: 'ru-RU', tz: 'Europe/Moscow' });
 
     await changeUserSettings({ lang: 'ru-RU' });
@@ -61,7 +61,7 @@ describe('changeUserSettings: что уходит на сервер', () => {
     expect(sent[0]!.tzHeader).toMatch(/^[\w/+-]+;offset=[+-]\d{2}:\d{2};dst=[01]$/);
   });
 
-  it('явный пояс → уходит телом, заголовок не собираем (тело всё равно строже)', async () => {
+  it('an explicit zone travels in the body; we build no header, the body wins anyway', async () => {
     const { changeUserSettings, sent } = await load({ lang: 'ru-RU', tz: 'Asia/Tokyo' });
 
     await changeUserSettings({ lang: 'ru-RU', tz: 'Asia/Tokyo' });
@@ -70,7 +70,7 @@ describe('changeUserSettings: что уходит на сервер', () => {
     expect(sent[0]!.tzHeader).toBeNull();
   });
 
-  it('«Авто» по обоим → тело пустое, пустых строк в нём нет', async () => {
+  it('«Auto» for both: the body is empty and carries no empty strings', async () => {
     const { changeUserSettings, sent } = await load({ lang: 'en-US', tz: 'Asia/Tokyo' });
 
     await changeUserSettings({});
@@ -78,7 +78,7 @@ describe('changeUserSettings: что уходит на сервер', () => {
     expect(sent[0]!.body).toEqual({});
   });
 
-  it('оверрайд прошлого сохранения на этот запрос не уходит — иначе «Авто» вернуло бы старое', async () => {
+  it('the override from a previous save does not ride along: otherwise «Auto» would bring the old value back', async () => {
     const { changeUserSettings, setSettingsOverride, sent } = await load({
       lang: 'ru-RU',
       tz: 'Europe/Moscow',
@@ -91,7 +91,7 @@ describe('changeUserSettings: что уходит на сервер', () => {
     expect(sent[0]!.query.get('tz')).toBeNull();
   });
 
-  it('язык навигации на этом запросе, наоборот, остаётся: это и есть текущее окружение', async () => {
+  it('the navigation language, on the contrary, stays on this request: it is the current environment', async () => {
     const { changeUserSettings, setLanguage, sent } = await load({
       lang: 'en-US',
       tz: 'Europe/Moscow',
@@ -104,8 +104,8 @@ describe('changeUserSettings: что уходит на сервер', () => {
   });
 });
 
-describe('X-Accept-Time-Zone: где заголовок нужен, а где его быть не должно', () => {
-  it('signup несёт пояс заголовком (его ставит интерсептор), тело — только realm и user_email', async () => {
+describe('X-Accept-Time-Zone: where the header belongs and where it must not appear', () => {
+  it('signup carries the zone in a header (set by the interceptor); the body holds only realm and user_email', async () => {
     vi.resetModules();
     const { signup } = await import('./authApi');
 
@@ -134,7 +134,7 @@ describe('X-Accept-Time-Zone: где заголовок нужен, а где е
     expect(sent!.corrId).toBeTruthy();
   });
 
-  it('гостю заголовок уходит на любом запросе, авторизованному — ни на одном', async () => {
+  it('for a guest the header goes on every request, for an authenticated user on none', async () => {
     vi.resetModules();
     const { signin, openSession, getUserInfo } = await import('./authApi');
     const auth = await import('@core/auth');
@@ -177,8 +177,8 @@ describe('X-Accept-Time-Zone: где заголовок нужен, а где е
   });
 });
 
-describe('changeUserSettings: что применяется после ответа', () => {
-  it('в оверрайд окна кладём значения ИЗ ОТВЕТА (в «Авто» они подобраны сервером)', async () => {
+describe('changeUserSettings: what is applied after the response', () => {
+  it('the window override takes the values FROM THE RESPONSE (under «Auto» the server picked them)', async () => {
     const { changeUserSettings, getSettingsOverride } = await load({
       lang: 'en-US',
       tz: 'Asia/Tokyo',
@@ -189,7 +189,7 @@ describe('changeUserSettings: что применяется после отве�
     expect(getSettingsOverride()).toEqual({ lang: 'en-US', tz: 'Asia/Tokyo' });
   });
 
-  it('язык интерфейса подтягивается из ответа', async () => {
+  it('the interface language is picked up from the response', async () => {
     const { changeUserSettings, getLanguage, getLanguageSource } = await load({
       lang: 'en-US',
       tz: 'Europe/Moscow',
@@ -201,7 +201,7 @@ describe('changeUserSettings: что применяется после отве�
     expect(getLanguageSource()).toBe('profile');
   });
 
-  it('сохранение НЕ перебивает язык, выбранный в навигации', async () => {
+  it('saving does NOT override the language chosen in the shell', async () => {
     const { changeUserSettings, setLanguage, getLanguage, getLanguageSource } = await load({
       lang: 'ru-RU',
       tz: 'Europe/Moscow',

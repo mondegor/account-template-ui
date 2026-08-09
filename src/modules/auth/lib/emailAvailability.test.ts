@@ -14,8 +14,8 @@ beforeEach(() => {
   vi.mocked(checkLogin).mockReset();
 });
 
-describe('checkEmailAvailability (общий кэш дедупит check-login)', () => {
-  it('детерминированный исход кэшируется: повторный вызов не дёргает ручку', async () => {
+describe('checkEmailAvailability (a shared cache deduplicates check-login)', () => {
+  it('a deterministic outcome is cached: a repeat call does not hit the endpoint', async () => {
     vi.mocked(checkLogin).mockResolvedValue(true);
     expect(await checkEmailAvailability('user@example.com')).toEqual({ state: 'free' });
     // Второй раз (напр. async-валидатор на сабмите после живого чека поля) — из кэша, без сети.
@@ -25,17 +25,17 @@ describe('checkEmailAvailability (общий кэш дедупит check-login)'
     expect(getCachedEmailAvailability('  user@example.com  ')).toEqual({ state: 'free' });
   });
 
-  it("занятый email кэшируется c текстом; 'unknown' (сеть/5xx) — нет", async () => {
+  it("a taken email is cached with its text; 'unknown' (network/5xx) is not", async () => {
     vi.mocked(checkLogin).mockRejectedValueOnce(
-      new ApiFieldError([{ code: 'EmailAlreadyExists/user_login', detail: 'Занят' }], 400),
+      new ApiFieldError([{ code: 'EmailAlreadyExists/user_login', detail: 'Taken' }], 400),
     );
     expect(await checkEmailAvailability('taken@example.com')).toEqual({
       state: 'taken',
-      message: 'Занят',
+      message: 'Taken',
     });
     expect(await checkEmailAvailability('taken@example.com')).toEqual({
       state: 'taken',
-      message: 'Занят',
+      message: 'Taken',
     });
     expect(checkLogin).toHaveBeenCalledTimes(1);
 
@@ -49,11 +49,11 @@ describe('checkEmailAvailability (общий кэш дедупит check-login)'
     ).toHaveLength(2);
   });
 
-  it("400 не про занятость ('ValidateError/...') — 'unknown', а не 'занят' в кэше", async () => {
+  it("a 400 that is not about availability ('ValidateError/...') caches as 'unknown', not as taken", async () => {
     // Отказ по значению (в т.ч. по realm'у) к емаилу отношения не имеет: выдать его за занятость
     // значило бы навсегда — исход кэшируется — запретить пользователю его собственный адрес.
     vi.mocked(checkLogin).mockRejectedValue(
-      new ApiFieldError([{ code: 'ValidateError/realm', detail: 'Realm не найден' }], 400),
+      new ApiFieldError([{ code: 'ValidateError/realm', detail: 'Realm not found' }], 400),
     );
 
     expect(await checkEmailAvailability('user@example.com')).toEqual({ state: 'unknown' });

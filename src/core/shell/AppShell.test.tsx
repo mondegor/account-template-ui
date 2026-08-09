@@ -14,6 +14,7 @@ import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
 import { demoModule } from '@modules/demo';
 import { AppShell } from './AppShell';
+import { tr } from '../../test/i18n';
 
 /**
  * AppShell — доменно-агностичная оболочка: навигацию берёт из реестра (buildNav), «Выйти»
@@ -21,7 +22,7 @@ import { AppShell } from './AppShell';
  * пункты приходят в меню без правок оболочки.
  */
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   resetRegistry();
   resetComponents();
@@ -41,34 +42,36 @@ function renderShell() {
   return render(
     <MemoryRouter>
       <AppShell>
-        <div data-testid="content">контент страницы</div>
+        <div data-testid="content">page content</div>
       </AppShell>
     </MemoryRouter>,
   );
 }
 
 describe('AppShell', () => {
-  it('рендерит пункты навигации из реестра и контент страницы', () => {
+  it('renders the navigation entries from the registry and the page content', () => {
     renderShell();
     // Пункты обоих модулей (метки резолвятся через i18next).
-    expect(screen.getByRole('link', { name: 'Профиль' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Демо' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: tr('auth.nav.profile') })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: tr('demo.nav.home') })).toBeInTheDocument();
     expect(screen.getByTestId('content')).toBeInTheDocument();
   });
 
-  it('«Выйти» скрыт для анонима', () => {
+  it('the sign-out button is hidden from an anonymous visitor', () => {
     useAuthStore.setState({ status: 'anonymous' });
     renderShell();
-    expect(screen.queryByRole('button', { name: 'Выйти' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: tr('common.shell.logout') }),
+    ).not.toBeInTheDocument();
   });
 
-  it('«Выйти» виден аутентифицированному пользователю', () => {
+  it('the sign-out button is visible to an authenticated user', () => {
     useAuthStore.setState({ status: 'authenticated' });
     renderShell();
-    expect(screen.getByRole('button', { name: 'Выйти' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: tr('common.shell.logout') })).toBeInTheDocument();
   });
 
-  it('«Выйти» инвалидирует серверную сессию (DELETE /v1/session) и делает вкладку анонимной', async () => {
+  it('sign-out invalidates the server session (DELETE /v1/session) and makes the tab anonymous', async () => {
     const calls: (string | null)[] = [];
     server.use(
       http.delete(`${config.authApiBaseUrl}/v1/session`, ({ request }) => {
@@ -79,7 +82,7 @@ describe('AppShell', () => {
     useAuthStore.setState({ status: 'authenticated', accessToken: 'access', expiresAt: null });
     renderShell();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }));
+    fireEvent.click(screen.getByRole('button', { name: tr('common.shell.logout') }));
 
     // Серверная часть обязательна: без неё silent-refresh вернул бы пользователя после reload.
     // DELETE /v1/session требует bearer (openapi: security bearerAuth) — без него был бы 401,
@@ -89,7 +92,7 @@ describe('AppShell', () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
-  it('во время выхода кнопка «Выйти» заблокирована — второй клик не шлёт второй DELETE', async () => {
+  it('during sign-out the button is disabled: a second click does not send a second DELETE', async () => {
     const calls: (string | null)[] = [];
     server.use(
       http.delete(`${config.authApiBaseUrl}/v1/session`, async ({ request }) => {
@@ -101,7 +104,7 @@ describe('AppShell', () => {
     useAuthStore.setState({ status: 'authenticated', accessToken: 'access', expiresAt: null });
     renderShell();
 
-    const btn = screen.getByRole('button', { name: 'Выйти' });
+    const btn = screen.getByRole('button', { name: tr('common.shell.logout') });
     fireEvent.click(btn);
     // Пока DELETE в полёте — кнопка disabled; повторный клик по ней не доходит до logout().
     await waitFor(() => expect(btn).toBeDisabled());

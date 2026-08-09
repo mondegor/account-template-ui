@@ -14,6 +14,7 @@ import { authModule } from '@modules/auth';
 import { changeUserSettings, getUserInfo } from '../api/authApi';
 import type { UserInfo } from '../api/types';
 import { SettingsPage } from './SettingsPage';
+import { tr } from '../../../test/i18n';
 
 /**
  * Форма настроек: что показано (префилл, плашки) и что уходит на сервер (тело запроса).
@@ -61,7 +62,7 @@ const PROFILE: UserInfo = {
 };
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   addTranslations(deployTranslations);
   resetRegistry();
@@ -77,7 +78,7 @@ beforeAll(() => {
 });
 
 beforeEach(async () => {
-  await i18next.changeLanguage('ru');
+  await i18next.changeLanguage('en');
   vi.mocked(getUserInfo).mockResolvedValue(PROFILE);
   vi.mocked(changeUserSettings).mockReset();
 });
@@ -107,7 +108,7 @@ function choose(label: string, option: string | RegExp) {
 }
 
 function save() {
-  fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+  fireEvent.click(screen.getByRole('button', { name: tr('auth.settings.save') }));
 }
 
 /**
@@ -121,26 +122,28 @@ const selectValue = (label: string) => screen.getByRole('combobox', { name: labe
  * findByText отработал бы мгновенно — до того, как приедет профиль.
  */
 function formReady() {
-  return screen.findByRole('button', { name: 'Сохранить' });
+  return screen.findByRole('button', { name: tr('auth.settings.save') });
 }
 
 describe('SettingsPage', () => {
-  it('префилл — из профиля, а не «Авто»', async () => {
+  it('the prefill comes from the profile, not from «auto»', async () => {
     renderSettings();
     await formReady();
 
     // Селекты показывают сохранённые значения: форма правит профиль, значит показывает профиль.
     // Подпись зоны — как в системном списке и на языке интерфейса, а не IANA-имя.
-    expect(selectValue('Язык')).toBe('Русский');
-    expect(selectValue('Часовой пояс')).toBe('(UTC+03:00) Москва, Санкт-Петербург');
+    // «Русский» остаётся кириллицей при любом языке интерфейса: справочник языков хранит
+    // эндонимы — подпись каждого языка на нём самом, и переводу она не подлежит.
+    expect(selectValue(tr('auth.settings.lang'))).toBe('Русский');
+    expect(selectValue(tr('auth.settings.tz'))).toBe('(UTC+03:00) Moscow, St. Petersburg');
   });
 
-  it('«Авто» — это отсутствие поля в теле, а не пустая строка', async () => {
+  it('«auto» means the field is absent from the body, not an empty string', async () => {
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Asia/Tokyo' });
     renderSettings();
     await formReady();
 
-    choose('Часовой пояс', /Авто/);
+    choose(tr('auth.settings.tz'), tr('auth.settings.auto'));
     save();
 
     await waitFor(() => expect(changeUserSettings).toHaveBeenCalled());
@@ -148,7 +151,7 @@ describe('SettingsPage', () => {
     expect(vi.mocked(changeUserSettings).mock.calls[0]![0]).toEqual({ lang: 'ru-RU' });
   });
 
-  it('значение профиля вне справочника показано отдельным пунктом и выбрано', async () => {
+  it('a profile value outside the registry gets its own option and is selected', async () => {
     vi.mocked(getUserInfo).mockResolvedValue({ ...PROFILE, tz: 'Antarctica/Troll' });
     renderSettings();
     await formReady();
@@ -159,7 +162,7 @@ describe('SettingsPage', () => {
     expect(screen.getByText('(UTC+00:00) Antarctica/Troll')).toBeInTheDocument();
   });
 
-  it('плашка про окно применения появляется после сохранения, а до него её нет', async () => {
+  it('the note about the apply window appears after saving and not before', async () => {
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Asia/Tokyo' });
     renderSettings();
     await formReady();
@@ -174,13 +177,13 @@ describe('SettingsPage', () => {
     expect(await screen.findByTestId(SAVED)).toBeInTheDocument();
   });
 
-  it('успешное сохранение патчит кэш профиля', async () => {
+  it('a successful save patches the profile cache', async () => {
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Asia/Tokyo' });
     const client = renderSettings();
     await formReady();
 
-    // Интерфейс в этом тесте русский — значит и подпись зоны русская.
-    choose('Часовой пояс', /Осака, Саппоро, Токио/);
+    // Пункт списка ищем по подписи зоны — она приходит из справочника на языке интерфейса.
+    choose(tr('auth.settings.tz'), /Osaka, Sapporo, Tokyo/);
     save();
 
     await waitFor(() =>
@@ -190,7 +193,7 @@ describe('SettingsPage', () => {
     );
   });
 
-  it('400 по полю подсвечивает нужный селект его же текстом', async () => {
+  it('a 400 on a field highlights the matching select with the server text', async () => {
     vi.mocked(changeUserSettings).mockRejectedValue(
       new ApiFieldError([{ code: 'ValidateError/tz', detail: TZ_DETAIL }], 400),
     );
@@ -202,19 +205,19 @@ describe('SettingsPage', () => {
     expect(await screen.findByText(TZ_DETAIL)).toBeInTheDocument();
   });
 
-  it('подменённая зона: предупреждаем, только когда часы реально расходятся', async () => {
+  it('a substituted zone warns only when the clocks really disagree', async () => {
     // Просили «Авто», сервер сохранил зону с другим смещением (+14 против UTC): часы разъедутся.
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Pacific/Kiritimati' });
     renderSettings();
     await formReady();
 
-    choose('Часовой пояс', /Авто/);
+    choose(tr('auth.settings.tz'), tr('auth.settings.auto'));
     save();
 
     expect(await screen.findByTestId(SUBSTITUTED)).toBeInTheDocument();
   });
 
-  it('зона ответа, неизвестная ICU браузера, не роняет форму, а предупреждает', async () => {
+  it('a response zone unknown to the browser ICU warns instead of breaking the form', async () => {
     // База ICU отстаёт от серверной на годы (Europe/Kyiv — tzdata 2022b), поэтому сервер может
     // вернуть валидное для себя имя, на котором Intl кидает RangeError. Сверить поведение такой
     // зоны нечем — предупреждаем, но форма обязана остаться живой.
@@ -222,95 +225,102 @@ describe('SettingsPage', () => {
     renderSettings();
     await formReady();
 
-    choose('Часовой пояс', /Авто/);
+    choose(tr('auth.settings.tz'), tr('auth.settings.auto'));
     save();
 
     expect(await screen.findByTestId(SUBSTITUTED)).toBeInTheDocument();
     // Форма на месте: рендер не свалился исключением.
-    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: tr('auth.settings.save') })).toBeInTheDocument();
   });
 
-  it('равнозначная по поведению зона предупреждения не даёт', async () => {
+  it('a behaviourally equivalent zone raises no warning', async () => {
     // Зона ОС замокана в UTC; Africa/Abidjan ведёт себя так же круглый год — часы те же.
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Africa/Abidjan' });
     renderSettings();
     await formReady();
 
-    choose('Часовой пояс', /Авто/);
+    choose(tr('auth.settings.tz'), tr('auth.settings.auto'));
     save();
 
     await waitFor(() => expect(changeUserSettings).toHaveBeenCalled());
     expect(screen.queryByTestId(SUBSTITUTED)).toBeNull();
   });
 
-  it('явно выбранная зона предупреждения не даёт — там сервер не подбирает', async () => {
+  it('an explicitly chosen zone raises no warning: the server does not match there', async () => {
     // Ответ сознательно расходится с запросом: даже так предупреждать не о чем — явное значение
     // проверяется строго, и подмены на этом пути не бывает (был бы 400 по полю).
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Pacific/Kiritimati' });
     renderSettings();
     await formReady();
 
-    choose('Часовой пояс', /Токио/);
+    choose(tr('auth.settings.tz'), /Tokyo/);
     save();
 
     await waitFor(() => expect(changeUserSettings).toHaveBeenCalled());
     expect(screen.queryByTestId(SUBSTITUTED)).toBeNull();
   });
 
-  it('правка формы снимает обе плашки прошлого сохранения разом', async () => {
+  it('editing the form clears both notes of the previous save at once', async () => {
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Pacific/Kiritimati' });
     renderSettings();
     await formReady();
 
-    choose('Часовой пояс', /Авто/);
+    choose(tr('auth.settings.tz'), tr('auth.settings.auto'));
     save();
     expect(await screen.findByTestId(SAVED)).toBeInTheDocument();
     expect(screen.getByTestId(SUBSTITUTED)).toBeInTheDocument();
 
     // Обе плашки — про запрос, которого выбранные сейчас значения уже не касаются. Оставить одну
     // значило бы рассказывать про сервер на фоне формы, которая говорит другое.
-    choose('Язык', 'English');
+    choose(tr('auth.settings.lang'), 'English');
 
     expect(screen.queryByTestId(SAVED)).toBeNull();
     expect(screen.queryByTestId(SUBSTITUTED)).toBeNull();
   });
 
-  it('новая попытка сохранения снимает прошлое предупреждение', async () => {
+  it('a new save attempt clears the previous warning', async () => {
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Pacific/Kiritimati' });
     renderSettings();
     await formReady();
 
-    choose('Часовой пояс', /Авто/);
+    choose(tr('auth.settings.tz'), tr('auth.settings.auto'));
     save();
     expect(await screen.findByTestId(SUBSTITUTED)).toBeInTheDocument();
 
     // Теперь сервер отвечает равнозначной зоной — предупреждать больше не о чем.
     vi.mocked(changeUserSettings).mockResolvedValue({ lang: 'ru-RU', tz: 'Africa/Abidjan' });
-    choose('Часовой пояс', /Авто/);
+    choose(tr('auth.settings.tz'), tr('auth.settings.auto'));
     save();
 
     await waitFor(() => expect(screen.queryByTestId(SUBSTITUTED)).toBeNull());
   });
 
-  it('профиль в кэше обновился — селекты идут за ним, а не застревают на старом', async () => {
+  it('the cached profile changed: the selects follow it instead of sticking to the old value', async () => {
     const client = renderSettings();
     await formReady();
-    expect(selectValue('Часовой пояс')).toBe('(UTC+03:00) Москва, Санкт-Петербург');
+    expect(selectValue(tr('auth.settings.tz'))).toBe('(UTC+03:00) Moscow, St. Petersburg');
 
     // Так выглядит фоновый рефетч того же ключа (или сохранение из соседней вкладки): форма
     // не перемонтируется, key на ней нет — значение должно подхватиться сравнением с прошлым.
     client.setQueryData<UserInfo>(moduleQueryKey('auth', 'user'), { ...PROFILE, tz: 'Asia/Tokyo' });
 
     await waitFor(() =>
-      expect(selectValue('Часовой пояс')).toBe('(UTC+09:00) Осака, Саппоро, Токио'),
+      expect(selectValue(tr('auth.settings.tz'))).toBe('(UTC+09:00) Osaka, Sapporo, Tokyo'),
     );
   });
 
-  it('en: подписи переключаются на английский', async () => {
-    await i18next.changeLanguage('en');
+  it('the labels follow a language switch', async () => {
+    await i18next.changeLanguage('ru');
+    // Сверка с фиксированным словарём другого языка: без неё tr() сравнивался бы сам с собой и
+    // проверка прошла бы даже на подписи, захардкоженной в компоненте.
+    const en = i18next.getFixedT('en');
+    expect(tr('auth.settings.save')).not.toBe(en('auth.settings.save'));
+
     renderSettings();
 
-    expect(await screen.findByRole('button', { name: 'Save' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Time zone' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: tr('auth.settings.save') }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: tr('auth.settings.tz') })).toBeInTheDocument();
   });
 });

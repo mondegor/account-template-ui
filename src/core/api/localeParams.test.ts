@@ -48,8 +48,8 @@ async function load() {
   return { ...i18n, ...requestMeta, call, authenticate };
 }
 
-describe('интерсептор: ?lang по источнику языка', () => {
-  it('auto: не шлём ничего — язык берёт браузерный Accept-Language', async () => {
+describe('interceptor: ?lang by language source', () => {
+  it('auto: we send nothing, the language comes from the browser Accept-Language', async () => {
     const { call, authenticate } = await load();
     expect((await call()).get('lang')).toBeNull();
 
@@ -57,7 +57,7 @@ describe('интерсептор: ?lang по источнику языка', () 
     expect((await call()).get('lang')).toBeNull();
   });
 
-  it('local: шлём и гостю (язык письма), и авторизованному (предпросмотр)', async () => {
+  it('local: sent both for a guest (email language) and for an authenticated user (preview)', async () => {
     const { call, authenticate, setLanguage } = await load();
     setLanguage('en');
     expect((await call()).get('lang')).toBe('en-US');
@@ -66,7 +66,7 @@ describe('интерсептор: ?lang по источнику языка', () 
     expect((await call()).get('lang')).toBe('en-US');
   });
 
-  it('profile: гостю шлём (токена нет), авторизованному — нет (язык несёт токен)', async () => {
+  it('profile: sent for a guest (no token), not for an authenticated user (the token carries the language)', async () => {
     const { call, authenticate, setProfileLanguage } = await load();
     setProfileLanguage('en');
     expect((await call()).get('lang')).toBe('en-US');
@@ -76,8 +76,8 @@ describe('интерсептор: ?lang по источнику языка', () 
   });
 });
 
-describe('интерсептор: окно после сохранения настроек', () => {
-  it('оверрайд шлёт оба параметра: тексты и даты в них — уже новые', async () => {
+describe('interceptor: the window after settings are saved', () => {
+  it('the override sends both params: texts and dates in them are already the new ones', async () => {
     const { call, authenticate, setSettingsOverride } = await load();
     authenticate();
     setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
@@ -87,7 +87,7 @@ describe('интерсептор: окно после сохранения на�
     expect(params.get('tz')).toBe('Asia/Tokyo');
   });
 
-  it('язык навигации перебивает язык оверрайда, пояс окна при этом остаётся', async () => {
+  it('the navigation language beats the override language, while the window time zone stays', async () => {
     const { call, authenticate, setSettingsOverride, setLanguage } = await load();
     authenticate();
     setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
@@ -98,7 +98,7 @@ describe('интерсептор: окно после сохранения на�
     expect(params.get('tz')).toBe('Asia/Tokyo');
   });
 
-  it('гостю оверрайд не шлём: он про токен, которого нет', async () => {
+  it('no override for a guest: it is about a token they do not have', async () => {
     const { call, setSettingsOverride } = await load();
     setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
 
@@ -107,7 +107,7 @@ describe('интерсептор: окно после сохранения на�
     expect(params.get('tz')).toBeNull();
   });
 
-  it('skipSettingsOverride снимает оверрайд, но не язык навигации', async () => {
+  it('skipSettingsOverride drops the override but not the navigation language', async () => {
     const { call, authenticate, setSettingsOverride, setLanguage } = await load();
     authenticate();
     setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
@@ -120,7 +120,7 @@ describe('интерсептор: окно после сохранения на�
     expect(params.get('tz')).toBeNull();
   });
 
-  it('clearSettingsOverride (его зовёт applyAccess) убирает оба параметра', async () => {
+  it('clearSettingsOverride (called by applyAccess) removes both params', async () => {
     const { call, authenticate, setSettingsOverride, clearSettingsOverride } = await load();
     authenticate();
     setSettingsOverride({ lang: 'en-US', tz: 'Asia/Tokyo' });
@@ -132,8 +132,8 @@ describe('интерсептор: окно после сохранения на�
   });
 });
 
-describe('интерсептор: чужие параметры и заголовки', () => {
-  it('явные params вызывающего переживают интерсептор (realm у getUserSessions)', async () => {
+describe('interceptor: params and headers that are not ours', () => {
+  it('explicit caller params survive the interceptor (realm in getUserSessions)', async () => {
     const { call, authenticate, setLanguage } = await load();
     authenticate();
     setLanguage('en');
@@ -143,7 +143,7 @@ describe('интерсептор: чужие параметры и заголо�
     expect(params.get('lang')).toBe('en-US');
   });
 
-  it('?tz не появляется сам по себе — только окном после сохранения', async () => {
+  it('?tz never appears on its own, only through the window after saving', async () => {
     const { call, authenticate, setLanguage } = await load();
     authenticate();
     setLanguage('en');
@@ -151,7 +151,7 @@ describe('интерсептор: чужие параметры и заголо�
     expect((await call()).get('tz')).toBeNull();
   });
 
-  it('в общих заголовках нет ни X-Accept-Time-Zone, ни Accept-Language', async () => {
+  it('the shared headers carry neither X-Accept-Time-Zone nor Accept-Language', async () => {
     const { commonHeaders } = await load();
     // Пояс уходит точечно (регистрация и сохранение в «Авто»), а язык окружения ставит сам
     // браузер: подменять его выбранным языком интерфейса нельзя — сервер читает его как раз там,

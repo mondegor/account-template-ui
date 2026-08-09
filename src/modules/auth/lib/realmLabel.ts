@@ -12,7 +12,7 @@ export function realmLabel(t: TFunction, realm: string): string {
   return t(`deploy.realmLabel.${realm}`, { defaultValue: realm });
 }
 
-/** Тип аккаунта: staff → «Сотрудник». */
+/** Тип аккаунта: employee → «Сотрудник». */
 export function userKindLabel(t: TFunction, kind: string): string {
   return t(`deploy.userKind.${kind}`, { defaultValue: kind });
 }

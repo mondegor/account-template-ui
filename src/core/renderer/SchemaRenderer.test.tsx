@@ -1,19 +1,20 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { initI18n, setLanguage } from '@core/i18n';
+import { tr } from '../../test/i18n';
 import { resetComponents, type SchemaNode } from '@core/schema';
 import { registerBaseComponents } from './baseNodes';
 import { SchemaRenderer } from './SchemaRenderer';
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   resetComponents();
   registerBaseComponents();
 });
 
 describe('SchemaRenderer', () => {
-  it('рекурсивно рендерит базовые узлы page/text', () => {
+  it('renders the base page/text nodes recursively', () => {
     const schema: SchemaNode = {
       id: 'demo',
       type: 'page',
@@ -23,10 +24,10 @@ describe('SchemaRenderer', () => {
     render(<SchemaRenderer schema={schema} />);
     expect(screen.getByTestId('ui-page')).toBeInTheDocument();
     // text-узел резолвит i18n-ключ (common зарегистрирован ядром).
-    expect(screen.getByTestId('ui-text')).toHaveTextContent('Обязательное поле');
+    expect(screen.getByTestId('ui-text')).toHaveTextContent(tr('common.validation.required'));
   });
 
-  it('узел button по умолчанию инертен (type=button), submit — только по buttonType', () => {
+  it('a button node is inert by default (type=button); submit only through buttonType', () => {
     const schema: SchemaNode = {
       id: 'demo',
       type: 'page',
@@ -41,7 +42,7 @@ describe('SchemaRenderer', () => {
     expect(buttons[1]).toHaveAttribute('type', 'submit');
   });
 
-  it('fail-closed: незарегистрированный тип не рушит рендер, соседний узел рисуется', () => {
+  it('fail-closed: an unregistered type does not break the render, the neighbouring node still draws', () => {
     // confirmOperation валиден в схеме, но в этом тесте не зарегистрирован (модуль auth не поднят).
     const schema: SchemaNode = {
       id: 'demo',

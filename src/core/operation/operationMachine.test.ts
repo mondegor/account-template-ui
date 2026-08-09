@@ -26,7 +26,7 @@ function start(): OperationSnapshot {
 }
 
 describe('operationReducer', () => {
-  it('START строит активный снимок с абсолютными таймерами', () => {
+  it('START builds an active snapshot with absolute timers', () => {
     const s = start();
     expect(s.phase).toBe('active');
     expect(s.expiresAt).toBe(T0 + 600_000);
@@ -35,7 +35,7 @@ describe('operationReducer', () => {
     expect(resendSecondsLeft(s, T0)).toBe(30);
   });
 
-  it('CONFIRM_FAILED уменьшает попытки и обновляет таймеры из operation_state', () => {
+  it('CONFIRM_FAILED decrements the attempts and refreshes the timers from operation_state', () => {
     const s = operationReducer(start(), {
       type: 'CONFIRM_FAILED',
       state: { remaining_attempts: 1, remaining_resends: 2, resends_in: 0, expires_in: 500 },
@@ -46,7 +46,7 @@ describe('operationReducer', () => {
     expect(s.expiresAt).toBe(T0 + 10_000 + 500_000);
   });
 
-  it('исчерпание попыток → phase exhausted', () => {
+  it('running out of attempts moves the phase to exhausted', () => {
     const s = operationReducer(start(), {
       type: 'CONFIRM_FAILED',
       state: { remaining_attempts: 0, expires_in: 500 },
@@ -55,12 +55,12 @@ describe('operationReducer', () => {
     expect(s.phase).toBe('exhausted');
   });
 
-  it('TICK после expiresAt → phase expired', () => {
+  it('a TICK past expiresAt moves the phase to expired', () => {
     const s = operationReducer(start(), { type: 'TICK', now: T0 + 600_001 })!;
     expect(s.phase).toBe('expired');
   });
 
-  it('RESENT сбрасывает счётчики/таймеры', () => {
+  it('RESENT resets the counters and timers', () => {
     const failed = operationReducer(start(), {
       type: 'CONFIRM_FAILED',
       state: { remaining_attempts: 1, expires_in: 100 },
@@ -76,7 +76,7 @@ describe('operationReducer', () => {
     expect(s.expiresAt).toBe(T0 + 40_000 + 600_000);
   });
 
-  it('REVOKED очищает состояние', () => {
+  it('REVOKED clears the state', () => {
     expect(operationReducer(start(), { type: 'REVOKED' })).toBeNull();
   });
 
@@ -85,7 +85,7 @@ describe('operationReducer', () => {
    * трогать не должен — иначе она подменилась бы на «истекло», и экран предложил бы запросить
    * новый код там, где запрашивать не у чего.
    */
-  it('INVALIDATED переводит в dead, и TICK эту фазу не переписывает', () => {
+  it('INVALIDATED moves to dead, and a TICK does not rewrite that phase', () => {
     const s = operationReducer(start(), { type: 'INVALIDATED' })!;
     expect(s.phase).toBe('dead');
 
@@ -98,7 +98,7 @@ describe('operationReducer', () => {
    * нечего, а повторную отправку кода по подтверждённой операции сервер отклоняет. Уйди она в
    * `expired` — экран предложил бы «Запросить новый код», который заведомо откажет.
    */
-  it('TICK над confirmed → dead, а не expired', () => {
+  it('a TICK over a confirmed operation gives dead, not expired', () => {
     const confirmed = operationReducer(start(), { type: 'CONFIRMED' })!;
     expect(confirmed.phase).toBe('confirmed');
 
@@ -109,7 +109,7 @@ describe('operationReducer', () => {
     expect(after.phase).toBe('dead');
   });
 
-  it('CONFIRM_FAILED мёртвую операцию не воскрешает', () => {
+  it('CONFIRM_FAILED does not resurrect a dead operation', () => {
     const dead = operationReducer(start(), { type: 'INVALIDATED' })!;
 
     const after = operationReducer(dead, {
@@ -122,8 +122,8 @@ describe('operationReducer', () => {
   });
 });
 
-describe('селекторы резенда', () => {
-  it('remaining_resends === undefined ≠ 0: резенд неприменим (шаг PASSWORD/TOTP)', () => {
+describe('resend selectors', () => {
+  it('remaining_resends === undefined is not 0: resending does not apply (a PASSWORD/TOTP step)', () => {
     const s = operationReducer(null, {
       type: 'START',
       parts: { ...waiting, remaining_resends: undefined, resends_in: undefined },
@@ -133,7 +133,7 @@ describe('селекторы резенда', () => {
     expect(canResendNow(s, T0)).toBe(false);
   });
 
-  it('резенд доступен только после кулдауна и при остатке > 0', () => {
+  it('resending is available only after the cooldown and while the remaining count is above 0', () => {
     const s = start();
     expect(canResendNow(s, T0)).toBe(false); // кулдаун ещё идёт
     expect(canResendNow(s, T0 + 30_000)).toBe(true); // кулдаун истёк

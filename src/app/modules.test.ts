@@ -15,7 +15,7 @@ describe('registerAllModules', () => {
     registerAllModules();
   });
 
-  it('разлогин чистит кэш: следующий пользователь не увидит данные предыдущего', () => {
+  it("sign-out clears the cache: the next user does not see the previous one's data", () => {
     queryClient.setQueryData(['auth', 'user'], { email: 'previous@example.com' });
     queryClient.setQueryData(['auth', 'sessions', 'print-shop/standard'], [{ session_id: 'aaaa' }]);
 

@@ -23,23 +23,23 @@ function selectField(required: boolean): SchemaNode {
 }
 
 describe('buildFormSchema — enum/select', () => {
-  it('required, пусто → «обязательное поле» (а не «неверный формат»)', () => {
+  it('required and empty gives «required field», not «invalid format»', () => {
     const res = buildFormSchema([selectField(true)], t).safeParse({ role: '' });
     expect(res.success).toBe(false);
     if (!res.success) expect(res.error.issues[0].message).toBe('common.validation.required');
   });
 
-  it('required, значение вне enum → «неверный формат»', () => {
+  it('required with a value outside the enum gives «invalid format»', () => {
     const res = buildFormSchema([selectField(true)], t).safeParse({ role: 'ghost' });
     expect(res.success).toBe(false);
     if (!res.success) expect(res.error.issues[0].message).toBe('common.validation.pattern');
   });
 
-  it('required, валидное значение → ок', () => {
+  it('required with a valid value passes', () => {
     expect(buildFormSchema([selectField(true)], t).safeParse({ role: 'admin' }).success).toBe(true);
   });
 
-  it('optional, пусто → ок', () => {
+  it('optional and empty passes', () => {
     expect(buildFormSchema([selectField(false)], t).safeParse({ role: '' }).success).toBe(true);
   });
 });

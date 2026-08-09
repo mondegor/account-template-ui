@@ -7,17 +7,17 @@ interface Greeter {
 const GREETER = defineContract<Greeter>('demo.greeter');
 
 describe('contract-registry', () => {
-  it('provide → get отдаёт типизированную реализацию', () => {
+  it('provide → get returns the typed implementation', () => {
     const r = createContractRegistry();
     r.provide(GREETER, { hello: () => 'hi' });
     expect(r.get(GREETER)?.hello()).toBe('hi');
   });
 
-  it('get неопубликованного контракта → undefined', () => {
+  it('get on an unpublished contract returns undefined', () => {
     expect(createContractRegistry().get(GREETER)).toBeUndefined();
   });
 
-  it('повторная публикация того же ключа → fail-fast', () => {
+  it('publishing the same key twice fails fast', () => {
     const r = createContractRegistry();
     r.provide(GREETER, { hello: () => 'a' });
     expect(() => r.provide(GREETER, { hello: () => 'b' })).toThrow(/already published/);

@@ -9,6 +9,7 @@ import { resetComponents, resetSchemas } from '@core/schema';
 import { realmProvider } from '@core/auth';
 import { contractRegistry } from '@core/contracts';
 import { demoModule } from './module';
+import { tr } from '../../test/i18n';
 
 /**
  * Доказательство расширяемости: демо-модуль подключается через реестр и его роут /demo рендерит
@@ -19,7 +20,7 @@ function Routed() {
 }
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   resetRegistry();
   resetComponents();
@@ -33,13 +34,13 @@ beforeAll(() => {
 });
 
 describe('demoModule', () => {
-  it('роут /demo рендерит схему demo.home', () => {
+  it('the /demo route renders the demo.home schema', () => {
     render(
       <MemoryRouter initialEntries={['/demo']}>
         <Routed />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('ui-page')).toHaveTextContent('Демо-модуль');
+    expect(screen.getByTestId('ui-page')).toHaveTextContent(tr('demo.home.title'));
     expect(screen.getByTestId('ui-text')).toHaveTextContent('demo.home');
   });
 });

@@ -44,7 +44,7 @@ function error429(retryAfter?: string) {
       {
         title: 'Too Many Requests',
         status: 429,
-        detail: 'Повторите позже',
+        detail: 'Try again later',
         instance: '',
         time: new Date().toISOString(),
       },
@@ -60,36 +60,36 @@ function error429(retryAfter?: string) {
 }
 
 describe('parseErrorCode', () => {
-  it('код без суффикса — отказ по существу, поля у него нет', () => {
+  it('code without a suffix: a refusal on the merits, no field attached', () => {
     expect(parseErrorCode('ErrorCode')).toEqual({ reason: 'ErrorCode' });
   });
 
-  it('код с суффиксом — причина и имя поля запроса', () => {
+  it('code with a suffix: the reason and the request field name', () => {
     expect(parseErrorCode('EmailAlreadyExists/user_email')).toEqual({
       reason: 'EmailAlreadyExists',
       field: 'user_email',
     });
   });
 
-  it('режет по ПЕРВОМУ слэшу: остаток целиком считается именем поля', () => {
+  it('splits on the FIRST slash: the rest is the field name in full', () => {
     expect(parseErrorCode('ValidateError/realm/extra')).toEqual({
       reason: 'ValidateError',
       field: 'realm/extra',
     });
   });
 
-  it('пустой суффикс полем не считается — поля с пустым именем в запросе нет', () => {
+  it('an empty suffix is not a field: no request field has an empty name', () => {
     expect(parseErrorCode('ValidateError/')).toEqual({ reason: 'ValidateError' });
   });
 });
 
-describe('ApiFieldError.split: раскладка по полям формы', () => {
-  it('под поле садится только совпавший суффикс, остальное — общим сообщением', async () => {
+describe('ApiFieldError.split: mapping onto form fields', () => {
+  it('only a matching suffix lands on a field, the rest becomes a form-wide message', async () => {
     server.use(
       error400([
-        { code: 'ValidateError/user_email', detail: 'Некорректный емаил' },
-        { code: 'ErrorCode', detail: 'Отказано по существу' },
-        { code: 'ValidateError/realm', detail: 'Realm не найден' },
+        { code: 'ValidateError/user_email', detail: 'Malformed email' },
+        { code: 'ErrorCode', detail: 'Refused on the merits' },
+        { code: 'ValidateError/realm', detail: 'Realm not found' },
       ]),
     );
 
@@ -98,33 +98,33 @@ describe('ApiFieldError.split: раскладка по полям формы', (
     expect(err).toBeInstanceOf(ApiFieldError);
     // В форме есть только user_email: отказ по существу и ошибка по чужому полю класть некуда.
     const { byField, global } = (err as ApiFieldError).split(new Set(['user_email']), t);
-    expect(byField).toEqual([{ name: 'user_email', detail: 'Некорректный емаил' }]);
-    expect(global).toBe('Отказано по существу Realm не найден');
+    expect(byField).toEqual([{ name: 'user_email', detail: 'Malformed email' }]);
+    expect(global).toBe('Refused on the merits Realm not found');
   });
 
-  it('форма без единого совпавшего поля — всё уходит в общее сообщение, ничего не теряется', async () => {
-    server.use(error400([{ code: 'ValidateError/user_email', detail: 'Некорректный емаил' }]));
+  it('a form with no matching field: everything goes to the form-wide message, nothing is lost', async () => {
+    server.use(error400([{ code: 'ValidateError/user_email', detail: 'Malformed email' }]));
 
     const err = await authClient.post(`/v1/signup`, {}).catch((e: unknown) => e);
 
     const { byField, global } = (err as ApiFieldError).split(new Set(['user_login']), t);
     expect(byField).toEqual([]);
-    expect(global).toBe('Некорректный емаил');
+    expect(global).toBe('Malformed email');
   });
 
-  it('глобальных ошибок не было — общего сообщения нет вовсе', async () => {
-    server.use(error400([{ code: 'ValidateError/user_email', detail: 'Некорректный емаил' }]));
+  it('no global errors: there is no form-wide message at all', async () => {
+    server.use(error400([{ code: 'ValidateError/user_email', detail: 'Malformed email' }]));
 
     const err = await authClient.post(`/v1/signup`, {}).catch((e: unknown) => e);
 
     expect((err as ApiFieldError).split(new Set(['user_email']), t).global).toBeUndefined();
   });
 
-  it('две причины по одному полю склеиваются в одну запись — вторая не затирает первую', async () => {
+  it('two reasons for one field merge into a single entry: the second does not overwrite the first', async () => {
     server.use(
       error400([
-        { code: 'ValidateError/user_email', detail: 'Слишком длинный.' },
-        { code: 'EmailAlreadyExists/user_email', detail: 'Уже занят.' },
+        { code: 'ValidateError/user_email', detail: 'Too long.' },
+        { code: 'EmailAlreadyExists/user_email', detail: 'Already taken.' },
       ]),
     );
 
@@ -132,11 +132,11 @@ describe('ApiFieldError.split: раскладка по полям формы', (
 
     // Место под полем одно: отдай split() две записи, потребитель показал бы только последнюю.
     expect((err as ApiFieldError).split(new Set(['user_email']), t).byField).toEqual([
-      { name: 'user_email', detail: 'Слишком длинный. Уже занят.' },
+      { name: 'user_email', detail: 'Too long. Already taken.' },
     ]);
   });
 
-  it('глобальная ошибка с пустым detail → перевод, а не пустая строка (иначе тишина в UI)', async () => {
+  it('a global error with an empty detail falls back to a translation, not an empty string', async () => {
     server.use(error400([{ code: 'ErrorCode', detail: '' }]));
 
     const err = await authClient.post(`/v1/signup`, {}).catch((e: unknown) => e);
@@ -152,7 +152,7 @@ describe('ApiFieldError.split: раскладка по полям формы', (
  * чтобы не обещать «через 0 минут», но короткую паузу оно завысило бы в разы — а лимит
  * одновременных сессий сервер снимает и за полминуты.
  */
-describe('apiErrorText: срок повтора 429', () => {
+describe('apiErrorText: the 429 retry delay', () => {
   const details = (detail: string) => ({
     title: 'Too Many Requests',
     status: 429 as const,
@@ -161,33 +161,33 @@ describe('apiErrorText: срок повтора 429', () => {
     time: '',
   });
 
-  it('меньше минуты — секундами, как прислал сервер', () => {
-    expect(apiErrorText(new ApiRateLimitError(details('Занято'), 30), t)).toBe(
-      'Занято common.error.retryAfterSec(30)',
+  it('under a minute: seconds, exactly as the server sent them', () => {
+    expect(apiErrorText(new ApiRateLimitError(details('Busy'), 30), t)).toBe(
+      'Busy common.error.retryAfterSec(30)',
     );
   });
 
-  it('ровно минута — уже минутная шкала', () => {
-    expect(apiErrorText(new ApiRateLimitError(details('Занято'), 60), t)).toBe(
-      'Занято common.error.retryAfter(1)',
+  it('exactly a minute: already the minute scale', () => {
+    expect(apiErrorText(new ApiRateLimitError(details('Busy'), 60), t)).toBe(
+      'Busy common.error.retryAfter(1)',
     );
   });
 
-  it('минуты округляются вверх: 601 секунда — это 11 минут, а не 10', () => {
-    expect(apiErrorText(new ApiRateLimitError(details('Занято'), 601), t)).toBe(
-      'Занято common.error.retryAfter(11)',
+  it('minutes round up: 601 seconds is 11 minutes, not 10', () => {
+    expect(apiErrorText(new ApiRateLimitError(details('Busy'), 601), t)).toBe(
+      'Busy common.error.retryAfter(11)',
     );
   });
 
-  it('срока нет — только причина, без обрывка про повтор', () => {
-    expect(apiErrorText(new ApiRateLimitError(details('Занято')), t)).toBe('Занято');
+  it('no delay: the reason alone, without a dangling retry clause', () => {
+    expect(apiErrorText(new ApiRateLimitError(details('Busy')), t)).toBe('Busy');
   });
 
-  it('сервер не назвал ни причины, ни срока — свой текст про лимит', () => {
+  it('the server named neither reason nor delay: our own rate-limit text', () => {
     expect(apiErrorText(new ApiRateLimitError(details('')), t)).toBe('common.error.rateLimited');
   });
 
-  it('до сервера не дошли — текст про связь, а не про повтор позже', () => {
+  it('never reached the server: the connection text, not the retry-later one', () => {
     expect(apiErrorText(new ApiTransportError(), t)).toBe('common.error.network');
   });
 });
@@ -196,20 +196,20 @@ describe('apiErrorText: срок повтора 429', () => {
  * apiErrorText — путь для потребителя БЕЗ формы: класть под поля нечего, поэтому полевые детали
  * идут в общий текст наравне с остальными. У кого форма есть, тот зовёт split().
  */
-describe('apiErrorText: 400 у потребителя без формы', () => {
-  it('полевые детали не теряются — иначе причина отказа не показалась бы вовсе', () => {
+describe('apiErrorText: a 400 for a consumer without a form', () => {
+  it('field details are not lost: otherwise the reason for the refusal would never be shown', () => {
     const err = new ApiFieldError(
       [
-        { code: 'ValidateError/user_email', detail: 'Некорректный емаил.' },
-        { code: 'ErrorCode', detail: 'Отказано по существу.' },
+        { code: 'ValidateError/user_email', detail: 'Malformed email.' },
+        { code: 'ErrorCode', detail: 'Refused on the merits.' },
       ],
       400,
     );
 
-    expect(apiErrorText(err, t)).toBe('Некорректный емаил. Отказано по существу.');
+    expect(apiErrorText(err, t)).toBe('Malformed email. Refused on the merits.');
   });
 
-  it('деталей нет вовсе → перевод, а не пустая строка', () => {
+  it('no details at all: a translation, not an empty string', () => {
     expect(apiErrorText(new ApiFieldError([{ code: 'ErrorCode', detail: '' }], 400), t)).toBe(
       'common.error.generic',
     );
@@ -217,17 +217,17 @@ describe('apiErrorText: 400 у потребителя без формы', () => 
 });
 
 describe('normalizeError: 429', () => {
-  it('Retry-After доезжает в секундах', async () => {
+  it('Retry-After arrives in seconds', async () => {
     server.use(error429('600'));
 
     const err = await authClient.post(`/v1/signup`, {}).catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(ApiRateLimitError);
     expect((err as ApiRateLimitError).retryAfterSec).toBe(600);
-    expect((err as ApiRateLimitError).details.detail).toBe('Повторите позже');
+    expect((err as ApiRateLimitError).details.detail).toBe('Try again later');
   });
 
-  it('без заголовка — 429 всё равно свой класс, задержку выбирает клиент', async () => {
+  it('without the header a 429 is still its own class; the client picks the delay', async () => {
     server.use(error429());
 
     const err = await authClient.post(`/v1/signup`, {}).catch((e: unknown) => e);
@@ -236,7 +236,7 @@ describe('normalizeError: 429', () => {
     expect((err as ApiRateLimitError).retryAfterSec).toBeUndefined();
   });
 
-  it('429 без problem+json (прокси): detail пуст, чтобы UI показал свой перевод', async () => {
+  it('429 without problem+json (a proxy): detail stays empty so the UI shows its own translation', async () => {
     server.use(
       http.post(`${BASE}/v1/signup`, () => new HttpResponse('<html>429</html>', { status: 429 })),
     );
@@ -250,11 +250,11 @@ describe('normalizeError: 429', () => {
     expect((err as ApiRateLimitError).details.status).toBe(429);
   });
 
-  it('403 остаётся ApiProblemError — 429-ветка его не перехватывает', async () => {
+  it('403 stays an ApiProblemError: the 429 branch does not intercept it', async () => {
     server.use(
       http.post(`${BASE}/v1/signup`, () =>
         HttpResponse.json(
-          { title: 'Forbidden', status: 403, detail: 'Вы уже авторизованы' },
+          { title: 'Forbidden', status: 403, detail: 'You are already signed in' },
           { status: 403, headers: { 'Content-Type': 'application/problem+json' } },
         ),
       ),

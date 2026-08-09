@@ -27,12 +27,12 @@ beforeEach(() => {
 });
 
 describe('module-registry', () => {
-  it('дубль id модуля → fail-fast', () => {
+  it('a duplicate module id fails fast', () => {
     registerModule(mod({ id: 'a' }), ctx);
     expect(() => registerModule(mod({ id: 'a' }), ctx)).toThrow(/already registered/);
   });
 
-  it('buildRoutes: роуты модулей + app-level fallback "*"', () => {
+  it('buildRoutes: module routes plus the app-level "*" fallback', () => {
     registerModule(mod({ id: 'a' }), ctx);
     registerModule(mod({ id: 'b' }), ctx);
     const routes = buildRoutes();
@@ -41,7 +41,7 @@ describe('module-registry', () => {
     expect(routes[routes.length - 1]?.path).toBe('*');
   });
 
-  it('применяет декларативные схемы и onInit', () => {
+  it('applies declarative schemas and onInit', () => {
     let inited = false;
     registerModule(
       mod({
@@ -57,7 +57,7 @@ describe('module-registry', () => {
     expect(inited).toBe(true);
   });
 
-  it('buildNav: пока роли не применяются (rolesEnforced=false), requiredRoles никого не отсекает', () => {
+  it('buildNav: while roles are not enforced (rolesEnforced=false), requiredRoles filters nobody out', () => {
     registerModule(mod({ id: 'a', nav: [{ id: 'n', label: 'l', route: '/a' }] }), ctx);
     registerModule(
       mod({ id: 'b', requiredRoles: ['admin'], nav: [{ id: 'n2', label: 'l2', route: '/b' }] }),
@@ -70,7 +70,7 @@ describe('module-registry', () => {
     expect(buildRoutes().some((r) => r.path === '/b')).toBe(true);
   });
 
-  it('moduleQueryKey — конвенция [moduleId, entity, ...params]', () => {
+  it('moduleQueryKey: the [moduleId, entity, ...params] convention', () => {
     expect(moduleQueryKey('auth', 'user', 42)).toEqual(['auth', 'user', 42]);
   });
 });

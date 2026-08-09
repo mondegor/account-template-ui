@@ -2,7 +2,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Link, MemoryRouter, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { addTranslations, formatDateTimeLong, initI18n, setLanguage } from '@core/i18n';
+import {
+  addTranslations,
+  formatDateTimeLong,
+  i18next,
+  initI18n,
+  setLanguage,
+  toLocale,
+} from '@core/i18n';
 import { deployTranslations } from '@app';
 import { registerBaseComponents } from '@core/renderer';
 import { registerModule, resetRegistry } from '@core/module-registry';
@@ -65,7 +72,7 @@ const TWO_REALMS = user([
   },
   {
     name: OTHER_REALM,
-    user_kind: 'staff',
+    user_kind: 'employee',
     created_at: '2025-03-02T14:30:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
@@ -94,7 +101,7 @@ vi.mock('../api/authApi', () => ({
 }));
 
 beforeAll(() => {
-  setLanguage('ru');
+  setLanguage('en');
   initI18n();
   // Подписи кабинетов живут в deploy-слое (в проде их ставит registerAllModules).
   addTranslations(deployTranslations);
@@ -166,7 +173,7 @@ const trashButtons = () =>
   });
 
 describe('SessionsPage', () => {
-  it('текущая сессия — отдельным блоком и без корзины', async () => {
+  it('the current session sits in its own block and has no bin', async () => {
     renderSessions();
     expect(await screen.findByText('This device')).toBeInTheDocument();
     expect(
@@ -182,24 +189,24 @@ describe('SessionsPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('«Истекает» — абсолютная дата, формат как у «Открыта»', async () => {
+  it('«expires» is an absolute date, formatted like «opened»', async () => {
     renderSessions();
     await screen.findByText('This device');
     expect(rowValue(tr('auth.sessions.expiresAt'), cardWith('This device'))?.textContent).toBe(
-      formatDateTimeLong(new Date('2026-08-11T10:00:00Z'), 'ru-RU', PROFILE_TZ),
+      // Локаль берём ту же, что страница (@core/i18n: toLocale активного языка), а не жёсткую:
+      // эталон обязан ехать за языком интерфейса.
+      formatDateTimeLong(new Date('2026-08-11T10:00:00Z'), toLocale(i18next.language), PROFILE_TZ),
     );
   });
 
-  it('нет expires_at (поле опционально) → «Истекает» с прочерком', async () => {
+  it('no expires_at (the field is optional): «expires» shows a dash', async () => {
     vi.mocked(getUserSessions).mockResolvedValue([{ ...CURRENT, expires_at: undefined }]);
     renderSessions();
     await screen.findByText('This device');
-    expect(rowValue(tr('auth.sessions.expiresAt'), cardWith('This device'))?.textContent).toBe(
-      '—',
-    );
+    expect(rowValue(tr('auth.sessions.expiresAt'), cardWith('This device'))?.textContent).toBe('—');
   });
 
-  it('местоположение без данных (нет поля или пустая строка) → прочерк, строка на месте', async () => {
+  it('a location with no data (missing field or empty string): a dash, the row stays', async () => {
     vi.mocked(getUserSessions).mockResolvedValue([
       CURRENT,
       { ...OTHERS[0]!, location: undefined },
@@ -216,7 +223,7 @@ describe('SessionsPage', () => {
     expect(locationOf('Home PC')).toBe('—');
   });
 
-  it('массовая кнопка идёт после карточки текущей сессии и до списка остальных', async () => {
+  it('the bulk button comes after the current-session card and before the rest of the list', async () => {
     const { container } = renderSessions();
     await screen.findByText('This device');
     const text = container.textContent ?? '';
@@ -228,7 +235,7 @@ describe('SessionsPage', () => {
     );
   });
 
-  it('клик по корзине закрывает одну сессию', async () => {
+  it('a click on the bin closes a single session', async () => {
     renderSessions();
     await screen.findByText('This device');
 
@@ -236,7 +243,7 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(closeUserSessions).toHaveBeenCalledWith([OTHERS[0]!.session_id]));
   });
 
-  it('инвалидация после закрытия не зависит от того, какой кабинет открыт сейчас', async () => {
+  it('invalidation after closing does not depend on which realm is open right now', async () => {
     // Запрос закрытия висит; пока он в полёте, пользователь уходит в другой кабинет.
     let release: () => void = () => {};
     vi.mocked(closeUserSessions).mockImplementation(
@@ -261,7 +268,7 @@ describe('SessionsPage', () => {
     );
   });
 
-  it('массовое закрытие шлёт все id, кроме текущей — и только после подтверждения', async () => {
+  it('bulk closing sends every id except the current one, and only after confirmation', async () => {
     renderSessions();
     await screen.findByText('This device');
 
@@ -274,7 +281,7 @@ describe('SessionsPage', () => {
     );
   });
 
-  it('пока идёт массовое закрытие, корзины выключены — второй mutate не перетрёт первый', async () => {
+  it('while bulk closing runs the bins are disabled: a second mutate cannot overwrite the first', async () => {
     // Запрос, который не завершается: держим мутацию в pending и смотрим на состояние кнопок.
     let release: () => void = () => {};
     vi.mocked(closeUserSessions).mockImplementation(
@@ -298,7 +305,7 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(trashButtons()[0]!).toBeEnabled());
   });
 
-  it('смена кабинета перезапрашивает список, комбобокс остаётся на месте', async () => {
+  it('changing the realm refetches the list, the combobox stays in place', async () => {
     renderSessions();
     await screen.findByText('This device');
 
@@ -322,7 +329,7 @@ describe('SessionsPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('выбор кабинета уезжает в URL — F5 и пересланная ссылка его сохранят', async () => {
+  it('the chosen realm goes into the URL: a reload and a forwarded link both keep it', async () => {
     renderSessions();
     await screen.findByText('This device');
     expect(locationNow()).toBe('/sessions');
@@ -337,7 +344,7 @@ describe('SessionsPage', () => {
     );
   });
 
-  it('пункт меню «Сессии» (/sessions без параметра) откатывает на кабинет деплоя', async () => {
+  it('the «sessions» menu item (/sessions with no parameter) falls back to the deployment realm', async () => {
     renderSessions(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`);
     await waitFor(() =>
       expect(screen.getByRole('combobox').textContent).toBe(
@@ -358,7 +365,7 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(CURRENT_REALM));
   });
 
-  it('?realm= из ссылки в профиле открывает сессии этого кабинета', async () => {
+  it('?realm= from the profile link opens the sessions of that realm', async () => {
     renderSessions(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`);
 
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(OTHER_REALM));
@@ -370,7 +377,7 @@ describe('SessionsPage', () => {
     expect(screen.getByRole('combobox').textContent).toBe(tr('deploy.realmLabel.print-shop/admin'));
   });
 
-  it('чужой ?realm= игнорируется — откат на кабинет деплоя и чистка адреса', async () => {
+  it('a foreign ?realm= is ignored: fall back to the deployment realm and clean the address', async () => {
     // URL правится руками: доступа к кабинету нет, запрос туда уходить не должен.
     renderSessions('/sessions?realm=print-shop%2Fsomebody-else');
 
@@ -384,14 +391,14 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(locationNow()).toBe('/sessions'));
   });
 
-  it('чужой realm не сносит соседние query-параметры', async () => {
+  it('a foreign realm does not wipe the neighbouring query parameters', async () => {
     renderSessions('/sessions?realm=print-shop%2Fsomebody-else&keep=1');
 
     await screen.findByText('This device');
     await waitFor(() => expect(locationNow()).toBe('/sessions?keep=1'));
   });
 
-  it('выбор кабинета не сносит соседние query-параметры', async () => {
+  it('choosing a realm does not wipe the neighbouring query parameters', async () => {
     renderSessions('/sessions?keep=1');
     await screen.findByText('This device');
 
@@ -405,7 +412,7 @@ describe('SessionsPage', () => {
     );
   });
 
-  it('ошибка закрытия уходит вместе со списком, к которому относилась', async () => {
+  it('a close error goes away together with the list it belonged to', async () => {
     vi.mocked(closeUserSessions).mockRejectedValue(new Error('500'));
     renderSessions();
     await screen.findByText('This device');
@@ -424,7 +431,7 @@ describe('SessionsPage', () => {
     expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
   });
 
-  it('ошибка закрытия уходит и когда кабинет сменил не комбобокс, а пункт меню', async () => {
+  it('a close error goes away when the realm is changed by the menu item, not the combobox', async () => {
     // Комбобокс — не единственная дверь: кабинет живёт в URL, и пункт меню «Сессии» меняет его
     // мимо selectRealm (тот же роут — страница не размонтируется). Ошибка всё равно относится к
     // прошлому списку и обязана уйти вместе с ним, иначе висит над сессиями другого кабинета.
@@ -441,7 +448,7 @@ describe('SessionsPage', () => {
     expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
   });
 
-  it('кабинет сменили посреди запроса → ошибка не всплывает над чужим списком и не ждёт возврата', async () => {
+  it('the realm changed mid-request: the error does not surface over a foreign list and does not wait for a return', async () => {
     // Корзины на время запроса выключены, а комбобокс — нет: кабинет можно сменить, пока запрос в
     // полёте, и тогда ошибка рождается уже над чужим списком.
     let fail: (e: Error) => void = () => {};
@@ -475,7 +482,7 @@ describe('SessionsPage', () => {
     expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
   });
 
-  it('кабинет пропал из профиля → выбор сбрасывается на кабинет деплоя', async () => {
+  it('the realm disappeared from the profile: the choice resets to the deployment realm', async () => {
     const { client } = renderSessions();
     await screen.findByText('This device');
 
@@ -494,7 +501,7 @@ describe('SessionsPage', () => {
     expect(getUserSessions).toHaveBeenLastCalledWith(CURRENT_REALM);
   });
 
-  it('в комбобоксе — человеческие названия, а не print-shop/*', async () => {
+  it('the combobox shows human names, not print-shop/*', async () => {
     renderSessions();
     await screen.findByText('This device');
 
@@ -505,7 +512,7 @@ describe('SessionsPage', () => {
     expect(options.queryByText(CURRENT_REALM)).toBeNull();
   });
 
-  it('нет чужих сессий → массовая кнопка disabled', async () => {
+  it('no other sessions: the bulk button is disabled', async () => {
     vi.mocked(getUserSessions).mockResolvedValue([CURRENT]);
     renderSessions();
     await screen.findByText('This device');
@@ -516,7 +523,7 @@ describe('SessionsPage', () => {
     ).toBeDisabled();
   });
 
-  it('упал профиль → сообщение про профиль, а не про сессии', async () => {
+  it('the profile request failed: the message is about the profile, not the sessions', async () => {
     // Ошибка в том виде, в каком её отдаёт интерсептор. Текст плашки берётся из переводов, а не из
     // `message` класса: тот английский и служебный (@core/api/errors).
     vi.mocked(getUserInfo).mockRejectedValue(new ApiTransportError());
@@ -531,7 +538,7 @@ describe('SessionsPage', () => {
     expect(getUserSessions).not.toHaveBeenCalled();
   });
 
-  it('ни одного кабинета → внятное сообщение, а не пустая страница', async () => {
+  it('no realms at all: a clear message, not an empty page', async () => {
     vi.mocked(getUserInfo).mockResolvedValue(user([]));
     renderSessions();
 
@@ -540,7 +547,7 @@ describe('SessionsPage', () => {
     expect(getUserSessions).not.toHaveBeenCalled();
   });
 
-  it('один кабинет → просто «Сессии», без комбобокса и слова «кабинет»', async () => {
+  it('a single realm: just «sessions», with no combobox and no realm wording', async () => {
     vi.mocked(getUserInfo).mockResolvedValue(ONE_REALM);
     const { container } = renderSessions();
     await screen.findByText('This device');

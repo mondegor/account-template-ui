@@ -112,4 +112,17 @@ describe('authClient: 401 → refresh → retry', () => {
     expect(patches).toEqual([]);
     expect(calls).toEqual(['Bearer stale']);
   });
+
+  it('401 on POST /v1/signin/recovery does NOT trigger a refresh: it is guests-only too, and the path is matched exactly', async () => {
+    const patches: string[] = [];
+    const calls: (string | null)[] = [];
+    server.use(refreshHandler(patches), protectedOnce('post', '/v1/signin/recovery', calls));
+
+    await expect(
+      authClient.post('/v1/signin/recovery', { login: 'user@example.com' }),
+    ).rejects.toThrow();
+
+    expect(patches).toEqual([]);
+    expect(calls).toEqual(['Bearer stale']);
+  });
 });

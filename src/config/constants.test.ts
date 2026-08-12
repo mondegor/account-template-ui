@@ -12,6 +12,10 @@ import { limits } from './index';
  *
  * Проверки якорятся по имени схемы: пары min/max в спеке повторяются (realm и secret — оба 4/32),
  * поэтому поиск по всему файлу зеленел бы по чужому совпадению.
+ *
+ * Одна граница сверяется наполовину: `confirmCode` описывает код из сообщения, а в спеке он делит
+ * поле `secret` с паролем, TOTP и аварийным кодом. Общими там объявлены 4..32, поэтому якорь есть
+ * только у нижней границы — верхнюю сверять не с чем, её знает продукт.
  */
 const spec = readFileSync(resolve(__dirname, '../../contracts/auth/openapi.yaml'), 'utf8');
 
@@ -46,6 +50,9 @@ describe('field limits match the openapi contract', () => {
 
   it('secret/code 4/32 (ConfirmOperation)', () => {
     expect(limits.secret).toEqual({ min: 4, max: 32 });
+    // Код из сообщения занимает то же поле, поэтому короче схемы быть не может.
+    expect(limits.confirmCode.min).toBe(limits.secret.min);
+    expect(limits.confirmCode.max).toBeLessThanOrEqual(limits.secret.max);
     expect(
       hasMinMax(schemaBlock('Auth.Operation.Request.Model.ConfirmOperation'), 'secret', 4, 32),
     ).toBe(true);

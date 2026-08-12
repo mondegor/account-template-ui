@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react';
-import { TextField } from '@mui/material';
 import { useController, useFormContext } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { UiTextField } from '@ui';
 import type { NodeComponentProps } from '@core/schema';
 import { FormErrorContext, SubmitOnlyContext } from '@core/renderer';
 import { isSignupEmail } from '../lib/userLogin';
@@ -113,31 +113,22 @@ export function EmailFieldNode({ node }: NodeComponentProps) {
         : ' ');
 
   return (
-    <TextField
+    <UiTextField
       label={node.label ? t(node.label) : undefined}
       type="email"
       name={field.name}
       value={(field.value as string) ?? ''}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
       onBlur={field.onBlur}
       inputRef={field.ref}
-      fullWidth
-      size="small"
       autoFocus={node.props?.autoFocus}
       placeholder={node.props?.placeholder}
+      autoComplete={node.props?.autoComplete}
+      maxLength={node.validation?.max}
       error={isError}
+      // Свободный email — явный сигнал «можно регистрироваться».
+      success={showFree}
       helperText={helperText}
-      // Свободный email — зелёная рамка/подпись как явный сигнал «можно регистрироваться».
-      color={showFree ? 'success' : undefined}
-      focused={showFree || undefined}
-      sx={showFree ? { '& .MuiFormHelperText-root': { color: 'success.main' } } : undefined}
-      slotProps={{
-        htmlInput: {
-          autoComplete: node.props?.autoComplete,
-          maxLength: node.validation?.max,
-          'data-testid': field.name ? `field-${field.name}` : 'ui-textfield',
-        },
-      }}
     />
   );
 }

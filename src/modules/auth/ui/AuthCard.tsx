@@ -11,9 +11,9 @@ export function AuthCard({ children, footer }: { children: ReactNode; footer?: R
   return (
     <AuthLayout>
       <Card variant="outlined" sx={{ width: 340 }}>
-        <CardContent sx={{ px: 4, pt: 3, pb: 3, '&:last-child': { pb: 3 } }}>
+        <CardContent sx={{ px: 3.5, pt: 3, pb: 3, '&:last-child': { pb: 3 } }}>
           <BrandLockup />
-          <Box sx={{ mt: 2 }}>{children}</Box>
+          <Box sx={{ mt: 1 }}>{children}</Box>
           {footer}
         </CardContent>
       </Card>

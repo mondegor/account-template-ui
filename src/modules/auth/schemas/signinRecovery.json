@@ -1,0 +1,28 @@
+{
+  "id": "auth.signinRecovery",
+  "type": "page",
+  "title": "auth.signinRecovery.title",
+  "layout": "auth",
+  "children": [
+    {
+      "type": "section",
+      "children": [
+        { "type": "text", "text": "auth.signinRecovery.enterLogin" },
+        {
+          "type": "form",
+          "submitOnly": true,
+          "submit": { "label": "auth.signinRecovery.submit" },
+          "children": [
+            {
+              "type": "field.text",
+              "name": "user_login",
+              "label": "auth.field.login",
+              "props": { "autoComplete": "username" },
+              "validation": { "required": true, "min": 7, "max": 64, "format": "login" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -148,11 +148,10 @@ describe('ApiFieldError.split: mapping onto form fields', () => {
 });
 
 /**
- * Срок повтора 429 показывается в двух шкалах. Одной не хватает: округление вверх до минуты нужно,
- * чтобы не обещать «через 0 минут», но короткую паузу оно завысило бы в разы — а лимит
- * одновременных сессий сервер снимает и за полминуты.
+ * Серверная деталь доезжает до пользователя как есть. Срок повтора из Retry-After разобран в
+ * retryAfterSec и виден в логах, но в текст не подмешивается: назвать срок словами — дело детали.
  */
-describe('apiErrorText: the 429 retry delay', () => {
+describe('apiErrorText: the server detail is shown as is', () => {
   const details = (detail: string) => ({
     title: 'Too Many Requests',
     status: 429 as const,
@@ -161,25 +160,11 @@ describe('apiErrorText: the 429 retry delay', () => {
     time: '',
   });
 
-  it('under a minute: seconds, exactly as the server sent them', () => {
-    expect(apiErrorText(new ApiRateLimitError(details('Busy'), 30), t)).toBe(
-      'Busy common.error.retryAfterSec(30)',
-    );
+  it('a delay was named: still the detail alone, without a retry clause of ours', () => {
+    expect(apiErrorText(new ApiRateLimitError(details('Busy'), 30), t)).toBe('Busy');
   });
 
-  it('exactly a minute: already the minute scale', () => {
-    expect(apiErrorText(new ApiRateLimitError(details('Busy'), 60), t)).toBe(
-      'Busy common.error.retryAfter(1)',
-    );
-  });
-
-  it('minutes round up: 601 seconds is 11 minutes, not 10', () => {
-    expect(apiErrorText(new ApiRateLimitError(details('Busy'), 601), t)).toBe(
-      'Busy common.error.retryAfter(11)',
-    );
-  });
-
-  it('no delay: the reason alone, without a dangling retry clause', () => {
+  it('no delay: the same text — the header changes nothing here', () => {
     expect(apiErrorText(new ApiRateLimitError(details('Busy')), t)).toBe('Busy');
   });
 

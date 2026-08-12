@@ -24,6 +24,11 @@ export interface UiTextFieldProps {
   onBlur?: () => void;
   inputRef?: Ref<HTMLInputElement>;
   error?: boolean;
+  /**
+   * Проверка значения прошла: рамка и подпись зелёные, обводка активна и без фокуса. Нужно там,
+   * где «пусто» и «всё хорошо» — разные состояния и молчание поля читалось бы как первое.
+   */
+  success?: boolean;
   helperText?: string;
   disabled?: boolean;
   autoFocus?: boolean;
@@ -42,6 +47,7 @@ export function UiTextField({
   onBlur,
   inputRef,
   error,
+  success,
   helperText,
   disabled,
   autoFocus,
@@ -63,8 +69,21 @@ export function UiTextField({
       autoFocus={autoFocus}
       fullWidth
       size="small"
-      slotProps={{ htmlInput: { autoComplete, inputMode, maxLength } }}
-      data-testid={name ? `field-${name}` : 'ui-textfield'}
+      // Зелёный цвет MUI разносит по частям поля сам, кроме подписи под ним: её он красит только
+      // ошибкой, поэтому подпись догоняем вручную. `focused` — чтобы рамка была видна и тогда,
+      // когда курсор уже ушёл дальше.
+      color={success ? 'success' : undefined}
+      focused={success || undefined}
+      sx={success ? { '& .MuiFormHelperText-root': { color: 'success.main' } } : undefined}
+      // testid висит на самом `input`, а не на обёртке: по нему поле и читают, и заполняют.
+      slotProps={{
+        htmlInput: {
+          autoComplete,
+          inputMode,
+          maxLength,
+          'data-testid': name ? `field-${name}` : 'ui-textfield',
+        },
+      }}
     />
   );
 }

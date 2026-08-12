@@ -24,7 +24,7 @@ vi.mock('../api/authApi', () => ({
 }));
 
 /** Причину аннулирования знает только сервер — она приходит текстом и в переводах её нет. */
-const DISABLED_2FA_DETAIL = '2FA was disabled';
+const REALM_REVOKED_DETAIL = 'Access to the realm has been revoked';
 /** Так же и причину отказа терминального действия: 429 приносит её своим detail. */
 const LIMIT_DETAIL = 'Concurrent session limit exceeded';
 
@@ -93,6 +93,48 @@ describe('ConfirmOperationNode: «revoke» returns to the screen the flow starte
     renderConfirm();
     fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.revoke') }));
     await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/signin'));
+  });
+});
+
+/**
+ * Аварийный код вместо второго фактора спека допускает у обычного входа и не допускает в цепочке
+ * резервного: там он идёт отдельным звеном, и заменять им пароль значило бы потратить за один вход
+ * два кода. Признака потока в снимке нет — звенья приходят по одному, — поэтому подсказку выбирает
+ * то, откуда человек сюда пришёл.
+ */
+describe('ConfirmOperationNode: the second-factor hint', () => {
+  function renderFactorLink(origin?: string) {
+    if (origin) saveConfirmReturn(origin);
+    useOperationStore.getState().dispatch({
+      type: 'START',
+      parts: {
+        token: 't'.repeat(64),
+        confirm_method: 'PASSWORD',
+        remaining_attempts: 3,
+        expires_in: 600,
+      },
+      now: Date.now(),
+    });
+    renderConfirm();
+  }
+
+  it('the sign-in flow: the hint offers a recovery code as well', () => {
+    renderFactorLink('/signin');
+    expect(screen.getByText(tr('auth.signin.confirmHint.PASSWORD'))).toBeInTheDocument();
+  });
+
+  it('the recovery flow: the hint stays about the second factor alone', () => {
+    renderFactorLink('/signin/recovery');
+    expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
+  });
+
+  /**
+   * Источника нет — потока не знает никто, и звать аварийный код не на чем: в цепочке резервного
+   * входа его на этом звене не примут, а отказ стоил бы одной попытки из трёх.
+   */
+  it('with no stored origin the hint stays about the second factor alone', () => {
+    renderFactorLink();
+    expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
   });
 });
 
@@ -169,18 +211,20 @@ describe('ConfirmOperationNode: the terminal action is refused', () => {
 });
 
 /**
- * 409 — операцию аннулировало само условие, при котором она создавалась (2FA отключили уже после).
- * Экран обязан стать тупиком: ни поля кода, ни «Повторить», ни «запросить новый код» — повторять
- * нечего, единственный выход отсюда — начать вход заново. Объяснить это может только сервер:
- * свой текст про «начните заново» говорит, что делать, но не почему.
+ * 403 — завершить операцию нельзя в принципе: привязка к контуру снята, вкладка уже авторизована
+ * либо операция чужая. Приходит он от открытия сессии: у подтверждения кода такого ответа по спеке
+ * нет. Экран обязан стать тупиком: ни поля кода, ни «Повторить», ни «запросить новый код» —
+ * повторять нечего, единственный выход отсюда — начать вход заново. Объяснить это может только
+ * сервер: свой текст про «начните заново» говорит, что делать, но не почему.
  */
 describe('ConfirmOperationNode: the server invalidated the operation', () => {
   it('the screen collapses into a dead end carrying the server reason', async () => {
-    vi.mocked(confirmOperation).mockRejectedValue(
+    vi.mocked(confirmOperation).mockResolvedValue(null);
+    vi.mocked(openSession).mockRejectedValue(
       new ApiProblemError({
-        title: 'Conflict',
-        status: 409,
-        detail: DISABLED_2FA_DETAIL,
+        title: 'Forbidden',
+        status: 403,
+        detail: REALM_REVOKED_DETAIL,
         instance: '',
         time: '',
       }),
@@ -189,7 +233,7 @@ describe('ConfirmOperationNode: the server invalidated the operation', () => {
     fireEvent.change(screen.getByLabelText(tr('auth.field.code')), { target: { value: '183947' } });
     fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.submit') }));
 
-    expect(await screen.findByText(DISABLED_2FA_DETAIL)).toBeInTheDocument();
+    expect(await screen.findByText(REALM_REVOKED_DETAIL)).toBeInTheDocument();
     expect(screen.queryByLabelText(tr('auth.field.code'))).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: tr('auth.confirm.submit') }),

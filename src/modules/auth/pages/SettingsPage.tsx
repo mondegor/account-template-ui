@@ -280,9 +280,7 @@ function SettingsForm({ user }: { user: UserInfo }) {
               </FormHelperText>
             </FormControl>
 
-            {otherError && (
-              <Alert severity="error">{p('saveError', { message: otherError })}</Alert>
-            )}
+            {otherError && <Alert severity="error">{otherError}</Alert>}
             {/* Тоже с testid: подпись собирается из имени подобранной зоны, и искать плашку по
                 тексту значило бы повторять в тесте всю подстановку. */}
             {substituted && (
@@ -325,7 +323,7 @@ export function SettingsPage() {
       )}
       {isError && (
         <Alert severity="error" sx={{ maxWidth: 640, mx: 'auto' }}>
-          {t('auth.settings.loadError', { message: apiErrorText(error, t) })}
+          {apiErrorText(error, t)}
         </Alert>
       )}
       {/* Без key: перемонтирование на смене профиля сбрасывало бы и плашку сохранения, и

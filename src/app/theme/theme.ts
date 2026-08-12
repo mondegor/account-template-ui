@@ -13,6 +13,20 @@ const shared: ThemeOptions = {
   components: {
     // Ссылки подчёркиваются только при наведении — во всех экранах.
     MuiLink: { defaultProps: { underline: 'hover' } },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        // Автозаполнение браузера кладёт в поле собственную заливку поверх фона: она красит весь
+        // бокс ввода, включая полосу под вырезом рамки, и подпись поля оказывается на чужом фоне.
+        // Красим её в фон карточки, чтобы подставленное значение выглядело как набранное руками.
+        input: ({ theme }) => ({
+          '&:-webkit-autofill': {
+            WebkitBoxShadow: `0 0 0 100px ${theme.palette.background.paper} inset`,
+            WebkitTextFillColor: theme.palette.text.primary,
+            caretColor: theme.palette.text.primary,
+          },
+        }),
+      },
+    },
   },
 };
 

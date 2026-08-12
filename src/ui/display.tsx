@@ -25,7 +25,10 @@ export function UiAlert({
   children?: ReactNode;
 }) {
   return (
-    <Alert severity={severity} sx={{ mb: 2 }} data-testid="ui-alert">
+    // Плашка отбивается с обеих сторон одинаково: своего верхнего отступа у неё не было вовсе, и
+    // она прижималась к строке над собой. Боковые поля уже дефолтных — карточка узкая, и текст
+    // в плашке должен переноситься не раньше соседних строк.
+    <Alert severity={severity} sx={{ my: 1, px: 1.5 }} data-testid="ui-alert">
       {children}
     </Alert>
   );
@@ -56,7 +59,10 @@ export function UiButton({
       fullWidth={fullWidth}
       variant={variant}
       color={color}
-      sx={{ mt: 1 }}
+      // Отступ небольшой: поле над кнопкой всегда резервирует строку под сообщение об ошибке
+      // (чтобы кнопка не прыгала на сабмите), поэтому пустой формой зазор и так выглядит широким.
+      // Но и нулевым его не оставить — показанное сообщение упиралось бы в кнопку.
+      sx={{ mt: 0.5 }}
       data-testid="ui-button"
     >
       {label}

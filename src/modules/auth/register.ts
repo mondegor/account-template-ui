@@ -2,7 +2,7 @@ import { registerHandler, type AsyncValidator, type SchemaHandler } from '@core/
 import { i18next } from '@core/i18n';
 import { onForcedLogout } from '@core/auth';
 import { useOperationStore } from '@core/operation';
-import { signin, signup } from './api/authApi';
+import { signin, signinByRecovery, signup } from './api/authApi';
 import { checkEmailAvailability } from './lib/emailAvailability';
 import { saveConfirmReturn } from './lib/confirmReturn';
 import { clearSecurityFlow } from './lib/securityFlow';
@@ -30,6 +30,18 @@ const signinHandler: SchemaHandler = async (values, ctx) => {
 };
 
 /**
+ * Резервный вход отличается от обычного только методом-инициатором: дальше та же операция и тот же
+ * общий экран подтверждения, который сам ведёт по звеньям цепочки. Возврат по «Отменить» свой —
+ * человек пришёл с резервного экрана, и обычный вход ему как раз не годится.
+ */
+const signinRecoveryHandler: SchemaHandler = async (values, ctx) => {
+  const op = await signinByRecovery(String(values.user_login ?? '').trim());
+  ctx.dispatchOperation({ type: 'START', parts: op, now: Date.now() });
+  saveConfirmReturn('/signin/recovery');
+  ctx.navigate('/confirm');
+};
+
+/**
  * Асинк-проверка доступности email на регистрации (на submit). Занят (400) → текст ошибки под поле;
  * если сервер не прислал detail — общий фолбэк-текст (иначе занятый email проскочил бы гейт).
  * 5xx/сеть — остаёмся нейтральны: не подтверждаем доступность, но и не блокируем ввод (реальный
@@ -51,6 +63,7 @@ export function initAuthModule(): void {
     asyncValidators: { user_email: emailAvailable },
   });
   registerHandler('auth.signin', { handler: signinHandler });
+  registerHandler('auth.signinRecovery', { handler: signinRecoveryHandler });
 
   // Принудительный разлогин (протухший refresh, reuse токена вне grace-окна) не перезагружает
   // вкладку, поэтому незавершённая операция пережила бы смену пользователя: следующий гость

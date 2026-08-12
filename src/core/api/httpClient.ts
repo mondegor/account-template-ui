@@ -45,6 +45,7 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
 // класса any-users, 401 у него штатный (протухший access), и продлевать его НАДО.
 const NO_REFRESH_PATHS = [
   '/v1/signin',
+  '/v1/signin/recovery',
   '/v1/signup',
   '/v1/session',
   '/v1/operation/confirm',

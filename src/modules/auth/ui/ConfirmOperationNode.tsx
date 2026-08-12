@@ -29,8 +29,15 @@ export function ConfirmOperationNode(_props: NodeComponentProps) {
       clearConfirmReturn();
       navigate('/profile', { replace: true });
     },
-    onRevoked: () => navigate(loadConfirmReturn(), { replace: true }),
+    onRevoked: () => navigate(loadConfirmReturn() ?? '/signin', { replace: true }),
   });
 
-  return <OperationConfirm flow={flow} />;
+  // Аварийный код вместо второго фактора спека разрешает только обычному входу: в цепочке
+  // резервного он идёт отдельным звеном, и заменять им пароль значило бы потратить за один вход два
+  // кода. Отличить потоки можно только по тому, откуда человек сюда пришёл: в снимке операции
+  // признака нет — звенья цепочки приходят по одному. Нет записи — нет и повода звать аварийный
+  // код: подсказка про него там, где его не примут, стоит одной попытки из трёх.
+  const hintPrefix = loadConfirmReturn() === '/signin' ? 'auth.signin.confirmHint' : undefined;
+
+  return <OperationConfirm flow={flow} hintPrefix={hintPrefix} />;
 }

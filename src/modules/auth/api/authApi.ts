@@ -35,6 +35,20 @@ export async function signin(userLogin: string): Promise<WaitingConfirmOperation
 }
 
 /**
+ * Шаг 1 входа для утративших доступ к почте. Письма нет вовсе: цепочка идёт «второй фактор →
+ * одноразовый аварийный код», поэтому у метода нет ни полей повторной отправки в ответе, ни 429.
+ * Аккаунту без 2FA операция создаётся такая же — по ответу состояние аккаунта не читается, но
+ * подтвердить её нечем. → WaitingConfirmOperation (200).
+ */
+export async function signinByRecovery(userLogin: string): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/signin/recovery', {
+    realm: realmProvider.getRealm(),
+    user_login: userLogin,
+  });
+  return res.data;
+}
+
+/**
  * Шаг 1 регистрации: создаёт операцию по email, сервер шлёт код. → WaitingConfirmOperation (200).
  *
  * Язык и пояс тело не несёт: сервер берёт их из самого запроса и фиксирует в профиле нового
@@ -243,7 +257,9 @@ export async function startDisable2fa(): Promise<WaitingConfirmOperation> {
 
 /**
  * Универсальное завершение операции (204) — им закрываются те потоки, у которых своего
- * завершающего метода нет: отключение 2FA, смена email и телефона.
+ * завершающего метода нет: отключение 2FA, смена телефона и смена емаила. У смены емаила это
+ * ВТОРАЯ операция цепочки — подтверждение владения новым адресом: именно её применение и меняет
+ * адрес аккаунта.
  */
 export async function applyOperation(req: ApplyByTokenRequest): Promise<void> {
   await authClient.post('/v1/security/apply-operation', req);

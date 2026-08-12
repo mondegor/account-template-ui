@@ -1,35 +1,20 @@
-import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Link, Typography } from '@mui/material';
 import { loadSchema } from '@core/schema';
 import { SchemaRenderer } from '@core/renderer';
 import { AuthCard } from '../ui/AuthCard';
+import { AuthFooterLine } from '../ui/AuthFooterLine';
+import { AuthNavLink } from '../ui/AuthNavLink';
 
 /** Регистрация — тонкая обёртка: рендерит схему auth.signup. Логика — в обработчике (register.ts). */
 export function SignupPage() {
-  const navigate = useNavigate();
   const { t } = useTranslation();
   return (
     <AuthCard
       footer={
-        <Typography
-          variant="body2"
-          align="center"
-          sx={{
-            color: 'text.secondary',
-            mt: 2.5,
-          }}
-        >
+        <AuthFooterLine>
           {t('auth.signup.haveAccount')}{' '}
-          <Link
-            component="button"
-            type="button"
-            onClick={() => navigate('/signin')}
-            sx={{ verticalAlign: 'baseline', fontSize: 'inherit', lineHeight: 'inherit', p: 0 }}
-          >
-            {t('auth.signup.signinLink')}
-          </Link>
-        </Typography>
+          <AuthNavLink to="/signin">{t('auth.signup.signinLink')}</AuthNavLink>
+        </AuthFooterLine>
       }
     >
       <SchemaRenderer schema={loadSchema('auth.signup')} />

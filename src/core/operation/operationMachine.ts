@@ -29,7 +29,7 @@ export interface OperationSnapshot {
   token: string;
   confirmMethod: string;
   remainingAttempts: number;
-  /** undefined = резенд неприменим (шаг PASSWORD/TOTP); 0 = резенды исчерпаны. */
+  /** undefined = резенд неприменим (звенья PASSWORD/TOTP/RECOVERY); 0 = резенды исчерпаны. */
   remainingResends?: number;
   expiresAt: number;
   resendAllowedAt: number;

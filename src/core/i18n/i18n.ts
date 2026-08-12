@@ -24,9 +24,9 @@ import { DEFAULT_LANGUAGE, LANGUAGES } from './languages';
 const commonRu = {
   validation: {
     required: 'Обязательное поле',
-    email: 'Введите корректный email',
+    email: 'Введите корректный емаил',
     phone: 'Введите корректный телефон',
-    login: 'Введите корректный email или телефон',
+    login: 'Введите корректный емаил или телефон',
     min: 'Минимум {{min}} символов',
     max: 'Не более {{max}} символов',
     pattern: 'Неверный формат',
@@ -34,14 +34,6 @@ const commonRu = {
   error: {
     generic: 'Что-то пошло не так. Попробуйте позже.',
     rateLimited: 'Слишком много попыток. Повторите позже.',
-    // Дополнение к rateLimited (или к серверной детали), когда сервер прислал Retry-After.
-    // Пауза короче минуты называется секундами — см. apiErrorText (@core/api/errors).
-    retryAfterSec_one: 'Повторить можно через {{count}} секунду.',
-    retryAfterSec_few: 'Повторить можно через {{count}} секунды.',
-    retryAfterSec_many: 'Повторить можно через {{count}} секунд.',
-    retryAfter_one: 'Повторить можно через {{count}} минуту.',
-    retryAfter_few: 'Повторить можно через {{count}} минуты.',
-    retryAfter_many: 'Повторить можно через {{count}} минут.',
     network: 'Нет связи с сервером. Проверьте подключение.',
   },
   shell: {
@@ -64,10 +56,6 @@ const commonEn = {
   error: {
     generic: 'Something went wrong. Please try again later.',
     rateLimited: 'Too many attempts. Please try again later.',
-    retryAfterSec_one: 'You can try again in {{count}} second.',
-    retryAfterSec_other: 'You can try again in {{count}} seconds.',
-    retryAfter_one: 'You can try again in {{count}} minute.',
-    retryAfter_other: 'You can try again in {{count}} minutes.',
     network: 'Cannot reach the server. Check your connection.',
   },
   shell: {

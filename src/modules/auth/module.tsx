@@ -1,6 +1,7 @@
 import { GuestOnly, ProtectedRoute } from '@core/auth';
 import type { ModuleDefinition } from '@core/module-registry';
 import { SigninPage } from './pages/SigninPage';
+import { SigninRecoveryPage } from './pages/SigninRecoveryPage';
 import { SignupPage } from './pages/SignupPage';
 import { ConfirmPage } from './pages/ConfirmPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -12,6 +13,7 @@ import { authTranslations } from './i18n';
 import { initAuthModule } from './register';
 import signupSchema from './schemas/signup.json';
 import signinSchema from './schemas/signin.json';
+import signinRecoverySchema from './schemas/signinRecovery.json';
 import confirmSchema from './schemas/confirm.json';
 
 /**
@@ -27,6 +29,14 @@ export const authModule: ModuleDefinition = {
       element: (
         <GuestOnly>
           <SigninPage />
+        </GuestOnly>
+      ),
+    },
+    {
+      path: '/signin/recovery',
+      element: (
+        <GuestOnly>
+          <SigninRecoveryPage />
         </GuestOnly>
       ),
     },
@@ -73,6 +83,7 @@ export const authModule: ModuleDefinition = {
   schemas: {
     'auth.signup': signupSchema,
     'auth.signin': signinSchema,
+    'auth.signinRecovery': signinRecoverySchema,
     'auth.confirm': confirmSchema,
   },
   fieldTypes: ['auth.emailField'],

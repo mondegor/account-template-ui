@@ -109,6 +109,10 @@ in exactly three places, each carrying a comment saying why:
 The lint rule matches Cyrillic, so on an English suite it guards only against Russian literals
 coming back; a forgotten `getByText('Save')` still needs review to catch.
 
+A second Cyrillic rule covers `src/mocks/**`, and the two do not overlap: this one looks at the
+query forms inside tests, that one at every literal in a mock (see **Mocks**). Neither reaches
+ordinary `src` code, where Russian is the norm.
+
 ## Comments
 
 Comments describe the present state only. No "it used to be X, now it is Y", no references to
@@ -123,6 +127,14 @@ under `import.meta.env.DEV && config.enableMocks`, so they are stripped from pro
 Every demo branch is reachable either through a reserved value (`taken@example.com`,
 `inprogress@example.com`, `nobody@example.com`) or a `VITE_MOCK_*` env flag. **Always document a new
 flag in `.env.example`** — what it turns on and why — otherwise the branch cannot be found by hand.
+
+**Mock string literals are English** — error `detail` values, operation step messages, session
+fixtures, `[MSW]` console lines. A mock makes up the server's own data, which is exactly what a
+test fixture is, so it follows the same rule; and the suite runs in English, where a Russian
+"server" answer clashes with the screen. Comments in `handlers.ts` stay Russian like everywhere
+else: lint walks AST nodes, so it sees literals and not comments. Enforced on `src/mocks/**` by
+`no-restricted-syntax` in `eslint.config.js`, pinned by `src/test/eslintConfig.test.ts` — change
+the rule only together with that test.
 
 ## Toolchain
 

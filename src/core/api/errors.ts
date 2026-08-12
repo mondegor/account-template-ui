@@ -186,10 +186,14 @@ export function normalizeError(err: unknown): ApiError {
 /**
  * Текст ошибки для показа пользователю — одно правило на всех потребителей (формы, плашки страниц).
  *
- * Серверную деталь берём как есть: бэк отдаёт её на языке запроса (`?lang`/Accept-Language), точнее
- * текста у нас нет. Пустая деталь значит «сервер ничего внятного не сказал» (тела нет или оно не
+ * Серверную деталь берём как есть и ничего к ней не дописываем: бэк отдаёт её на языке запроса
+ * (`?lang`/Accept-Language), точнее текста у нас нет, а чего в его фразе не хватает — знает он, а
+ * не мы. Пустая деталь значит «сервер ничего внятного не сказал» (тела нет или оно не
  * problem+json) — тогда и только тогда показываем свой перевод. Сообщения самих классов сюда не
  * попадают: они английские и служебные (см. шапку файла).
+ *
+ * Отсюда же и 429: срок повтора из `Retry-After` разобран в `retryAfterSec` и виден в логах, но в
+ * текст не превращается — назвать срок словами должна сама деталь.
  *
  * `t` принимаем аргументом, чтобы @core/api не зависел от i18next, — как buildFormSchema(fields, t).
  *
@@ -202,20 +206,9 @@ export function apiErrorText(e: unknown, t: TFunction): string {
   if (e instanceof ApiFieldError) {
     return joinDetails(e.fields.map((f) => f.detail)) || t('common.error.generic');
   }
-  if (e instanceof ApiRateLimitError) {
-    const reason = e.details.detail || t('common.error.rateLimited');
-    // Срок повтора сервер называет не всегда; когда назвал — это единственное, что превращает
-    // «попробуйте позже» в понятное указание.
-    if (!e.retryAfterSec) return reason;
-    // Две шкалы, потому что одной не хватает: минуты округляем ВВЕРХ (раньше срока всё равно
-    // откажут, а «через 0 минут» ничего не значит), но короткую паузу такое округление завысило бы
-    // в разы — лимит одновременных сессий сервер снимает и за полминуты.
-    const wait =
-      e.retryAfterSec < 60
-        ? t('common.error.retryAfterSec', { count: e.retryAfterSec })
-        : t('common.error.retryAfter', { count: Math.ceil(e.retryAfterSec / 60) });
-    return `${reason} ${wait}`;
-  }
+  // 429 отличает от прочих problem+json только запасной текст: отказ временный, и «что-то пошло
+  // не так» сказало бы о нём меньше, чем «слишком много попыток».
+  if (e instanceof ApiRateLimitError) return e.details.detail || t('common.error.rateLimited');
   if (e instanceof ApiProblemError) return e.details.detail || t('common.error.generic');
   // ApiTransportError и всё, что не дошло до сервера вовсе: до бэка запрос не добрался, и «попробуйте
   // позже» тут менее полезно, чем прямое указание на связь.

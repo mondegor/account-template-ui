@@ -311,7 +311,7 @@ export function ProfilePage() {
       )}
       {isError && (
         <Alert severity="error" sx={{ maxWidth: 880, mx: 'auto' }}>
-          {t('auth.profile.loadError', { message: apiErrorText(error, t) })}
+          {apiErrorText(error, t)}
         </Alert>
       )}
       {data && <ProfileView user={data} />}

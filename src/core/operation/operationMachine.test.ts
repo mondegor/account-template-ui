@@ -123,7 +123,7 @@ describe('operationReducer', () => {
 });
 
 describe('resend selectors', () => {
-  it('remaining_resends === undefined is not 0: resending does not apply (a PASSWORD/TOTP step)', () => {
+  it('remaining_resends === undefined is not 0: resending does not apply (a PASSWORD/TOTP/RECOVERY link)', () => {
     const s = operationReducer(null, {
       type: 'START',
       parts: { ...waiting, remaining_resends: undefined, resends_in: undefined },

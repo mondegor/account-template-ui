@@ -155,13 +155,13 @@ export function SessionsPage() {
     );
   }
 
-  // Упал профиль, а не список сессий: список без реалмов даже не запрашивался — и текст про него
-  // сбивал бы с толку.
+  // Упал профиль, а не список сессий: список без реалмов даже не запрашивался, и показывать тут
+  // нечего, кроме причины отказа.
   if (user.isError) {
     return (
       <AppShell>
         <Alert severity="error" sx={{ maxWidth: 880, mx: 'auto' }}>
-          {t('auth.profile.loadError', { message: apiErrorText(user.error, t) })}
+          {apiErrorText(user.error, t)}
         </Alert>
       </AppShell>
     );
@@ -185,9 +185,7 @@ export function SessionsPage() {
           </Box>
         )}
 
-        {sessions.isError && (
-          <Alert severity="error">{p('loadError', { message: listError })}</Alert>
-        )}
+        {sessions.isError && <Alert severity="error">{listError}</Alert>}
 
         {sessions.isSuccess && (
           <>

@@ -4,7 +4,7 @@ import { ApiFieldError, ApiProblemError, ApiRateLimitError } from '@core/api';
 import { addTranslations, i18next, initI18n, setLanguage } from '@core/i18n';
 import { authTranslations } from '../i18n';
 import { useOperationStore } from '@core/operation';
-import { confirmOperation, openSession, resendOperation } from '../api/authApi';
+import { applyPassword, confirmOperation, openSession, resendOperation } from '../api/authApi';
 import { useConfirmFlow } from './useConfirmFlow';
 import { tr } from '../../../test/i18n';
 
@@ -15,11 +15,13 @@ import { tr } from '../../../test/i18n';
  * ровно в openSession. Переиграй он подтверждение — экран впустую попросил бы код ещё раз, а
  * ответом на него был бы тот же 204: операция от повторного confirm не сдвигается.
  *
- * Терминал у хука — параметр, поэтому кейсы гоняют ровно тот, что передаёт узел подтверждения
- * входа: только так проверка остаётся про вход, а не про подставную функцию.
+ * Терминал у хука — параметр, поэтому кейсы гоняют настоящие завершающие методы, а не подставную
+ * функцию: обычно тот же, что передаёт узел подтверждения входа, а там, где ответ объявлен только
+ * у security-потока, — его завершающий метод.
  */
 
 vi.mock('../api/authApi', () => ({
+  applyPassword: vi.fn(),
   confirmOperation: vi.fn(),
   openSession: vi.fn(),
   resendOperation: vi.fn(),
@@ -47,6 +49,15 @@ const loginTerminal = async (token: string) => {
   return result.kind === 'access' ? undefined : result.operation;
 };
 
+/**
+ * Терминал включения пароля вторым фактором: цепочка звеньев у него та же, а вот 409 спека
+ * объявляет только у завершающих методов второго фактора — открытие сессии его не отдаёт.
+ */
+const factorTerminal = async (token: string) => {
+  await applyPassword({ token });
+  return undefined;
+};
+
 function rateLimited(retryAfterSec?: number) {
   return new ApiRateLimitError(
     {
@@ -72,6 +83,7 @@ beforeAll(() => {
 beforeEach(async () => {
   sessionStorage.clear();
   useOperationStore.getState().reset();
+  vi.mocked(applyPassword).mockReset();
   vi.mocked(confirmOperation).mockReset();
   vi.mocked(openSession).mockReset();
   vi.mocked(resendOperation).mockReset();
@@ -117,10 +129,8 @@ describe('useConfirmFlow: the terminal session opening', () => {
       await result.current.confirm('183947');
     });
 
-    // Серверная деталь + срок из Retry-After: пауза короче минуты называется секундами.
-    expect(result.current.error).toBe(
-      `Concurrent session limit exceeded ${tr('common.error.retryAfterSec', { count: 30 })}`,
-    );
+    // Серверная деталь как есть: срок из Retry-After в текст не подмешивается.
+    expect(result.current.error).toBe('Concurrent session limit exceeded');
     // Снимок на месте и тем же токеном — повторяется ТОТ ЖЕ запрос, новая операция не нужна.
     expect(useOperationStore.getState().snapshot?.token).toBe(TOKEN);
     // Фаза `confirmed`, а не `active`: подтверждение пройдено, повторять надо открытие сессии.
@@ -210,13 +220,14 @@ describe('useConfirmFlow: the terminal session opening', () => {
   });
 
   /**
-   * 409 — условие, при котором операция создавалась, отпало (2FA отключили уже после её создания).
-   * В отличие от 429 повторять нечего: снимок обязан стать мёртвым, иначе экран продолжил бы
-   * просить код по токену, который сервер больше не примет.
+   * 409 — состояние второго фактора изменилось уже после создания операции, и завершающий метод
+   * ею больше не распорядится. В отличие от 429 повторять нечего: снимок обязан стать мёртвым,
+   * иначе экран продолжил бы просить код по токену, который сервер больше не примет. Терминал тут
+   * security-потока: у открытия сессии 409 по спеке нет.
    */
-  it('a 409 while opening the session marks the operation dead', async () => {
+  it('a 409 from the second-factor terminal marks the operation dead', async () => {
     vi.mocked(confirmOperation).mockResolvedValue(null);
-    vi.mocked(openSession).mockRejectedValue(
+    vi.mocked(applyPassword).mockRejectedValue(
       new ApiProblemError({
         title: 'Conflict',
         status: 409,
@@ -227,7 +238,7 @@ describe('useConfirmFlow: the terminal session opening', () => {
     );
     useOperationStore.getState().dispatch(activeOp);
     const { result } = renderHook(() =>
-      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+      useConfirmFlow({ terminal: factorTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
     );
 
     await act(async () => {
@@ -365,29 +376,6 @@ describe('useConfirmFlow: the terminal session opening', () => {
     expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
     expect(result.current.awaitingFinish).toBe(false);
     expect(result.current.error).toBe('The operation is not confirmed');
-  });
-
-  it('a 409 on code confirmation: the same dead operation', async () => {
-    vi.mocked(confirmOperation).mockRejectedValue(
-      new ApiProblemError({
-        title: 'Conflict',
-        status: 409,
-        detail: 'There is nothing left to confirm',
-        instance: '',
-        time: '',
-      }),
-    );
-    useOperationStore.getState().dispatch(activeOp);
-    const { result } = renderHook(() =>
-      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
-    );
-
-    await act(async () => {
-      await result.current.confirm('183947');
-    });
-
-    expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
-    expect(vi.mocked(openSession)).not.toHaveBeenCalled();
   });
 });
 

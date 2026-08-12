@@ -4,8 +4,12 @@ import { ESLint } from 'eslint';
 
 /**
  * Спека правил no-restricted-syntax из eslint.config.js: запрет dangerouslySetInnerHTML (на нём
- * держится interpolation.escapeValue: false в i18n) и запрет русских фраз в поиске по тексту в
- * тестах. Конфиг загружается настоящий, фрагменты гоняются через ESLint API — спека падает и на
+ * держится interpolation.escapeValue: false в i18n), запрет русских фраз в поиске по тексту в
+ * тестах и запрет русских литералов в моках. Три правила — три охвата, и спека сторожит границы
+ * между ними так же, как сами селекторы: правило моков не должно доставать до переводов, а
+ * правило тестов — до фикстур.
+ *
+ * Конфиг загружается настоящий, фрагменты гоняются через ESLint API — спека падает и на
  * сломанном селекторе (fatal при разборе конфига), и на дырке в охвате, и на ложном срабатывании.
  * Правка правила без правки спеки невозможна.
  */
@@ -237,6 +241,58 @@ describe('eslint.config.js: Russian phrases in text queries', { timeout: 60000 }
     const msgs = await restricted(
       "export const found = () => screen.getByText('Личные данные');\n",
       'src/modules/auth/fixture.tsx',
+    );
+    expect(msgs).toEqual([]);
+  });
+});
+
+/** Фрагмент проверяется как мок: правило про литералы включено только для src/mocks/**. */
+const MOCK_FILE = 'src/mocks/fixture.ts';
+
+describe('eslint.config.js: Russian literals in the mocks', { timeout: 60000 }, () => {
+  it('catches a server detail', async () => {
+    const msgs = await restricted(
+      "export const e = { detail: 'Требуется авторизация' };\n",
+      MOCK_FILE,
+    );
+    expect(msgs).toHaveLength(1);
+  });
+
+  // Подстановка режет шаблон на куски, и правило считает каждый: во фразе «Язык «…» не
+  // поддерживается» русский текст и до `${lang}`, и после, поэтому сообщений два, а не одно.
+  it('catches a phrase built with a template string, on both sides of the substitution', async () => {
+    const msgs = await restricted(
+      'export const e = (lang: string) => `Язык «${lang}» не поддерживается`;\n',
+      MOCK_FILE,
+    );
+    expect(msgs).toHaveLength(2);
+  });
+
+  // Пояснения в моках — русские, как во всём репозитории: правило ходит по узлам AST, а
+  // комментарии узлами не являются. Иначе перевод литералов утащил бы за собой и комментарии.
+  it('leaves a Russian comment alone: the ban is about literals', async () => {
+    const msgs = await restricted(
+      '// Отдаём 401, пока сессия не открыта.\nexport const status = 401;\n',
+      MOCK_FILE,
+    );
+    expect(msgs).toEqual([]);
+  });
+
+  // Блок правил для моков задаёт no-restricted-syntax заново — та же ловушка перекрытия, что и
+  // у блока тестов: без повторённого селектора запрет молча перестал бы действовать в src/mocks.
+  it('keeps the dangerouslySetInnerHTML ban in the mocks', async () => {
+    const msgs = await restricted(
+      "export const p = { dangerouslySetInnerHTML: { __html: 'x' } };\n",
+      MOCK_FILE,
+    );
+    expect(msgs).toHaveLength(1);
+  });
+
+  // Правило адресное: русский текст вне моков — это переводы и комментарии, и трогать их нельзя.
+  it('leaves Russian literals outside the mocks alone', async () => {
+    const msgs = await restricted(
+      "export const t = { save: 'Сохранить' };\n",
+      'src/modules/auth/fixture.ts',
     );
     expect(msgs).toEqual([]);
   });

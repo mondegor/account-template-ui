@@ -523,18 +523,14 @@ describe('SessionsPage', () => {
     ).toBeDisabled();
   });
 
-  it('the profile request failed: the message is about the profile, not the sessions', async () => {
+  it('the profile request failed: the reason alone, and no sessions request', async () => {
     // Ошибка в том виде, в каком её отдаёт интерсептор. Текст плашки берётся из переводов, а не из
     // `message` класса: тот английский и служебный (@core/api/errors).
     vi.mocked(getUserInfo).mockRejectedValue(new ApiTransportError());
     renderSessions();
 
-    // Список сессий тут даже не запрашивался (реалмы неизвестны) — текст про него сбивал бы с толку.
-    expect(
-      await screen.findByText(
-        tr('auth.profile.loadError', { message: tr('common.error.network') }),
-      ),
-    ).toBeInTheDocument();
+    // До сервера запрос не дошёл, поэтому серверной детали нет и плашку заполняет наш перевод.
+    expect(await screen.findByText(tr('common.error.network'))).toBeInTheDocument();
     expect(getUserSessions).not.toHaveBeenCalled();
   });
 

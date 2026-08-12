@@ -9,6 +9,8 @@
       "email": "Email",
       "login": "Email or phone",
       "code": "Confirmation code",
+      "password": "Password",
+      "recoveryCode": "Recovery code",
       "emailChecking": "Checking availability…",
       "emailFree": "Email is available",
       "emailTaken": "This email is already registered"
@@ -22,10 +24,24 @@
     },
     "signin": {
       "title": "Sign in",
-      "subtitle": "Enter your email or phone — we'll send a code to sign in.",
+      "subtitle": "Enter your email or phone — we'll send the sign-in code to your email.",
       "submit": "Sign in",
-      "noAccount": "No account?",
-      "signupLink": "Sign up"
+      "noAccount": "Don't have an account?",
+      "signupLink": "Sign up",
+      "emailTrouble": "Not getting the code?",
+      "recoveryLink": "Sign in without email",
+      "confirmHint": {
+        "PASSWORD": "Enter your password to confirm. One of your one-time recovery codes works here too.",
+        "TOTP": "Enter the code from your authenticator app. One of your one-time recovery codes works here too."
+      }
+    },
+    "signinRecovery": {
+      "title": "Sign in without email access",
+      "enterLogin": "Enter the email or phone linked to your account.",
+      "submit": "Sign in",
+      "twoFaOnly": "Requires two-factor protection: your password or authenticator code, plus a recovery code.",
+      "emailSigninPrompt": "Inbox working?",
+      "emailSigninLink": "Sign in with email"
     },
     "confirm": {
       "title": "Confirmation",
@@ -33,15 +49,19 @@
         "EMAIL": "We sent a code to your email. Enter it to continue.",
         "PHONE": "We sent a code to your phone. Enter it to continue.",
         "PASSWORD": "Enter your password to confirm.",
-        "TOTP": "Enter the code from your authenticator app."
+        "TOTP": "Enter the code from your authenticator app.",
+        "RECOVERY": "Enter one of your one-time recovery codes."
       },
       "awaitingFinish": "The code was accepted, but signing in failed. No need to confirm again — just try once more.",
       "submit": "Confirm",
       "retryFinish": "Try again",
       "attemptsLeft": "Attempts left: {{n}}",
       "expiresIn": "Code valid for {{time}}",
-      "finishExpiresIn": "You can retry for another {{time}}",
+      "expiresInNoCode": "Valid for another {{time}}",
       "expired": "Code expired",
+      "expiredNoCode": "Time is up",
+      "finishExpiresIn": "You can retry for another {{time}}",
+      "finishExpired": "Time to retry is up",
       "resendLink": "Resend",
       "resendTimer": "Resend · {{time}}",
       "requestNewCode": "Request a new code",
@@ -51,6 +71,9 @@
       "exhaustedAttempts": "Wrong code, no attempts left. Request a new code.",
       "exhaustedExpired": "The code has expired. Request a new code.",
       "deadEnd": "You've run out of entry attempts and resends. Start signing in again.",
+      "deadEndNoResend": "You've run out of entry attempts. Start signing in again.",
+      "deadEndExpired": "The time to confirm has run out and there are no resends left. Start signing in again.",
+      "deadEndExpiredNoResend": "The time to confirm has run out. Start signing in again.",
       "invalidated": "This operation can no longer be completed. Start signing in again."
     },
     "profile": {
@@ -73,7 +96,6 @@
       "sessions": "Sessions",
       "sessionsOf": "Sessions of {{realm}}",
       "sessionsOfAccount": "Account sessions",
-      "loadError": "Failed to load profile: {{message}}",
       "settingsLink": "Settings",
       "settingsAria": "Language and time zone settings",
       "tzUnsupported": "your browser does not know this zone, dates are shown in the device time zone",
@@ -104,9 +126,7 @@
       "osZoneHint": "Your zone is {{zone}}; it is not in the list. Pick “Auto” and the server will choose the closest one.",
       "save": "Save",
       "saved": "Settings saved. Information shown may differ from them for a while — to apply them instantly, sign in again.",
-      "substituted": "The closest available zone was saved: {{zone}} — its time differs from yours.",
-      "saveError": "Could not save: {{message}}",
-      "loadError": "Could not load settings: {{message}}"
+      "substituted": "The closest available zone was saved: {{zone}} — its time differs from yours."
     },
     "sessions": {
       "title": "Sessions",
@@ -130,7 +150,6 @@
       "lastSeenAt": "Last seen",
       "expiresAt": "Expires",
       "justNow": "just now",
-      "loadError": "Failed to load sessions: {{message}}",
       "closeError": "Could not close the sessions. Please try again."
     },
     "errors": {

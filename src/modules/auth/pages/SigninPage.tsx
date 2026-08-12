@@ -1,35 +1,28 @@
-import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Link, Typography } from '@mui/material';
 import { loadSchema } from '@core/schema';
 import { SchemaRenderer } from '@core/renderer';
 import { AuthCard } from '../ui/AuthCard';
+import { AuthFooterLine } from '../ui/AuthFooterLine';
+import { AuthNavLink } from '../ui/AuthNavLink';
 
 /** Вход — тонкая обёртка: рендерит схему auth.signin. Логика — в обработчике (register.ts). */
 export function SigninPage() {
-  const navigate = useNavigate();
   const { t } = useTranslation();
   return (
     <AuthCard
       footer={
-        <Typography
-          variant="body2"
-          align="center"
-          sx={{
-            color: 'text.secondary',
-            mt: 2.5,
-          }}
-        >
-          {t('auth.signin.noAccount')}{' '}
-          <Link
-            component="button"
-            type="button"
-            onClick={() => navigate('/signup')}
-            sx={{ verticalAlign: 'baseline', fontSize: 'inherit', lineHeight: 'inherit', p: 0 }}
-          >
-            {t('auth.signin.signupLink')}
-          </Link>
-        </Typography>
+        <>
+          <AuthFooterLine>
+            {t('auth.signin.noAccount')}{' '}
+            <AuthNavLink to="/signup">{t('auth.signin.signupLink')}</AuthNavLink>
+          </AuthFooterLine>
+          {/* Резервный вход — второй строкой: он для узкого случая (потерян доступ к почте),
+              и путать его с обычным входом на равных не стоит. */}
+          <AuthFooterLine tight>
+            {t('auth.signin.emailTrouble')}{' '}
+            <AuthNavLink to="/signin/recovery">{t('auth.signin.recoveryLink')}</AuthNavLink>
+          </AuthFooterLine>
+        </>
       }
     >
       <SchemaRenderer schema={loadSchema('auth.signin')} />

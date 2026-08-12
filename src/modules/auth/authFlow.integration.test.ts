@@ -3,7 +3,10 @@ import { logout, refresh, useAuthStore } from '@core/auth';
 import { ApiFieldError, ApiRateLimitError } from '@core/api';
 import { TIME_ZONES, getLanguage, getLanguageSource, initI18n, setLanguage } from '@core/i18n';
 import { clearSettingsOverride } from '@core/request-meta';
+import { resetMockState } from '@mocks/handlers';
 import {
+  applyOperation,
+  applyPassword,
   changeUserSettings,
   checkLogin,
   closeUserSessions,
@@ -13,8 +16,33 @@ import {
   openSession,
   resendOperation,
   signin,
+  signinByRecovery,
   signup,
+  startDisable2fa,
+  startPasswordSetup,
 } from './api/authApi';
+
+/** Проходит цепочку звеньев подряд и возвращает токен ПОСЛЕДНЕГО: у каждого звена он свой. */
+async function confirmChain(token: string, secrets: string[]): Promise<string> {
+  let current = token;
+  for (const secret of secrets) {
+    const next = await confirmOperation({ token: current, secret });
+    if (next) current = next.token;
+  }
+  return current;
+}
+
+/**
+ * Включает второй фактор аккаунта и оставляет сессию открытой. Фактор — состояние аккаунта, а не
+ * настройка кейса, поэтому получить аккаунт с 2FA можно только пройдя установку пароля целиком.
+ */
+async function enable2fa() {
+  const op = await signin('user@example.com');
+  await confirmOperation({ token: op.token, secret: '183947' });
+  await openSession({ token: op.token });
+  const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+  await applyPassword({ token: await confirmChain(setup.token, ['183947']) });
+}
 
 /**
  * Сквозная проверка среза через реальный authApi + интерсепторы httpClient против MSW-сервера
@@ -24,6 +52,9 @@ import {
  */
 describe('auth flow (signin → confirm → session → profile)', () => {
   beforeEach(() => {
+    // Второй фактор и остаток аварийных кодов у мока — состояние: без сброса кейсы читали бы
+    // env-флаги разработчика и краснели бы у того, кто настроил окружение по .env.example.
+    resetMockState();
     useAuthStore.getState().setAnonymous();
     // getUserInfo применяет язык профиля через i18next — в приложении инстанс поднят бутстрапом
     // (main.tsx) задолго до первого запроса, здесь воспроизводим то же условие. Идемпотентно.
@@ -104,6 +135,92 @@ describe('auth flow (signin → confirm → session → profile)', () => {
 
     const user = await getUserInfo();
     expect(user.email).toBe('newuser@example.com');
+  });
+
+  /**
+   * Резервный вход — единственный поток среза с цепочкой из двух звеньев: письма в нём нет, а
+   * доказательства идут по очереди (второй фактор, затем одноразовый аварийный код). Секреты —
+   * фикстуры мока, поэтому здесь они литералами.
+   *
+   * Второй фактор аккаунту нужен: без него предъявить на первом звене нечего, и до сессии этот
+   * поток не доходит вовсе — набора аварийных кодов у такого аккаунта тоже нет.
+   */
+  it('the backup sign-in walks the two links and opens a session', async () => {
+    await enable2fa();
+    useAuthStore.getState().setAnonymous();
+
+    const factor = await signinByRecovery('user@example.com');
+    expect(factor.confirm_method).toBe('PASSWORD');
+    // Отправлять на таком звене нечего, поэтому полей повторной отправки в ответе нет вовсе —
+    // именно по их отсутствию клиент и убирает со экрана «Отправить повторно».
+    expect(factor.remaining_resends).toBeUndefined();
+    expect(factor.resends_in).toBeUndefined();
+
+    const recovery = await confirmOperation({ token: factor.token, secret: 'MockPass2026!' });
+    expect(recovery?.confirm_method).toBe('RECOVERY');
+    // У каждого звена свой токен, и предыдущий перестаёт действовать сразу.
+    expect(recovery?.token).not.toBe(factor.token);
+    await expect(
+      confirmOperation({ token: factor.token, secret: 'MockPass2026!' }),
+    ).rejects.toSatisfy(
+      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
+    );
+
+    const done = await confirmOperation({ token: recovery!.token, secret: 'RECOVRY1-CODE0011' });
+    expect(done).toBeNull();
+
+    const result = await openSession({ token: recovery!.token });
+    expect(result.kind).toBe('access');
+    expect(useAuthStore.getState().status).toBe('authenticated');
+  });
+
+  /**
+   * Вход при включённой 2FA идёт двумя звеньями: код с емаила, затем второй фактор. У каждого звена
+   * свой секрет-фикстура, и последнее звено подтверждается прямо методом открытия сессии.
+   */
+  it('a sign-in with 2FA on asks for the email code and then the second factor', async () => {
+    await enable2fa();
+    useAuthStore.getState().setAnonymous();
+
+    const op = await signin('user@example.com');
+    expect(op.confirm_method).toBe('EMAIL');
+
+    const factor = await confirmOperation({ token: op.token, secret: '183947' });
+    expect(factor?.confirm_method).toBe('PASSWORD');
+    // На звене фактора отправлять нечего — полей повторной отправки в ответе нет.
+    expect(factor?.remaining_resends).toBeUndefined();
+    expect(factor?.resends_in).toBeUndefined();
+
+    const result = await openSession({ token: factor!.token, secret: 'MockPass2026!' });
+    expect(result.kind).toBe('access');
+  });
+
+  /**
+   * Второй фактор отключили из соседней вкладки, пока операция входа ждала его звена. Отдельного
+   * кода у этой ветки нет: звено отвечает обычным «неверный код», иначе по ответу гостевого метода
+   * читалось бы состояние 2FA аккаунта.
+   */
+  it('2FA switched off after the operation was created comes back as a plain wrong code', async () => {
+    await enable2fa();
+    const pending = await signin('user@example.com');
+    const factor = await confirmOperation({ token: pending.token, secret: '183947' });
+
+    const off = await startDisable2fa();
+    await applyOperation({ token: await confirmChain(off.token, ['183947', 'RECOVRY1-CODE0011']) });
+    expect((await getUserInfo()).auth_2fa_type).toBe('NONE');
+
+    await expect(confirmOperation({ token: factor!.token, secret: '183947' })).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof ApiFieldError && e.fields[0]?.code === 'ConfirmCodeIsIncorrect/secret',
+    );
+  });
+
+  it('resending on a second-factor link is refused: there is no message to send', async () => {
+    const factor = await signinByRecovery('user@example.com');
+    await expect(resendOperation({ token: factor.token })).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof ApiFieldError && e.fields[0]?.code === 'ResendCodeIsNotSupported/token',
+    );
   });
 
   it('check-login: a free email gives true (204)', async () => {

@@ -1,6 +1,12 @@
 /** Auth-домен DTO (из contracts/auth/openapi.yaml). */
 
-export type ConfirmMethod = 'EMAIL' | 'PHONE' | 'PASSWORD' | 'TOTP';
+/**
+ * Метод подтверждения текущего звена цепочки. `RECOVERY` — одноразовый аварийный код отдельным
+ * звеном: он бывает только последним и только у операций, созданных методами `.../recovery`
+ * (вход и смена емаила при утраченном доступе к почте). Там же, где аварийный код принимается
+ * ВМЕСТО второго фактора, отдельного звена нет — метод остаётся `PASSWORD`/`TOTP`.
+ */
+export type ConfirmMethod = 'EMAIL' | 'PHONE' | 'PASSWORD' | 'TOTP' | 'RECOVERY';
 export type UserAuth2fa = 'NONE' | 'PASSWORD' | 'TOTP';
 export type UserStatus = 'DRAFT' | 'ENABLED' | 'DISABLED' | 'BLOCKED';
 
@@ -59,6 +65,36 @@ export interface UserRealm {
   updated_at: string;
 }
 
+/** Тип защищённой операции, ожидающей подтверждения либо применения. */
+export type OperationType =
+  | 'CREATE_USER'
+  | 'AUTHORIZE_USER'
+  /** Смена емаила, шаг 1: подтверждение владения аккаунтом. */
+  | 'CHANGE_EMAIL'
+  /** Смена емаила, шаг 2: подтверждение владения новым адресом. */
+  | 'CHANGE_EMAIL_CONFIRM'
+  | 'CHANGE_PHONE'
+  | 'CHANGE_PASSWORD'
+  | 'CHANGE_TOTP'
+  | 'REGENERATE_RECOVERY'
+  | 'DISABLE_2FA';
+
+/** `OPENED` — ждёт подтверждения кодом; `CONFIRMED` — ждёт применения завершающим методом. */
+export type OperationStatus = 'OPENED' | 'CONFIRMED';
+
+/**
+ * Незакрытая операция пользователя в его профиле: тем же токеном она подтверждается,
+ * переотправляет код, отзывается и применяется завершающим методом своего потока.
+ */
+export interface PendingOperation {
+  token: string;
+  type: OperationType;
+  /** Значение для показа пользователю; приходит только у операций смены адреса. */
+  extra_value?: string;
+  expires_at: string;
+  status: OperationStatus;
+}
+
 /**
  * Профиль пользователя.
  */
@@ -76,6 +112,8 @@ export interface UserInfo {
    */
   recovery_codes_left?: number;
   realms: UserRealm[];
+  /** Действующие операции, ожидающие подтверждения либо применения. Экрана-потребителя пока нет. */
+  pending_operations?: PendingOperation[];
   /** Состояние учётной записи. Интерфейс его не показывает: распоряжается им не пользователь. */
   status: UserStatus;
 }

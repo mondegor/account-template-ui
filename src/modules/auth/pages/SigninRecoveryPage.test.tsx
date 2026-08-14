@@ -45,12 +45,28 @@ describe('SigninRecoveryPage (schema-driven)', () => {
     ).toBeInTheDocument();
   });
 
+  /** Что вводить, сказано строкой над формой; полю остаётся имя, но не видимая подпись. */
+  it('gives the lone field a name without showing a label', () => {
+    render(
+      <MemoryRouter>
+        <SigninRecoveryPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText(tr('auth.field.login'))).not.toBeInTheDocument();
+    expect(screen.getByLabelText(tr('auth.field.login'))).toBe(screen.getByRole('textbox'));
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      tr('auth.field.emailFormat'),
+    );
+  });
+
   /**
-   * Что понадобится — примечание, а не плашка: оно живёт в подвале карточки, ПОСЛЕ пути назад, и
-   * потому в схему не входит. Порядок задан разметкой страницы и без этой проверки съедет молча —
-   * а наверху эта же строка перебивала бы и заголовок, и инструкцию к полю.
+   * Примечание про то, что понадобится, относится к форме и стоит сразу за ней; путь назад —
+   * выход с экрана и потому замыкает карточку. Порядок задан разметкой страницы и без этой
+   * проверки съедет молча.
    */
-  it('puts the note at the very bottom, after the way back', () => {
+  it('puts the way back at the very bottom, after the note', () => {
     const { container } = render(
       <MemoryRouter>
         <SigninRecoveryPage />
@@ -59,8 +75,8 @@ describe('SigninRecoveryPage (schema-driven)', () => {
 
     const card = container.textContent ?? '';
     expect(card).toContain(tr('auth.signinRecovery.twoFaOnly'));
-    expect(card.indexOf(tr('auth.signinRecovery.emailSigninLink'))).toBeLessThan(
-      card.indexOf(tr('auth.signinRecovery.twoFaOnly')),
+    expect(card.indexOf(tr('auth.signinRecovery.twoFaOnly'))).toBeLessThan(
+      card.indexOf(tr('auth.signinRecovery.emailSigninLink')),
     );
     // В схеме примечания нет: страница дорисовывает его сама.
     expect(screen.getByTestId('ui-page')).not.toHaveTextContent(

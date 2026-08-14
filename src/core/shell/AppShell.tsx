@@ -11,7 +11,6 @@ import {
   Stack,
   Toolbar,
   Tooltip,
-  Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -20,38 +19,11 @@ import { useTranslation } from 'react-i18next';
 import { buildNav } from '@core/module-registry';
 import { logout, useAuthStore } from '@core/auth';
 import { DEFAULT_LANGUAGE, LANGUAGES, findLanguage, setLanguage } from '@core/i18n';
+import { UiBrandLockup } from '@ui';
 import { useThemeMode } from './themeMode';
 import { LangFlag } from './LangFlag';
 
 const DRAWER_WIDTH = 240;
-
-/** Компактный брендовый знак (line-принтер) для топ-бара shell. */
-function ShellBrand() {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <Box
-        component="svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.7}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        sx={{ width: 20, height: 20, color: 'primary.main', display: 'block', flexShrink: 0 }}
-      >
-        <path d="M6 9V3h12v6" />
-        <path d="M6 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1" />
-        <rect x="6" y="14" width="12" height="7" rx="1" />
-      </Box>
-      <Typography
-        variant="overline"
-        sx={{ fontWeight: 700, letterSpacing: '.12em', color: 'text.secondary', lineHeight: 1 }}
-      >
-        PRINT·SHOP
-      </Typography>
-    </Box>
-  );
-}
 
 /** Инлайн-бургер (без @mui/icons-material) — три линии. */
 function MenuGlyph() {
@@ -250,7 +222,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const drawerContent = (
     <Box>
       <Toolbar>
-        <ShellBrand />
+        <UiBrandLockup size={20} />
       </Toolbar>
       <Divider />
       <NavList onNavigate={isMobile ? () => setMobileOpen(false) : undefined} />
@@ -276,7 +248,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <MenuGlyph />
             </IconButton>
           )}
-          {!isMobile && <ShellBrand />}
+          {!isMobile && <UiBrandLockup size={20} />}
           <Box sx={{ flexGrow: 1 }} />
           <Stack
             direction="row"

@@ -23,6 +23,7 @@ import { tr } from '../../../test/i18n';
 
 /** Detail от серверной стороны: подсветка поля берёт его текст как есть, минуя переводы. */
 const TZ_DETAIL = 'Time zone is not supported';
+const LANG_DETAIL = 'Language is not supported';
 
 /** Плашки после сохранения ищем как элементы, а не по их длинным подписям. */
 const SAVED = 'settings-saved';
@@ -57,7 +58,9 @@ const PROFILE: UserInfo = {
   lang: 'ru-RU',
   tz: 'Europe/Moscow',
   auth_2fa_type: 'NONE',
-  realms: [{ name: 'print-shop/standard', user_kind: 'standard', created_at: '', updated_at: '' }],
+  realms: [
+    { name: 'account-template/standard', user_kind: 'standard', created_at: '', updated_at: '' },
+  ],
   status: 'ENABLED',
 };
 
@@ -322,5 +325,47 @@ describe('SettingsPage', () => {
       await screen.findByRole('button', { name: tr('auth.settings.save') }),
     ).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: tr('auth.settings.tz') })).toBeInTheDocument();
+  });
+
+  /** Полей два — подпись остаётся на экране: иначе их не различить. */
+  it('keeps both labels on screen: there are two fields to tell apart', async () => {
+    renderSettings();
+    await formReady();
+
+    for (const key of ['auth.settings.lang', 'auth.settings.tz']) {
+      expect(screen.getByText(tr(key))).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: tr(key) })).toBeInTheDocument();
+    }
+  });
+
+  /** Отказ по полю подсказку не вытесняет: она объясняет, что это за поле, и после ошибки тоже. */
+  it('an error under the field joins the hint instead of replacing it', async () => {
+    vi.mocked(changeUserSettings).mockRejectedValue(
+      new ApiFieldError([{ code: 'ValidateError/lang', detail: LANG_DETAIL }], 400),
+    );
+    renderSettings();
+    await formReady();
+
+    save();
+
+    const error = await screen.findByText(LANG_DETAIL);
+    const hint = screen.getByText(tr('auth.settings.langHint'));
+    expect(hint).toBeInTheDocument();
+    // Красная под полем только та строка, которая про отказ и говорит: подсветка поля подсказку
+    // не перекрашивает. Сравниваем строки между собой — эталон цвета тут палитра, а не литерал.
+    expect(getComputedStyle(hint).color).not.toBe(getComputedStyle(error).color);
+  });
+
+  /**
+   * Пока сказать нечего, строки под полем нет вовсе — зазор до кнопки не занят пустым местом.
+   * Зона ОС здесь замокана в UTC, справочник её знает, ошибки нет: единственная строка на экране —
+   * подсказка под языком.
+   */
+  it('reserves no room under the zone field until there is something to say', async () => {
+    renderSettings();
+    await formReady();
+
+    expect(document.querySelectorAll('.MuiFormHelperText-root')).toHaveLength(1);
+    expect(screen.getByText(tr('auth.settings.langHint'))).toBeInTheDocument();
   });
 });

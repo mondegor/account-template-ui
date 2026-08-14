@@ -341,6 +341,10 @@ paths:
         - `OperationInvalid/token` — токен операции неизвестен, истёк или уже использован;
         - `OperationAlreadyExpired/token` — срок жизни операции истёк, её нужно создавать заново;
 
+        Отключение 2FA после создания операции отдельным кодом не отражается: подтверждение звена
+        второго фактора в этом случае отвечает обычным `ConfirmCodeIsIncorrect`. Иначе по ответу
+        метода читалось бы состояние 2FA аккаунта, а он гостевой.
+
         ### Причины ответа `403`
         - метод гостевой: запрос выполнен с действующим access-токеном, то есть вызывающий уже
           авторизован и открывать новую сессию ему нельзя;
@@ -348,10 +352,6 @@ paths:
           в систему, поэтому открыть по ней сессию нельзя;
         - привязка пользователя к realm'у операции снята между её созданием и входом:
           доступ к контуру отозван, войти по этой операции нельзя;
-
-        ### Причины ответа `409`
-        - подтверждается звено второго фактора, но 2FA была отключена после создания операции:
-          вход по ней завершить нельзя, нужен новый `POST /v1/signin`;
 
         ### Причины ответа `429`
         - превышен лимит одновременных сессий (hard-порог): вход отклонён до тех пор, пока фоновая
@@ -381,8 +381,6 @@ paths:
           $ref: '#/components/responses/Auth.ResponseJson.Error400'
         '403':
           $ref: '#/components/responses/Api.ResponseJson.Error403'
-        '409':
-          $ref: '#/components/responses/Api.ResponseJson.Error409'
         '422':
           $ref: '#/components/responses/Api.ResponseJson.Error422'
         '429':
@@ -692,7 +690,8 @@ paths:
         расходуется до вызова завершающего метода, поэтому шаг можно безопасно повторить тем же
         токеном после сетевого сбоя или отказа завершающего метода (см. `POST /v1/session`).
 
-        Особенности звена второго фактора (`confirm_method`: `PASSWORD` или `TOTP`):
+        Особенности звеньев, к которым код не высылается
+        (`confirm_method`: `PASSWORD`, `TOTP` или `RECOVERY`):
 
         - поля `remaining_resends` и `resends_in` **не возвращаются** — повторная отправка к
           такому звену неприменима (код никуда не отправляется, см. описание этих полей);
@@ -701,7 +700,8 @@ paths:
           (`PATCH /v1/operation/confirm`, `POST /v1/security/apply-*`) выполняются с токеном
           **последнего полученного** звена;
         - звено второго фактора завершающее — за ним следует `204`, а не очередной `200`.
-          Исключение единственное: в цепочке метода `.../recovery` за ним идёт звено `RECOVERY`;
+          Исключение единственное: в цепочке метода `.../recovery` за ним идёт звено `RECOVERY`,
+          которое завершающее всегда;
 
         ### Аварийные коды
         Аварийный код принимается **только последним звеном** цепочки — двумя способами:
@@ -792,8 +792,10 @@ paths:
         - `OperationAlreadyConfirmed/token` — операция уже подтверждена, отправлять код повторно незачем;
         - `NoAttemptsToResendCode/token` — повторные отправки израсходованы окончательно: ждать
           бессмысленно, операцию нужно создавать заново; ответ дополнен объектом `operation_state`;
-        - `ResendCodeIsNotSupported/token` — текущее действие операции подтверждается вторым
-          фактором (TOTP/пароль), поэтому отправлять по нему нечего: код повторно не высылается;
+        - `ResendCodeIsNotSupported/token` — текущее звено операции подтверждается доказательством,
+          которое никуда не высылается: вторым фактором (`PASSWORD`/`TOTP`) либо аварийным кодом
+          (`RECOVERY`), — поэтому отправлять по нему нечего: код повторно не высылается. У цепочек,
+          созданных методами `.../recovery`, это верно с самого первого звена;
       operationId: resendUserOperationConfirmCode
       tags:
         - Auth.Operation
@@ -863,17 +865,31 @@ paths:
           емаил: операция собирает доказательства владения аккаунтом, а не новым адресом;
         2. Пользователь указывает полученный код и подтверждает операцию (`PATCH /v1/operation/confirm`);
         3. Если 2FA включена — пользователю предлагается ввести пароль или TOTP код;
-        4. Пользователь применяет подтверждённую операцию методом `POST /v1/security/apply-operation` —
+        4. Пользователь применяет подтверждённую операцию методом `POST /v1/security/apply-email` —
+          емаил **пока не меняется**: создаётся операция подтверждения владения новым адресом,
+          код уходит на **новый** емаил, а на прежний — уведомление о запросе смены;
+        5. Пользователь указывает код с нового адреса (`PATCH /v1/operation/confirm`, единственное
+          звено `EMAIL`; повторный step-up не требуется — он оплачен на шаге 1);
+        6. Пользователь применяет подтверждённую операцию методом `POST /v1/security/apply-operation` —
           емаил изменяется на новый, на прежний емаил отправляется уведомление;
 
-        Смена адреса всегда требует пароль или TOTP код: после неё аккаунт продолжает зависеть от
-        второго фактора, но уже не от прежнего емаила. Поэтому этим методом аварийный код
+        Пока созданная на шаге 4 операция не применена, адрес аккаунта остаётся прежним, а саму
+        операцию видно в `GET /v1/user` (`pending_operations`) вместе со сроком истечения; отозвать
+        её можно методом `PATCH /v1/operation/revoke`, по истечении срока она закрывается сама.
+        Одновременно у аккаунта существует не более одной такой операции: создание новой закрывает
+        предыдущую. Знание одного лишь кода с нового адреса смену не завершает — оба завершающих
+        метода требуют сессии.
+
+        Если 2FA включена, смена адреса требует пароль или TOTP код: после неё аккаунт продолжает
+        зависеть от второго фактора, но уже не от прежнего емаила. Поэтому этим методом аварийный код
         не принимается ни на одном шаге — комбинация «код с емаила + аварийный код» отклоняется.
+        У аккаунта с выключенной 2FA второго фактора нет вовсе, и цепочка ограничивается кодом
+        с текущего емаила.
         Комбинация «пароль/TOTP + аварийный код» — это выход из сценария утраченного доступа
         к почте, и создаётся она отдельным методом `POST /v1/security/email/recovery`.
 
         ### Влияние на сессии
-        Смена емаила (шаг 4, `POST /v1/security/apply-operation`) сессии и токены не затрагивает:
+        Смена емаила (шаг 6, `POST /v1/security/apply-operation`) сессии и токены не затрагивает:
         текущая сессия сохраняется, refresh токен не ротируется, остальные открытые сессии
         не закрываются, повторный вход не требуется. Закрыть прочие сессии пользователь при желании
         может сам — `GET /v1/sessions` и `POST /v1/sessions/close`.
@@ -925,10 +941,13 @@ paths:
           `confirm_method` — `PASSWORD` либо `TOTP`);
         3. Затем предлагается ввести один из одноразовых аварийных кодов
           (`confirm_method` — `RECOVERY`);
-        4. Пользователь применяет подтверждённую операцию методом `POST /v1/security/apply-operation` —
-          емаил изменяется на новый, на прежний емаил отправляется уведомление;
+        4. Дальше — как у `POST /v1/security/email`: пользователь применяет подтверждённую операцию
+          методом `POST /v1/security/apply-email` (создаётся операция подтверждения владения новым
+          адресом, код уходит на новый емаил, уведомление о запросе смены — на прежний), подтверждает
+          её кодом с нового адреса (`PATCH /v1/operation/confirm`) и применяет
+          методом `POST /v1/security/apply-operation` — только тогда емаил изменяется на новый;
 
-        Смена адреса всегда требует пароль или TOTP код: после неё аккаунт продолжает зависеть
+        Смена адреса этим методом требует пароль или TOTP код: после неё аккаунт продолжает зависеть
         от второго фактора, но уже не от прежнего емаила. Поэтому здесь аварийный код принимается
         в дополнение ко второму фактору, а не вместо него, и комбинация «код с емаила + аварийный
         код» недопустима ни этим методом, ни обычным.
@@ -973,6 +992,77 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error403'
         '409':
           $ref: '#/components/responses/Api.ResponseJson.Error409'
+        '422':
+          $ref: '#/components/responses/Api.ResponseJson.Error422'
+        '500':
+          $ref: '#/components/responses/Api.ResponseJson.Error5xx'
+  /v1/security/apply-email:
+    post:
+      summary: Auth/SC/R1c. Метод применяет подтверждённую операцию смены емаила
+      description: |-
+        Метод завершает первый шаг смены адреса — тот, на котором пользователь доказал владение
+        аккаунтом (`POST /v1/security/email` либо `POST /v1/security/email/recovery`), — и начинает
+        второй: создаёт **операцию подтверждения владения новым адресом** и возвращает её.
+        Емаил аккаунта при этом **не меняется**.
+
+        На новый адрес уходит код подтверждения, на прежний — уведомление о запросе смены
+        (дата и время, новый адрес, срок действия операции). Ссылок, выполняющих действие,
+        в письмах нет.
+
+        ### Созданная операция
+        - живёт долго (порядка 72 часов) и всё это время ждёт пользователя; срок отдаётся
+          в `expires_in`, а сама операция видна в `GET /v1/user` (`pending_operations`) вместе
+          с новым адресом и сроком истечения;
+        - подтверждается кодом с нового адреса — `PATCH /v1/operation/confirm` (единственное
+          звено, `confirm_method`: `EMAIL`); второй фактор повторно не спрашивается, он предъявлен
+          на первом шаге;
+        - применяется методом `POST /v1/security/apply-operation` — только тогда емаил меняется
+          на новый, а на прежний адрес уходит уведомление о состоявшейся смене;
+        - отзывается методом `PATCH /v1/operation/revoke` в любой момент до применения;
+        - повторная отправка кода (`PATCH /v1/operation/resend`) выдаёт новый код, но срок жизни
+          операции **не продлевает**: он отсчитывается от её создания;
+        - одновременно у аккаунта существует не более одной такой операции: создание новой
+          закрывает предыдущую;
+
+        ### Влияние на сессии
+        Сессии и токены не затрагиваются: текущая сессия сохраняется, refresh токен не ротируется,
+        остальные открытые сессии не закрываются, повторный вход не требуется.
+
+        ### Значения `code` в ответе `400`
+        - `ValidateError/token` — токен операции не указан или не проходит проверку схемы;
+        - `OperationInvalid/token` — токен операции неизвестен, истёк или уже использован;
+        - `OperationIsNotConfirmed/token` — операция ещё не подтверждена: сначала нужно пройти
+          подтверждение через `PATCH /v1/operation/confirm`;
+        - `OperationAlreadyExpired/token` — срок жизни операции истёк, её нужно создавать заново;
+        - `EmailAlreadyExists` — новый емаил заняли, пока шло подтверждение первого шага;
+          смену нужно начинать заново с другим адресом. Ошибка не привязана к полю: в запросе
+          передаётся только токен;
+
+        ### Причины ответа `403`
+        - указанная операция принадлежит другому пользователю;
+        - токен указывает на операцию другого типа, а не на смену емаила
+          (`POST /v1/security/email`, `POST /v1/security/email/recovery`);
+        - общие причины отказа — см. «Аутентификация и доступ» в описании API;
+      operationId: applyUserEmail
+      tags:
+        - Auth.Security
+      x-auth-scopes:
+        - any-users
+      requestBody:
+        required: true
+        content:
+          application/json;charset=UTF-8:
+            schema:
+              $ref: '#/components/schemas/Auth.Security.Request.Model.ApplyByToken'
+      responses:
+        '200':
+          $ref: '#/components/responses/Auth.ResponseJson.WaitingConfirmOperation'
+        '400':
+          $ref: '#/components/responses/Api.ResponseJson.Error400'
+        '401':
+          $ref: '#/components/responses/Api.ResponseJson.Error401'
+        '403':
+          $ref: '#/components/responses/Api.ResponseJson.Error403'
         '422':
           $ref: '#/components/responses/Api.ResponseJson.Error422'
         '500':
@@ -1031,7 +1121,7 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/password:
     post:
-      summary: Auth/SC/R3. Метод создания операции на установку пароля пользователя (2FA)
+      summary: Auth/SC/R3a. Метод создания операции на установку пароля пользователя (2FA)
       description: |-
         Метод предназначен для создания операции установки пароля текущего пользователя в качестве
         второго фактора (2FA по паролю).
@@ -1086,7 +1176,7 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/apply-password:
     post:
-      summary: Auth/SC/R4. Метод применяет подтверждённую операцию смены пароля и выдаёт аварийные коды
+      summary: Auth/SC/R3b. Метод применяет подтверждённую операцию смены пароля и выдаёт аварийные коды
       description: |-
         Метод завершает установку пароля как 2FA после подтверждения операции, созданной
         методом `POST /v1/security/password`. При успехе 2FA по паролю включается и единоразово
@@ -1147,61 +1237,9 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error422'
         '500':
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
-  /v1/security/apply-operation:
-    post:
-      summary: Auth/SC/R5. Метод применяет подтверждённую пользователем операцию
-      description: |-
-        Метод предназначен для применения подтверждённой пользователем операции
-        (изменение защищённого свойства пользователя, отмены 2FA и т.д.)
-
-        ### Влияние на сессии
-        Сессии и токены не затрагиваются ни для одной из применяемых операций (отключение 2FA,
-        смена емаила или телефона): текущая сессия сохраняется, refresh токен не ротируется,
-        остальные открытые сессии не закрываются, повторный вход не требуется. Клиенту достаточно
-        перечитать профиль (`GET /v1/user`). Закрыть прочие сессии — например, после отключения
-        2FA — пользователь при желании может сам через `GET /v1/sessions` и `POST /v1/sessions/close`.
-
-        ### Значения `code` в ответе `400`
-        - `ValidateError/token` — токен операции не указан или не проходит проверку схемы;
-        - `OperationInvalid/token` — токен операции неизвестен, истёк или уже использован;
-        - `OperationIsNotConfirmed/token` — операция ещё не подтверждена: сначала нужно пройти
-          подтверждение через `PATCH /v1/operation/confirm`;
-        - `OperationAlreadyExpired/token` — срок жизни операции истёк, её нужно создавать заново;
-
-        Тип операции проверяется раньше её подтверждённости, поэтому токен, указывающий на тип
-        операции, который это развёртывание не поддерживает, даёт `500` (ошибка конфигурации
-        сервера), а не `OperationIsNotConfirmed`.
-
-        ### Причины ответа `403`
-        - указанная операция принадлежит другому пользователю;
-        - общие причины отказа — см. «Аутентификация и доступ» в описании API;
-      operationId: applyUserOperation
-      tags:
-        - Auth.Security
-      x-auth-scopes:
-        - any-users
-      requestBody:
-        required: true
-        content:
-          application/json;charset=UTF-8:
-            schema:
-              $ref: '#/components/schemas/Auth.Security.Request.Model.ApplyOperation'
-      responses:
-        '204':
-          description: Указанная пользователем операция была применена
-        '400':
-          $ref: '#/components/responses/Api.ResponseJson.Error400'
-        '401':
-          $ref: '#/components/responses/Api.ResponseJson.Error401'
-        '403':
-          $ref: '#/components/responses/Api.ResponseJson.Error403'
-        '422':
-          $ref: '#/components/responses/Api.ResponseJson.Error422'
-        '500':
-          $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/totp:
     post:
-      summary: Auth/SC/R6. Метод создания операции на установку TOTP генератора для 2FA аутентификации пользователя
+      summary: Auth/SC/R4a. Метод создания операции на установку TOTP генератора для 2FA аутентификации пользователя
       description: |-
         Метод предназначен для создания операции установки TOTP генератора в качестве второго фактора
         (2FA по TOTP) для текущего пользователя.
@@ -1245,7 +1283,7 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/totp/{token}:
     get:
-      summary: Auth/SC/R7. Метод возвращает секрет TOTP генератора для 2FA аутентификации пользователя
+      summary: Auth/SC/R4b. Метод возвращает секрет TOTP генератора для 2FA аутентификации пользователя
       description: |-
         Метод возвращает секрет TOTP генератора, который уже сохранён в операции: строкой в Base32
         для ручного ввода в приложение и ссылкой `otpauth://` с теми же параметрами. По ссылке
@@ -1306,7 +1344,7 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/totp/{token}/qrcode:
     get:
-      summary: Auth/SC/R8. Метод возвращает QR-код TOTP генератора для 2FA аутентификации пользователя
+      summary: Auth/SC/R4c. Метод возвращает QR-код TOTP генератора для 2FA аутентификации пользователя
       description: |-
         Метод возвращает QR-код (изображение) для добавления генератора в приложение 2FA
         аутентификации, построенный на основе секрета, который уже сохранён в операции.
@@ -1365,7 +1403,7 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/apply-totp:
     post:
-      summary: Auth/SC/R9. Метод проверяет TOTP-код и привязывает генератор, выдавая аварийные коды
+      summary: Auth/SC/R4d. Метод проверяет TOTP-код и привязывает генератор, выдавая аварийные коды
       description: |-
         Пользователь вводит код из TOTP-приложения для подтверждения владения генератором.
         При успехе генератор привязывается, 2FA по TOTP включается и единоразово возвращается
@@ -1428,7 +1466,7 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/recovery-codes:
     post:
-      summary: Auth/SC/R10. Метод создания операции перевыпуска одноразовых аварийных кодов
+      summary: Auth/SC/R5a. Метод создания операции перевыпуска одноразовых аварийных кодов
       description: |-
         Метод предназначен для перевыпуска набора одноразовых аварийных кодов текущего пользователя
         без смены второго фактора (например, когда коды заканчиваются). Требует включённую 2FA.
@@ -1471,7 +1509,7 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/apply-recovery-codes:
     post:
-      summary: Auth/SC/R11. Метод применяет подтверждённую операцию перевыпуска и выдаёт новые аварийные коды
+      summary: Auth/SC/R5b. Метод применяет подтверждённую операцию перевыпуска и выдаёт новые аварийные коды
       description: |-
         Метод завершает перевыпуск аварийных кодов после подтверждения операции, созданной методом
         `POST /v1/security/recovery-codes`. Набор аварийных кодов заменяется на новый и единоразово
@@ -1529,9 +1567,68 @@ paths:
           $ref: '#/components/responses/Api.ResponseJson.Error422'
         '500':
           $ref: '#/components/responses/Api.ResponseJson.Error5xx'
+  /v1/security/apply-operation:
+    post:
+      summary: Auth/SC/R6. Метод применяет подтверждённую пользователем операцию
+      description: |-
+        Метод предназначен для применения подтверждённой пользователем операции
+        (изменение защищённого свойства пользователя, отмены 2FA и т.д.)
+
+        У смены емаила этим методом применяется **вторая** операция цепочки — подтверждение
+        владения новым адресом, созданное методом `POST /v1/security/apply-email`. Именно здесь
+        емаил аккаунта меняется на новый, а на прежний адрес уходит уведомление.
+
+        ### Влияние на сессии
+        Сессии и токены не затрагиваются ни для одной из применяемых операций (отключение 2FA,
+        смена емаила или телефона): текущая сессия сохраняется, refresh токен не ротируется,
+        остальные открытые сессии не закрываются, повторный вход не требуется. Клиенту достаточно
+        перечитать профиль (`GET /v1/user`). Закрыть прочие сессии — например, после отключения
+        2FA — пользователь при желании может сам через `GET /v1/sessions` и `POST /v1/sessions/close`.
+
+        ### Значения `code` в ответе `400`
+        - `ValidateError/token` — токен операции не указан или не проходит проверку схемы;
+        - `OperationInvalid/token` — токен операции неизвестен, истёк или уже использован;
+        - `OperationIsNotConfirmed/token` — операция ещё не подтверждена: сначала нужно пройти
+          подтверждение через `PATCH /v1/operation/confirm`;
+        - `OperationAlreadyExpired/token` — срок жизни операции истёк, её нужно создавать заново;
+        - `EmailAlreadyExists` — применяется смена емаила, а новый адрес успели занять за время
+          жизни операции; смену нужно начинать заново с другим адресом. Ошибка не привязана
+          к полю: в запросе передаётся только токен;
+
+        Тип операции проверяется раньше её подтверждённости, поэтому токен, указывающий на тип
+        операции, который это развёртывание не поддерживает, даёт `500` (ошибка конфигурации
+        сервера), а не `OperationIsNotConfirmed`.
+
+        ### Причины ответа `403`
+        - указанная операция принадлежит другому пользователю;
+        - общие причины отказа — см. «Аутентификация и доступ» в описании API;
+      operationId: applyUserOperation
+      tags:
+        - Auth.Security
+      x-auth-scopes:
+        - any-users
+      requestBody:
+        required: true
+        content:
+          application/json;charset=UTF-8:
+            schema:
+              $ref: '#/components/schemas/Auth.Security.Request.Model.ApplyOperation'
+      responses:
+        '204':
+          description: Указанная пользователем операция была применена
+        '400':
+          $ref: '#/components/responses/Api.ResponseJson.Error400'
+        '401':
+          $ref: '#/components/responses/Api.ResponseJson.Error401'
+        '403':
+          $ref: '#/components/responses/Api.ResponseJson.Error403'
+        '422':
+          $ref: '#/components/responses/Api.ResponseJson.Error422'
+        '500':
+          $ref: '#/components/responses/Api.ResponseJson.Error5xx'
   /v1/security/disable2fa:
     post:
-      summary: Auth/SC/R12. Метод создания операции отключения 2FA аутентификацию пользователя
+      summary: Auth/SC/R7. Метод создания операции отключения 2FA аутентификацию пользователя
       description: |-
         Метод предназначен для создания операции отключения 2FA аутентификации текущего пользователя.
 
@@ -1838,7 +1935,7 @@ components:
           description: |-
             Оставшееся количество повторных отправок кода подтверждения; 0 означает,
             что отправки исчерпаны. Отсутствует вместе с resends_in, если повторные отправки
-            не применимы (пароль и TOTP)
+            не применимы (`PASSWORD`, `TOTP`, `RECOVERY`)
           type: integer
           minimum: 0
           example: 1
@@ -1847,7 +1944,7 @@ components:
             Количество оставшихся секунд по истечении которых можно сделать повторную отправку
             кода подтверждения; 0 означает, что её можно сделать прямо сейчас.
             Отсутствует вместе с remaining_resends, если повторные отправки не применимы
-            (пароль и TOTP)
+            (`PASSWORD`, `TOTP`, `RECOVERY`)
           type: integer
           minimum: 0
           example: 1
@@ -1995,6 +2092,13 @@ components:
             Указывается, только пока в операции остаётся неподтверждённое звено; по полностью
             подтверждённой операции поле в теле не указывается (см. описание метода);
             пустая строка является невалидным значением.
+            Границы `4..32` — общий диапазон размера на все форматы разом; фактический размер
+            задаёт `confirm_method` текущего звена:
+            - EMAIL - 6-значный цифровой код;
+            - PHONE - 6-значный цифровой код;
+            - PASSWORD - 8..32 символа;
+            - TOTP - 6-значный цифровой код;
+            - RECOVERY - 8..32 символа;
           type: string
           minLength: 4
           maxLength: 32
@@ -2044,7 +2148,7 @@ components:
           description: |-
             Оставшееся количество повторных отправок кода подтверждения; 0 означает,
             что отправки исчерпаны. Отсутствует вместе с resends_in, если повторные отправки
-            не применимы (пароль и TOTP)
+            не применимы (`PASSWORD`, `TOTP`, `RECOVERY`)
           type: integer
           minimum: 0
           example: 1
@@ -2053,7 +2157,7 @@ components:
             Количество оставшихся секунд по истечении которых можно сделать повторную отправку
             кода подтверждения; 0 означает, что её можно сделать прямо сейчас.
             Отсутствует вместе с remaining_resends, если повторные отправки не применимы
-            (пароль и TOTP)
+            (`PASSWORD`, `TOTP`, `RECOVERY`)
           type: integer
           minimum: 0
           example: 1
@@ -2126,6 +2230,75 @@ components:
           $ref: '#/components/schemas/Api.Field.DateTimeCreatedAt'
         updated_at:
           $ref: '#/components/schemas/Api.Field.DateTimeUpdatedAt'
+    Auth.Enum.OperationType:
+      description: |-
+        Тип защищённой операции, ожидающей подтверждения либо применения:
+        - CREATE_USER - регистрация пользователя;
+        - AUTHORIZE_USER - вход пользователя в систему;
+        - CHANGE_EMAIL - смена емаила, шаг 1: подтверждение владения аккаунтом;
+        - CHANGE_EMAIL_CONFIRM - смена емаила, шаг 2: подтверждение владения новым адресом;
+        - CHANGE_PHONE - смена телефона;
+        - CHANGE_PASSWORD - установка/смена пароля (2FA);
+        - CHANGE_TOTP - установка/смена TOTP генератора (2FA);
+        - REGENERATE_RECOVERY - перевыпуск одноразовых аварийных кодов;
+        - DISABLE_2FA - отключение 2FA;
+      type: string
+      enum:
+        - CREATE_USER
+        - AUTHORIZE_USER
+        - CHANGE_EMAIL
+        - CHANGE_EMAIL_CONFIRM
+        - CHANGE_PHONE
+        - CHANGE_PASSWORD
+        - CHANGE_TOTP
+        - REGENERATE_RECOVERY
+        - DISABLE_2FA
+      example: CHANGE_EMAIL_CONFIRM
+    Auth.Enum.OperationStatus:
+      description: |-
+        Текущий статус защищённой операции:
+        - OPENED - открыта, ожидает подтверждения (`PATCH /v1/operation/confirm`);
+        - CONFIRMED - подтверждена, ожидает применения завершающим методом операции
+          (`POST /v1/security/apply-*`, а для операций входа и регистрации - `POST /v1/session`);
+      type: string
+      enum:
+        - OPENED
+        - CONFIRMED
+      example: OPENED
+    Auth.Response.Model.PendingOperation:
+      description: |-
+        Защищённая операция пользователя, ожидающая подтверждения либо применения.
+        Токеном операции она подтверждается (`PATCH /v1/operation/confirm`), при необходимости
+        переотправляет код (`PATCH /v1/operation/resend`), отзывается (`PATCH /v1/operation/revoke`)
+        и применяется завершающим методом (`POST /v1/security/apply-*`).
+      type: object
+      required:
+        - token
+        - type
+        - expires_at
+        - status
+      properties:
+        token:
+          description: Токен операции
+          type: string
+          maxLength: 128
+          example: b1d50cb1f3bc817f2be3a4b357929cee70402fb5463db25b91568a1801dc0974
+        type:
+          $ref: '#/components/schemas/Auth.Enum.OperationType'
+        extra_value:
+          description: |-
+            Значение операции отображаемое пользователю. Отдаётся только у операций смены адреса
+            (`CHANGE_EMAIL`, `CHANGE_EMAIL_CONFIRM`)
+          type: string
+          maxLength: 128
+          example: new-user-email@example.com
+        expires_at:
+          description: Дата и время, когда операция перестанет действовать.
+          type: string
+          format: date-time
+          example: '2020-01-01T15:00:00+03:00'
+        status:
+          $ref: '#/components/schemas/Auth.Enum.OperationStatus'
     Auth.Enum.UserStatus:
       description: |-
         Текущий статус пользователя:
@@ -2192,6 +2365,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Auth.Response.Model.UserRealm'
+        pending_operations:
+          description: Действующие операции пользователя, ожидающие его подтверждения либо применения.
+          type: array
+          items:
+            $ref: '#/components/schemas/Auth.Response.Model.PendingOperation'
         status:
           $ref: '#/components/schemas/Auth.Enum.UserStatus'
     Auth.Request.Model.ChangeUserSettings:
@@ -2376,6 +2554,13 @@ components:
           description: |-
             Пароль, одноразовый пароль, код подтверждения, высланный на емаил/телефон, либо один
             из аварийных кодов — если текущее звено цепочки подтверждений его допускает.
+            Границы `4..32` — общий диапазон размера на все форматы разом; фактический размер
+            задаёт `confirm_method` текущего звена:
+            - EMAIL - 6-значный цифровой код;
+            - PHONE - 6-значный цифровой код;
+            - PASSWORD - 8..32 символа;
+            - TOTP - 6-значный цифровой код;
+            - RECOVERY - 8..32 символа;
           type: string
           minLength: 4
           maxLength: 32
@@ -2403,6 +2588,17 @@ components:
           minLength: 7
           maxLength: 64
           example: new-user-email@example.com
+    Auth.Security.Request.Model.ApplyByToken:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          description: Токен операции, которая подтверждена пользователем
+          type: string
+          minLength: 64
+          maxLength: 128
+          example: b1d50cb1f3bc817f2be3a4b357929cee70402fb5463db25b91568a1801dc0974
     Auth.Security.Request.Model.ChangePhone:
       type: object
       required:
@@ -2426,17 +2622,6 @@ components:
           minLength: 8
           maxLength: 32
           example: L$QI.qA6eu7zG%7w
-    Auth.Security.Request.Model.ApplyByToken:
-      type: object
-      required:
-        - token
-      properties:
-        token:
-          description: Токен операции, которая подтверждена пользователем
-          type: string
-          minLength: 64
-          maxLength: 128
-          example: b1d50cb1f3bc817f2be3a4b357929cee70402fb5463db25b91568a1801dc0974
     Auth.Security.Response.RecoveryCodes:
       type: object
       required:
@@ -2450,17 +2635,6 @@ components:
           example:
             - QW39L7R0-417X5FKV
             - 67DO040V-17K59ABP
-    Auth.Security.Request.Model.ApplyOperation:
-      type: object
-      required:
-        - token
-      properties:
-        token:
-          description: Токен операции, которая подтверждена пользователем
-          type: string
-          minLength: 64
-          maxLength: 128
-          example: b1d50cb1f3bc817f2be3a4b357929cee70402fb5463db25b91568a1801dc0974
     Auth.Security.Response.TotpSecret:
       type: object
       required:
@@ -2501,6 +2675,17 @@ components:
           minLength: 6
           maxLength: 6
           example: '183947'
+    Auth.Security.Request.Model.ApplyOperation:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          description: Токен операции, которая подтверждена пользователем
+          type: string
+          minLength: 64
+          maxLength: 128
+          example: b1d50cb1f3bc817f2be3a4b357929cee70402fb5463db25b91568a1801dc0974
     Auth.Field.DateTimeLastSeenAt:
       description: Дата и время последней активности сессии в часовом поясе пользователя (RFC3339 со смещением; по умолчанию UTC)
       type: string
@@ -2655,12 +2840,6 @@ components:
                 type: string
                 format: date-time
                 example: '2020-01-01T12:00:00.000Z'
-    Api.ResponseJson.Error409:
-      description: Запрос отклонён текущим состоянием ресурса
-      content:
-        application/problem+json;charset=UTF-8:
-          schema:
-            $ref: '#/components/schemas/Api.Response.Model.ErrorDetails'
     Api.ResponseJson.Error401:
       description: Пользователь не был аутентифицирован
       content:
@@ -2675,6 +2854,12 @@ components:
             $ref: '#/components/schemas/Auth.Check.Response.Model.Jwks'
     Api.ResponseJson.Error404:
       description: Запрашиваемый ресурс не был найден
+      content:
+        application/problem+json;charset=UTF-8:
+          schema:
+            $ref: '#/components/schemas/Api.Response.Model.ErrorDetails'
+    Api.ResponseJson.Error409:
+      description: Запрос отклонён текущим состоянием ресурса
       content:
         application/problem+json;charset=UTF-8:
           schema:

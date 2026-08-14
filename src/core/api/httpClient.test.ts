@@ -51,7 +51,9 @@ describe('authClient: 401 → refresh → retry', () => {
     const calls: (string | null)[] = [];
     server.use(refreshHandler(patches), protectedOnce('get', '/v1/sessions', calls));
 
-    const res = await authClient.get('/v1/sessions', { params: { realm: 'print-shop/admin' } });
+    const res = await authClient.get('/v1/sessions', {
+      params: { realm: 'account-template/admin' },
+    });
 
     expect(res.status).toBe(200);
     expect(patches).toHaveLength(1);

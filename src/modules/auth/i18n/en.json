@@ -7,18 +7,26 @@
     },
     "field": {
       "email": "Email",
+      "emailFormat": "user@example.com",
       "login": "Email or phone",
       "code": "Confirmation code",
+      "totpCode": "App code",
       "password": "Password",
       "recoveryCode": "Recovery code",
+      "recoveryCodeFormat": "XXXXXXXX-XXXXXXXX",
       "emailChecking": "Checking availability…",
-      "emailFree": "Email is available",
+      "emailFree": "Email is available for registration",
       "emailTaken": "This email is already registered"
     },
     "signup": {
-      "title": "Create account",
+      "title": "Sign up",
       "subtitle": "Enter your email — we'll send a code to confirm registration.",
-      "submit": "Sign up",
+      "submit": "Create account",
+      "terms": {
+        "before": "By creating an account, you agree to the",
+        "link": "Terms of Service",
+        "after": ". We'll occasionally send you account-related emails."
+      },
       "haveAccount": "Already have an account?",
       "signinLink": "Sign in"
     },
@@ -29,19 +37,14 @@
       "noAccount": "Don't have an account?",
       "signupLink": "Sign up",
       "emailTrouble": "Not getting the code?",
-      "recoveryLink": "Sign in without email",
-      "confirmHint": {
-        "PASSWORD": "Enter your password to confirm. One of your one-time recovery codes works here too.",
-        "TOTP": "Enter the code from your authenticator app. One of your one-time recovery codes works here too."
-      }
+      "recoveryLink": "Sign in another way"
     },
     "signinRecovery": {
-      "title": "Sign in without email access",
+      "title": "Recovery sign-in",
       "enterLogin": "Enter the email or phone linked to your account.",
       "submit": "Sign in",
       "twoFaOnly": "Requires two-factor protection: your password or authenticator code, plus a recovery code.",
-      "emailSigninPrompt": "Inbox working?",
-      "emailSigninLink": "Sign in with email"
+      "emailSigninLink": "Back to the main sign-in method"
     },
     "confirm": {
       "title": "Confirmation",
@@ -51,6 +54,11 @@
         "PASSWORD": "Enter your password to confirm.",
         "TOTP": "Enter the code from your authenticator app.",
         "RECOVERY": "Enter one of your one-time recovery codes."
+      },
+      "mode": {
+        "PASSWORD": "Enter your password",
+        "TOTP": "Enter the authenticator code",
+        "RECOVERY": "Enter a recovery code"
       },
       "awaitingFinish": "The code was accepted, but signing in failed. No need to confirm again — just try once more.",
       "submit": "Confirm",

@@ -1,16 +1,26 @@
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
-import { ShieldDotsIcon } from './icons';
 
 /**
- * Примечание в подвале auth-карточки: условие, при котором экран вообще подходит. Плашкой его не
- * делаем — ничего не случилось, это оговорка, а не происшествие; форма сноски за навигационной
- * строкой и есть её смысл.
+ * Примечание в подвале auth-карточки: оговорка к форме. Плашкой его не делаем — ничего не
+ * случилось; форма сноски и есть её смысл.
  *
- * Предупреждающий тон остаётся только на щите: пятно размером с глиф глаз находит, но с заголовком
- * и кнопкой не спорит. Щит тот же, что метит двухфакторную защиту в профиле, — о ней здесь и речь.
+ * Знак и его цвет выбирает экран: они говорят про его текст, и одного значка на все оговорки не
+ * бывает. Умолчания у цвета нет намеренно — тон это и есть громкость сноски, и решать её молча за
+ * экран нечем. Здесь остаётся размер: по нему сноски разных экранов и совпадают друг с другом.
+ *
+ * Цвет задаётся путём в палитре, не литералом: сноска живёт в обеих темах, и «белый» на светлой
+ * карточке пропадёт.
  */
-export function AuthFooterNote({ children }: { children: ReactNode }) {
+export function AuthFooterNote({
+  icon: Icon,
+  tone,
+  children,
+}: {
+  icon: ComponentType<{ size?: number }>;
+  tone: string;
+  children: ReactNode;
+}) {
   return (
     <Stack
       direction="row"
@@ -18,16 +28,15 @@ export function AuthFooterNote({ children }: { children: ReactNode }) {
       sx={{
         alignItems: 'flex-start',
         justifyContent: 'center',
+        // Примечание идёт за кнопкой — прибавки строчного бокса сверху нет, поэтому число то же,
+        // что у прочих зазоров карточки.
         mt: 2,
-        pt: 1.75,
-        borderTop: 1,
-        borderColor: 'divider',
       }}
     >
-      <Box sx={{ color: 'warning.main', display: 'flex', flexShrink: 0, mt: '2px' }}>
-        <ShieldDotsIcon size={17} />
+      <Box sx={{ color: tone, display: 'flex', flexShrink: 0, mt: '2px' }}>
+        <Icon size={17} />
       </Box>
-      {/* На ступень мельче строки футера: примечание читают после неё, а не вместо неё. */}
+      {/* На ступень мельче строки футера: это сноска, а не ещё один выход с экрана. */}
       <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: 12 }}>
         {children}
       </Typography>

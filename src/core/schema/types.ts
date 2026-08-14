@@ -56,6 +56,11 @@ export interface NodeProps {
   inputMode?: 'text' | 'numeric' | 'tel' | 'email';
   fullWidth?: boolean;
   autoFocus?: boolean;
+  /**
+   * Подписи у поля на экране нет — она остаётся только доступным именем. Ставится там, где поле в
+   * форме одно и что вводить, уже сказано соседним текстом.
+   */
+  hideLabel?: boolean;
 }
 
 /**

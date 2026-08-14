@@ -17,11 +17,16 @@ describe('registerAllModules', () => {
 
   it("sign-out clears the cache: the next user does not see the previous one's data", () => {
     queryClient.setQueryData(['auth', 'user'], { email: 'previous@example.com' });
-    queryClient.setQueryData(['auth', 'sessions', 'print-shop/standard'], [{ session_id: 'aaaa' }]);
+    queryClient.setQueryData(
+      ['auth', 'sessions', 'account-template/standard'],
+      [{ session_id: 'aaaa' }],
+    );
 
     forceLogout();
 
     expect(queryClient.getQueryData(['auth', 'user'])).toBeUndefined();
-    expect(queryClient.getQueryData(['auth', 'sessions', 'print-shop/standard'])).toBeUndefined();
+    expect(
+      queryClient.getQueryData(['auth', 'sessions', 'account-template/standard']),
+    ).toBeUndefined();
   });
 });

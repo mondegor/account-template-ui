@@ -25,11 +25,11 @@ import { SessionsPage } from './SessionsPage';
 import type { UserInfo, UserSession } from '../api/types';
 
 /**
- * Реалм деплоя (realmProvider) — 'print-shop/standard': именно в нём осмыслен is_current.
+ * Реалм деплоя (realmProvider) — 'account-template/standard': именно в нём осмыслен is_current.
  * Второй кабинет пользователя — чужой, там «текущей» сессии не существует.
  */
-const CURRENT_REALM = 'print-shop/standard';
-const OTHER_REALM = 'print-shop/admin';
+const CURRENT_REALM = 'account-template/standard';
+const OTHER_REALM = 'account-template/admin';
 
 function session(id: string, device: string, isCurrent = false): UserSession {
   return {
@@ -257,7 +257,7 @@ describe('SessionsPage', () => {
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.account-template/admin')),
     );
     release();
 
@@ -305,13 +305,22 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(trashButtons()[0]!).toBeEnabled());
   });
 
+  /** Что выбирают, назвал заголовок слева; селекту остаётся имя, но не видимая подпись. */
+  it('gives the realm filter a name without showing a label', async () => {
+    renderSessions();
+    await screen.findByText('This device');
+
+    expect(screen.queryByText(tr('auth.sessions.realm'))).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: tr('auth.sessions.realm') })).toBeInTheDocument();
+  });
+
   it('changing the realm refetches the list, the combobox stays in place', async () => {
     renderSessions();
     await screen.findByText('This device');
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.account-template/admin')),
     );
 
     // Комбобокс переживает загрузку: страница не схлопывается целиком.
@@ -336,7 +345,7 @@ describe('SessionsPage', () => {
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.account-template/admin')),
     );
 
     await waitFor(() =>
@@ -348,7 +357,7 @@ describe('SessionsPage', () => {
     renderSessions(`/sessions?realm=${encodeURIComponent(OTHER_REALM)}`);
     await waitFor(() =>
       expect(screen.getByRole('combobox').textContent).toBe(
-        tr('deploy.realmLabel.print-shop/admin'),
+        tr('deploy.realmLabel.account-template/admin'),
       ),
     );
 
@@ -359,7 +368,7 @@ describe('SessionsPage', () => {
     await waitFor(() => expect(locationNow()).toBe('/sessions'));
     await waitFor(() =>
       expect(screen.getByRole('combobox').textContent).toBe(
-        tr('deploy.realmLabel.print-shop/standard'),
+        tr('deploy.realmLabel.account-template/standard'),
       ),
     );
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(CURRENT_REALM));
@@ -374,25 +383,27 @@ describe('SessionsPage', () => {
     await waitFor(() =>
       expect(screen.getByText(tr('auth.sessions.allSessions', { n: 1 }))).toBeInTheDocument(),
     );
-    expect(screen.getByRole('combobox').textContent).toBe(tr('deploy.realmLabel.print-shop/admin'));
+    expect(screen.getByRole('combobox').textContent).toBe(
+      tr('deploy.realmLabel.account-template/admin'),
+    );
   });
 
   it('a foreign ?realm= is ignored: fall back to the deployment realm and clean the address', async () => {
     // URL правится руками: доступа к кабинету нет, запрос туда уходить не должен.
-    renderSessions('/sessions?realm=print-shop%2Fsomebody-else');
+    renderSessions('/sessions?realm=account-template%2Fsomebody-else');
 
     await screen.findByText('This device');
     expect(getUserSessions).toHaveBeenCalledWith(CURRENT_REALM);
-    expect(getUserSessions).not.toHaveBeenCalledWith('print-shop/somebody-else');
+    expect(getUserSessions).not.toHaveBeenCalledWith('account-template/somebody-else');
     expect(screen.getByRole('combobox').textContent).toBe(
-      tr('deploy.realmLabel.print-shop/standard'),
+      tr('deploy.realmLabel.account-template/standard'),
     );
     // Иначе адрес называл бы один кабинет, а экран показывал другой — и такую ссылку переслали бы.
     await waitFor(() => expect(locationNow()).toBe('/sessions'));
   });
 
   it('a foreign realm does not wipe the neighbouring query parameters', async () => {
-    renderSessions('/sessions?realm=print-shop%2Fsomebody-else&keep=1');
+    renderSessions('/sessions?realm=account-template%2Fsomebody-else&keep=1');
 
     await screen.findByText('This device');
     await waitFor(() => expect(locationNow()).toBe('/sessions?keep=1'));
@@ -404,7 +415,7 @@ describe('SessionsPage', () => {
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.account-template/admin')),
     );
 
     await waitFor(() =>
@@ -422,7 +433,7 @@ describe('SessionsPage', () => {
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.account-template/admin')),
     );
 
     await waitFor(() =>
@@ -463,7 +474,7 @@ describe('SessionsPage', () => {
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.account-template/admin')),
     );
     await screen.findByText('MacBook Pro');
 
@@ -476,7 +487,9 @@ describe('SessionsPage', () => {
     // И не всплывает при возврате: стейт мутации выброшен, а не просто спрятан условием рендера.
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/standard')),
+      within(screen.getByRole('listbox')).getByText(
+        tr('deploy.realmLabel.account-template/standard'),
+      ),
     );
     await screen.findByText('This device');
     expect(screen.queryByText(tr('auth.sessions.closeError'))).toBeNull();
@@ -488,7 +501,7 @@ describe('SessionsPage', () => {
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(
-      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.print-shop/admin')),
+      within(screen.getByRole('listbox')).getByText(tr('deploy.realmLabel.account-template/admin')),
     );
     await waitFor(() => expect(getUserSessions).toHaveBeenCalledWith(OTHER_REALM));
 
@@ -501,14 +514,16 @@ describe('SessionsPage', () => {
     expect(getUserSessions).toHaveBeenLastCalledWith(CURRENT_REALM);
   });
 
-  it('the combobox shows human names, not print-shop/*', async () => {
+  it('the combobox shows human names, not account-template/*', async () => {
     renderSessions();
     await screen.findByText('This device');
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     const options = within(screen.getByRole('listbox'));
-    expect(options.getByText(tr('deploy.realmLabel.print-shop/standard'))).toBeInTheDocument();
-    expect(options.getByText(tr('deploy.realmLabel.print-shop/admin'))).toBeInTheDocument();
+    expect(
+      options.getByText(tr('deploy.realmLabel.account-template/standard')),
+    ).toBeInTheDocument();
+    expect(options.getByText(tr('deploy.realmLabel.account-template/admin'))).toBeInTheDocument();
     expect(options.queryByText(CURRENT_REALM)).toBeNull();
   });
 

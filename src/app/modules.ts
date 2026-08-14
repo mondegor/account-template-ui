@@ -24,7 +24,7 @@ let registered = false;
 export function registerAllModules(): void {
   if (registered) return;
   registered = true;
-  // Подписи реалмов/типов аккаунта — это про деплой, а не про модуль: имена print-shop/* живут здесь.
+  // Подписи реалмов/типов аккаунта — это про деплой, а не про модуль: имена account-template/* живут здесь.
   addTranslations(deployTranslations);
   const ctx: ModuleInitContext = { queryClient, contracts: contractRegistry, realmProvider };
   for (const m of modules) registerModule(m, ctx);

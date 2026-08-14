@@ -36,7 +36,7 @@ const MOCK_RECOVERY_CODE = 'RECOVRY1-CODE0011';
  */
 const MOCK_PASSWORD = 'MockPass2026!';
 /** Второй реалм пользователя — чтобы на /sessions было из чего выбирать. */
-const SECOND_REALM = 'print-shop/admin';
+const SECOND_REALM = 'account-template/admin';
 /** Мок-онли: 0 = у пользователя один кабинет (UI без выбора кабинета). Живёт здесь, а не в config. */
 const MOCK_MULTI_REALM = import.meta.env.VITE_MOCK_MULTI_REALM !== '0';
 

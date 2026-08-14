@@ -15,7 +15,7 @@ import {
   UiTextField,
 } from '@ui';
 import { hasComponent, registerComponent, type NodeComponentProps } from '@core/schema';
-import { FormErrorContext, SubmitOnlyContext } from './formContext';
+import { FormErrorContext, LoneFieldContext, SubmitOnlyContext } from './formContext';
 
 /**
  * Базовые schema-aware адаптеры: мапят узел (SchemaNode) на презентационный ui-атом и, для полей,
@@ -34,12 +34,26 @@ function TextFieldNode({ node }: NodeComponentProps) {
   const { t } = useTranslation();
   const { clearErrors } = useFormContext();
   const submitOnly = useContext(SubmitOnlyContext);
-  const { clear: clearFormError } = useContext(FormErrorContext);
+  const { hasError: formError, clear: clearFormError } = useContext(FormErrorContext);
+  const loneField = useContext(LoneFieldContext);
   const { field, fieldState } = useController({ name: node.name ?? '' });
+  const type = INPUT_TYPE[node.type] ?? 'text';
   return (
     <UiTextField
       label={node.label ? t(node.label) : undefined}
-      type={INPUT_TYPE[node.type] ?? 'text'}
+      hideLabel={node.props?.hideLabel}
+      collapseHelper={loneField}
+      // Форменное сообщение формы с одним полем рисуется строкой под этим блоком — зазор под ним
+      // считает блок, и эта строка ему такая же своя.
+      messageBelow={loneField && formError}
+      type={type}
+      // Пароль набирают вслепую — и придуманный, и вспоминаемый: показать набранное можно на любом
+      // схемном экране, где такое поле объявлено.
+      reveal={
+        type === 'password'
+          ? { show: t('common.field.showPassword'), hide: t('common.field.hidePassword') }
+          : undefined
+      }
       name={field.name}
       value={(field.value as string) ?? ''}
       // submitOnly: редактирование гасит показанную ошибку (снова покажется на след. сабмите). Без
@@ -54,7 +68,8 @@ function TextFieldNode({ node }: NodeComponentProps) {
       inputRef={field.ref}
       error={!!fieldState.error}
       helperText={fieldState.error?.message}
-      placeholder={node.props?.placeholder}
+      // Подсказка в поле — такой же текст интерфейса, как подпись, и живёт там же, в переводах.
+      placeholder={node.props?.placeholder ? t(node.props.placeholder) : undefined}
       autoComplete={node.props?.autoComplete}
       inputMode={node.props?.inputMode}
       autoFocus={node.props?.autoFocus}
@@ -71,6 +86,7 @@ function SelectNode({ node }: NodeComponentProps) {
   return (
     <UiSelect
       label={node.label ? t(node.label) : undefined}
+      hideLabel={node.props?.hideLabel}
       name={field.name}
       value={(field.value as string) ?? ''}
       options={options}

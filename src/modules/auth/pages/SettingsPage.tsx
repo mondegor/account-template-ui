@@ -9,13 +9,13 @@ import {
   CardContent,
   CircularProgress,
   FormControl,
-  FormHelperText,
-  InputLabel,
+  FormLabel,
   MenuItem,
   Select,
   Stack,
   Typography,
 } from '@mui/material';
+import { UiFieldMessage, uiFieldBlockSx } from '@ui';
 import { AppShell, LangFlag } from '@core/shell';
 import { ApiFieldError, apiErrorText } from '@core/api';
 import {
@@ -187,6 +187,26 @@ function SettingsForm({ user }: { user: UserInfo }) {
   const fieldError = (name: string) => parts?.byField.find((f) => f.name === name)?.detail;
   const otherError = parts ? parts.global : save.error ? apiErrorText(save.error, t) : undefined;
 
+  // Подсказка про язык постоянна — поле объясняет себя всегда. Про зону ОС нужна, только когда
+  // справочник её не знает: остальным она рассказывала бы про случай, которого у них нет.
+  const hint = {
+    lang: p('langHint'),
+    tz: osZoneUnknown ? p('osZoneHint', { zone: osZone }) : undefined,
+  };
+
+  /** Селект читают вместе со строками под ним, а связать их приходится самим: подписей у них нет. */
+  const describedBy = (name: keyof typeof hint) =>
+    [
+      fieldError(name) ? `settings-${name}-error` : null,
+      hint[name] ? `settings-${name}-hint` : null,
+    ]
+      .filter(Boolean)
+      .join(' ') || undefined;
+
+  /** Зазор под блоком поля: строка под полем его уполовинивает. Все строки здесь свои, не снаружи. */
+  const fieldGap = (name: keyof typeof hint) =>
+    (fieldError(name) ?? hint[name]) ? ('message' as const) : ('quiet' as const);
+
   return (
     <Stack spacing={2} sx={{ maxWidth: 640, mx: 'auto' }}>
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
@@ -225,13 +245,18 @@ function SettingsForm({ user }: { user: UserInfo }) {
         </Alert>
       )}
       <Card variant="outlined">
+        {/* Зазор под каждым блоком поля держит сам блок (uiFieldBlockSx): он вдвое меньше, когда
+            под полем показана строка, и знает об этом только он. Общего `spacing` у карточки
+            поэтому нет — иначе он складывался бы с этим отступом. */}
         <CardContent>
-          <Stack spacing={2.5}>
+          <Box sx={uiFieldBlockSx(fieldGap('lang'))}>
             <FormControl fullWidth size="small" error={Boolean(fieldError('lang'))}>
-              <InputLabel id="settings-lang-label">{p('lang')}</InputLabel>
+              <FormLabel id="settings-lang-label" sx={{ fontSize: 13, mb: 0.5 }}>
+                {p('lang')}
+              </FormLabel>
               <Select
                 labelId="settings-lang-label"
-                label={p('lang')}
+                aria-describedby={describedBy('lang')}
                 value={lang}
                 onChange={(e) => {
                   setLang(e.target.value);
@@ -254,14 +279,26 @@ function SettingsForm({ user }: { user: UserInfo }) {
                   </MenuItem>
                 ))}
               </Select>
-              <FormHelperText>{fieldError('lang') ?? p('langHint')}</FormHelperText>
+              {/* Отказ сервера подсказку не вытесняет, а встаёт над ней: подсказка объясняет, что
+                  это за поле, и после ошибки нужна не меньше, чем до неё. */}
+              <UiFieldMessage
+                id="settings-lang-error"
+                text={fieldError('lang')}
+                tone="error"
+                align="start"
+              />
+              <UiFieldMessage id="settings-lang-hint" text={hint.lang} align="start" />
             </FormControl>
+          </Box>
 
+          <Box sx={uiFieldBlockSx(fieldGap('tz'))}>
             <FormControl fullWidth size="small" error={Boolean(fieldError('tz'))}>
-              <InputLabel id="settings-tz-label">{p('tz')}</InputLabel>
+              <FormLabel id="settings-tz-label" sx={{ fontSize: 13, mb: 0.5 }}>
+                {p('tz')}
+              </FormLabel>
               <Select
                 labelId="settings-tz-label"
-                label={p('tz')}
+                aria-describedby={describedBy('tz')}
                 value={tz}
                 onChange={(e) => {
                   setTz(e.target.value);
@@ -275,32 +312,40 @@ function SettingsForm({ user }: { user: UserInfo }) {
                   </MenuItem>
                 ))}
               </Select>
-              <FormHelperText>
-                {fieldError('tz') ?? (osZoneUnknown ? p('osZoneHint', { zone: osZone }) : ' ')}
-              </FormHelperText>
+              <UiFieldMessage
+                id="settings-tz-error"
+                text={fieldError('tz')}
+                tone="error"
+                align="start"
+              />
+              <UiFieldMessage id="settings-tz-hint" text={hint.tz} align="start" />
             </FormControl>
+          </Box>
 
-            {otherError && <Alert severity="error">{otherError}</Alert>}
-            {/* Тоже с testid: подпись собирается из имени подобранной зоны, и искать плашку по
-                тексту значило бы повторять в тесте всю подстановку. */}
-            {substituted && (
-              <Alert severity="warning" data-testid="settings-substituted">
-                {p('substituted', { zone: substituted })}
-              </Alert>
-            )}
+          {otherError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {otherError}
+            </Alert>
+          )}
+          {/* Тоже с testid: подпись собирается из имени подобранной зоны, и искать плашку по
+              тексту значило бы повторять в тесте всю подстановку. */}
+          {substituted && (
+            <Alert severity="warning" data-testid="settings-substituted" sx={{ mb: 2 }}>
+              {p('substituted', { zone: substituted })}
+            </Alert>
+          )}
 
-            <Button
-              variant="contained"
-              size="large"
-              disabled={save.isPending}
-              onClick={submit}
-              startIcon={
-                save.isPending ? <CircularProgress size={20} color="inherit" /> : undefined
-              }
-            >
-              {p('save')}
-            </Button>
-          </Stack>
+          <Button
+            variant="contained"
+            size="large"
+            // Ширину кнопке задаёт она сама: блоки полей идут в потоке, растягивать её некому.
+            fullWidth
+            disabled={save.isPending}
+            onClick={submit}
+            startIcon={save.isPending ? <CircularProgress size={20} color="inherit" /> : undefined}
+          >
+            {p('save')}
+          </Button>
         </CardContent>
       </Card>
     </Stack>

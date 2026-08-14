@@ -62,6 +62,23 @@ function isOperationGone(e: ApiFieldError): boolean {
 }
 
 /**
+ * Отказ вместе с тем, на чём он случился. Одного текста экрану мало: место строки и пометка поля
+ * решаются порознь, и решают их разные вопросы.
+ *
+ *  - `confirm` — сервер вынес вердикт по набранному: строка под полем, поле помечено ошибкой;
+ *  - `notice` — до вердикта не дошло (лимит, сбой сервиса, обрыв связи). Повторить можно тут же,
+ *    поэтому строка тоже под полем, но набранное ни в чём не виновато и поле остаётся чистым;
+ *  - `resend` — сорвалась повторная отправка: она про кнопку, поля к ней нет, и строка идёт наверх.
+ *
+ * Сорванное терминальное действие разбирается теми же ветками, но метка ему без надобности: секрет
+ * к тому времени принят, поля на экране нет, и место у такого отказа одно — наверху.
+ */
+interface FlowFailure {
+  from: 'confirm' | 'notice' | 'resend';
+  text: string;
+}
+
+/**
  * Флоу подтверждения (auth-обвязка над generic-движком). После 204 выполняет терминальное
  * действие, которое передал вызывающий; 200 из confirm = следующее звено цепочки (второй фактор):
  * у следующего звена свой токен, предыдущий сразу перестаёт действовать — поэтому все вызовы
@@ -94,7 +111,14 @@ export function useConfirmFlow({
   const reset = useOperationStore((s) => s.reset);
 
   const [now, setNow] = useState(() => Date.now());
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<FlowFailure | null>(null);
+  // setState с тем же null React пропускает, так что вызов на каждый набранный символ безвреден.
+  const clearError = useCallback(() => setFailure(null), []);
+  // Текст и его источник ставятся одним вызовом: разойтись им нельзя, иначе отказ уедет не туда.
+  const fail = useCallback(
+    (from: FlowFailure['from'], text: string) => setFailure({ from, text }),
+    [],
+  );
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
 
@@ -111,7 +135,7 @@ export function useConfirmFlow({
       // саму операцию (auth.confirm.invalidated). Причины от сервера приходят своим путём — там
       // фаза меняется в обработке ответа, а не здесь.
       if (before !== 'dead' && useOperationStore.getState().snapshot?.phase === 'dead') {
-        setError(null);
+        setFailure(null);
       }
     }, 1000);
     return () => clearInterval(id);
@@ -145,7 +169,7 @@ export function useConfirmFlow({
     async (secret: string) => {
       if (!snapshot) return;
       setSubmitting(true);
-      setError(null);
+      setFailure(null);
       // На каком шаге сорвалось. У подтверждённой операции кода не вводили вовсе, поэтому запасные
       // тексты про код там не годятся: они назвали бы неверным то, чего не было. Флаг локальный,
       // а не по фазе снимка: 204 двигает её через store, а `snapshot` в этом вызове тот же самый.
@@ -172,12 +196,15 @@ export function useConfirmFlow({
           // Операции больше нет: её израсходовала соседняя вкладка либо вышел срок. Просить код
           // заново (или предлагать «Повторить») незачем — этот токен сервер уже не примет.
           dispatch({ type: 'INVALIDATED' });
-          setError(apiErrorText(e, t));
+          fail('confirm', apiErrorText(e, t));
         } else if (e instanceof ApiFieldError) {
           if (e.operationState) {
             dispatch({ type: 'CONFIRM_FAILED', state: e.operationState, now: Date.now() });
           }
-          setError(e.fields[0]?.detail || t(finishing ? finishErrorKey : 'auth.errors.wrongCode'));
+          fail(
+            'confirm',
+            e.fields[0]?.detail || t(finishing ? finishErrorKey : 'auth.errors.wrongCode'),
+          );
         } else if (e instanceof ApiProblemError && (e.status === 409 || e.status === 403)) {
           // Операцию больше нельзя завершить ничем. 409 — отпало условие, при котором она
           // создавалась (второй фактор включили или отключили уже после). 403 — завершить её
@@ -190,28 +217,29 @@ export function useConfirmFlow({
           // обычным ConfirmCodeIsIncorrect, иначе по ответу гостевого метода читалось бы состояние
           // 2FA аккаунта.
           dispatch({ type: 'INVALIDATED' });
-          setError(apiErrorText(e, t));
+          fail('confirm', apiErrorText(e, t));
         } else if (e instanceof ApiRateLimitError || e instanceof ApiProblemError) {
+          // Вердикта по секрету тут нет: лимит считает попытки, а сбой сервиса не дошёл до проверки.
           // 429 на терминале — например, лимит одновременных сессий на открытии. Подтверждённая
           // операция при этом НЕ расходуется, поэтому снимок не сбрасываем: фаза `confirmed` уже
           // выставлена, и повтор пойдёт сразу в терминал, пока не истёк срок жизни операции.
-          setError(apiErrorText(e, t));
+          fail('notice', apiErrorText(e, t));
         } else {
           // Не ответ сервиса (сеть, сбой в самом клиенте) — здесь уместнее сказать про шаг,
           // на котором сорвалось, чем общее «что-то пошло не так» из apiErrorText.
-          setError(t(finishing ? finishErrorKey : 'auth.errors.confirm'));
+          fail('notice', t(finishing ? finishErrorKey : 'auth.errors.confirm'));
         }
       } finally {
         setSubmitting(false);
       }
     },
-    [snapshot, startNextLink, runTerminal, dispatch, finishErrorKey, t],
+    [snapshot, startNextLink, runTerminal, dispatch, fail, finishErrorKey, t],
   );
 
   const resend = useCallback(async () => {
     if (!snapshot || resending) return; // защита от повторной отправки (двойной клик жжёт лимит)
     setResending(true);
-    setError(null);
+    setFailure(null);
     try {
       const op = await resendOperation({ token: snapshot.token });
       dispatch({ type: 'RESENT', parts: op, now: Date.now() });
@@ -219,7 +247,7 @@ export function useConfirmFlow({
       if (e instanceof ApiFieldError && isOperationGone(e)) {
         // Операции нет — новый код слать некуда, и вводить его тоже некуда: тот же тупик.
         dispatch({ type: 'INVALIDATED' });
-        setError(apiErrorText(e, t));
+        fail('resend', apiErrorText(e, t));
       } else if (e instanceof ApiFieldError) {
         // Счётчики несёт не всякий отказ: у «операция уже подтверждена» их нет — там и обновлять
         // нечего. Поэтому смотрим на само тело, а не на код: пришёл operation_state — применяем.
@@ -227,20 +255,20 @@ export function useConfirmFlow({
         if (e.operationState) {
           dispatch({ type: 'CONFIRM_FAILED', state: e.operationState, now: Date.now() });
         }
-        setError(e.fields[0]?.detail || t('auth.errors.resendUnavailable'));
+        fail('resend', e.fields[0]?.detail || t('auth.errors.resendUnavailable'));
       } else if (e instanceof ApiProblemError) {
         // Троттл повторной отправки приходит сюда не 429-м, а 400-м выше: срок повтора клиент
         // берёт из operation_state.resends_in, которого тело problem+json не вмещает. Здесь
         // остаётся то, что про саму операцию не говорит ничего.
-        setError(apiErrorText(e, t));
+        fail('resend', apiErrorText(e, t));
       } else {
         // Не ответ сервиса (сеть, сбой в самом клиенте) — говорим про шаг, на котором сорвалось.
-        setError(t('auth.errors.resend'));
+        fail('resend', t('auth.errors.resend'));
       }
     } finally {
       setResending(false);
     }
-  }, [snapshot, dispatch, resending, t]);
+  }, [snapshot, dispatch, fail, resending, t]);
 
   const revoke = useCallback(async () => {
     if (snapshot) {
@@ -256,7 +284,11 @@ export function useConfirmFlow({
 
   return {
     snapshot,
-    error,
+    error: failure?.text ?? null,
+    /** На чём сорвалось: отсюда экран берёт и место строки, и то, помечать ли поле (`FlowFailure`). */
+    errorFrom: failure?.from ?? null,
+    /** Снять показанный отказ — экран зовёт на правке набранного, когда отказ был про него. */
+    clearError,
     submitting,
     resending,
     /** Код принят, сорвался только терминал: экрану нужен «Повторить», а не поле ввода. */

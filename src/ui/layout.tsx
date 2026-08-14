@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 
 /**
@@ -28,13 +28,58 @@ export function UiPage({
           sx={{
             color: 'text.secondary',
             mt: 0.5,
-            mb: 2.5,
+            // На четыре пикселя меньше, чем зазор между полем и кнопкой: в строчный бокс текста
+            // входит ещё около пяти пикселей собственного просвета под последней строкой, и равные
+            // по числу отступы читались бы у текста крупнее.
+            mb: 2,
           }}
         >
           {subtitle}
         </Typography>
       )}
       {children}
+    </Box>
+  );
+}
+
+/**
+ * Обёртка, которая тянет свою высоту к высоте содержимого переходом. Нужна там, где текст
+ * подменяется другим текстом другой высоты: без неё всё, что ниже, скачком уезжает на строку.
+ *
+ * `Collapse` тут не годится: он анимирует появление и исчезновение, а не изменение высоты уже
+ * показанного, — подменённый текст сложился бы в ноль и раскрылся заново.
+ *
+ * Высоту меряет `ResizeObserver`. Где его нет (jsdom), высота не выставляется вовсе и остаётся
+ * `auto`: иначе `overflow: hidden` поверх нулевого измерения спрятал бы содержимое.
+ */
+export function UiSmoothHeight({ children }: { children?: ReactNode }) {
+  const inner = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number>();
+
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setHeight(el.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <Box
+      sx={{
+        height,
+        overflow: 'hidden',
+        transition: (theme) => theme.transitions.create('height'),
+      }}
+    >
+      {/* `flow-root` — чтобы измеряемая высота включала вертикальные поля содержимого: у обычного
+          блока они схлопываются наружу, и замер вышел бы меньше настоящего, а `overflow: hidden`
+          внешнего бокса срезал бы низ текста. */}
+      <Box ref={inner} sx={{ display: 'flow-root' }}>
+        {children}
+      </Box>
     </Box>
   );
 }

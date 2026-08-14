@@ -384,6 +384,46 @@ describe('useConfirmFlow: the terminal session opening', () => {
  * `OperationAlreadyExpired`, `OperationAlreadyConfirmed`) приходят 400-кой БЕЗ `operation_state`:
  * счётчиков там нет, а деталь сервера объясняет отказ точнее любого нашего запасного текста.
  */
+/**
+ * Метка отказа решает не текст, а место строки и пометку поля. Вердикт по секрету у сервера один —
+ * ответ по полю; лимит считает попытки, а сбой сервиса и обрыв связи до проверки не доходят вовсе,
+ * и метить ими поле значило бы позвать исправлять то, в чём ошибки нет.
+ */
+describe('useConfirmFlow: where a refusal of the code step belongs', () => {
+  async function confirmFailsWith(e: unknown) {
+    vi.mocked(confirmOperation).mockRejectedValue(e);
+    useOperationStore.getState().dispatch(activeOp);
+    const { result } = renderHook(() =>
+      useConfirmFlow({ terminal: loginTerminal, onDone: vi.fn(), onRevoked: vi.fn() }),
+    );
+
+    await act(async () => {
+      await result.current.confirm('183947');
+    });
+    return result;
+  }
+
+  it('a wrong code is a verdict on the secret', async () => {
+    const result = await confirmFailsWith(
+      new ApiFieldError([{ code: 'ConfirmCodeIsIncorrect/secret', detail: 'Wrong code' }], 400),
+    );
+
+    expect(result.current.errorFrom).toBe('confirm');
+  });
+
+  it('a 429 is not a verdict on the secret', async () => {
+    const result = await confirmFailsWith(rateLimited(30));
+
+    expect(result.current.errorFrom).toBe('notice');
+  });
+
+  it('a broken connection is not a verdict on the secret either', async () => {
+    const result = await confirmFailsWith(new Error('boom'));
+
+    expect(result.current.errorFrom).toBe('notice');
+  });
+});
+
 describe('useConfirmFlow: a failed resend', () => {
   async function resendFailsWith(e: unknown) {
     vi.mocked(resendOperation).mockRejectedValue(e);

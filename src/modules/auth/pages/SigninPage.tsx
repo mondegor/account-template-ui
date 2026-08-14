@@ -18,7 +18,7 @@ export function SigninPage() {
           </AuthFooterLine>
           {/* Резервный вход — второй строкой: он для узкого случая (потерян доступ к почте),
               и путать его с обычным входом на равных не стоит. */}
-          <AuthFooterLine tight>
+          <AuthFooterLine above="tight">
             {t('auth.signin.emailTrouble')}{' '}
             <AuthNavLink to="/signin/recovery">{t('auth.signin.recoveryLink')}</AuthNavLink>
           </AuthFooterLine>

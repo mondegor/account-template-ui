@@ -1,7 +1,10 @@
 {
   "id": "auth.confirm",
   "type": "page",
-  "title": "auth.confirm.title",
   "layout": "auth",
-  "children": [{ "type": "confirmOperation" }]
+  "children": [
+    {
+      "type": "confirmOperation"
+    }
+  ]
 }

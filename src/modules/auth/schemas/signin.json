@@ -8,14 +8,25 @@
     {
       "type": "form",
       "submitOnly": true,
-      "submit": { "label": "auth.signin.submit" },
+      "submit": {
+        "label": "auth.signin.submit"
+      },
       "children": [
         {
           "type": "field.text",
           "name": "user_login",
           "label": "auth.field.login",
-          "props": { "autoComplete": "username" },
-          "validation": { "required": true, "min": 7, "max": 64, "format": "login" }
+          "props": {
+            "autoComplete": "username",
+            "placeholder": "auth.field.emailFormat",
+            "hideLabel": true
+          },
+          "validation": {
+            "required": true,
+            "min": 7,
+            "max": 64,
+            "format": "login"
+          }
         }
       ]
     }

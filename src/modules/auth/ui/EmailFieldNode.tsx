@@ -3,7 +3,7 @@ import { useController, useFormContext } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { UiTextField } from '@ui';
 import type { NodeComponentProps } from '@core/schema';
-import { FormErrorContext, SubmitOnlyContext } from '@core/renderer';
+import { FormErrorContext, LoneFieldContext, SubmitOnlyContext } from '@core/renderer';
 import { isSignupEmail } from '../lib/userLogin';
 import {
   checkEmailAvailability,
@@ -28,6 +28,7 @@ export function EmailFieldNode({ node }: NodeComponentProps) {
   const { clearErrors } = useFormContext();
   const submitOnly = useContext(SubmitOnlyContext);
   const { hasError: hasFormError, clear: clearFormError } = useContext(FormErrorContext);
+  const loneField = useContext(LoneFieldContext);
   const { field, fieldState } = useController({ name: node.name ?? '' });
 
   const [checkState, setCheckState] = useState<CheckState>('idle');
@@ -103,6 +104,7 @@ export function EmailFieldNode({ node }: NodeComponentProps) {
   // алерт, напр. «заявка уже обрабатывается»): иначе противоречие «ошибка сверху + всё хорошо у поля».
   const showFree = checkState === 'free' && !fieldState.error && !hasFormError;
   const isError = !!fieldState.error || checkState === 'taken';
+  // Пусто — значит сказать нечего, и строка под полем не раскрывается вовсе.
   const helperText =
     fieldState.error?.message ??
     takenMsg ??
@@ -110,11 +112,16 @@ export function EmailFieldNode({ node }: NodeComponentProps) {
       ? t('auth.field.emailChecking')
       : showFree
         ? t('auth.field.emailFree')
-        : ' ');
+        : undefined);
 
   return (
     <UiTextField
       label={node.label ? t(node.label) : undefined}
+      hideLabel={node.props?.hideLabel}
+      collapseHelper={loneField}
+      // Форменное сообщение формы с одним полем рисуется строкой под этим блоком — зазор под ним
+      // считает блок, и эта строка ему такая же своя.
+      messageBelow={loneField && hasFormError}
       type="email"
       name={field.name}
       value={(field.value as string) ?? ''}
@@ -122,7 +129,7 @@ export function EmailFieldNode({ node }: NodeComponentProps) {
       onBlur={field.onBlur}
       inputRef={field.ref}
       autoFocus={node.props?.autoFocus}
-      placeholder={node.props?.placeholder}
+      placeholder={node.props?.placeholder ? t(node.props.placeholder) : undefined}
       autoComplete={node.props?.autoComplete}
       maxLength={node.validation?.max}
       error={isError}

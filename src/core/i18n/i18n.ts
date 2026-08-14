@@ -36,6 +36,16 @@ const commonRu = {
     rateLimited: 'Слишком много попыток. Повторите позже.',
     network: 'Нет связи с сервером. Проверьте подключение.',
   },
+  /**
+   * Механика полей ввода: доступные имена кнопки показа пароля и клеток кода. Своих строк атомы
+   * @ui не заводят (слой ui ядра не видит), а механика у них одна на схемные и на ручные экраны —
+   * поэтому тексты лежат здесь, а не в ветке модуля.
+   */
+  field: {
+    showPassword: 'Показать пароль',
+    hidePassword: 'Скрыть пароль',
+    digit: 'Цифра {{n}} из {{total}}',
+  },
   shell: {
     menu: 'Меню',
     logout: 'Выйти',
@@ -57,6 +67,11 @@ const commonEn = {
     generic: 'Something went wrong. Please try again later.',
     rateLimited: 'Too many attempts. Please try again later.',
     network: 'Cannot reach the server. Check your connection.',
+  },
+  field: {
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+    digit: 'Digit {{n}} of {{total}}',
   },
   shell: {
     menu: 'Menu',

@@ -1,9 +1,18 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Link, Stack, TextField, Typography } from '@mui/material';
-import { limits } from '@config';
-import { UiAlert, UiButton } from '@ui';
+import { Box, Link, Stack, Typography } from '@mui/material';
+import { UiAlert, UiButton, UiSmoothHeight } from '@ui';
 import type { ConfirmFlow } from '../hooks/useConfirmFlow';
+import {
+  isSwapMode,
+  SECRET_FORMAT,
+  secretValue,
+  type SecretMode,
+  type SwapMode,
+} from '../lib/secretFormat';
+import { AuthenticatorIcon, KeyIcon, LifeBuoyIcon } from './icons';
+import { SecretInput } from './SecretInput';
+import { SecretModeSwitch, type SecretModeOption } from './SecretModeSwitch';
 
 /**
  * Экран подтверждения операции — презентационная часть, общая для всех потоков: читает
@@ -14,6 +23,13 @@ import type { ConfirmFlow } from '../hooks/useConfirmFlow';
 
 interface OperationConfirmProps {
   flow: ConfirmFlow;
+  /**
+   * Заголовок экрана — он же левая половина строки, в правой которой стоит переключатель формата.
+   * Рисуется здесь, а не схемой страницы: разделить строку надвое может только тот, кто знает про
+   * переключатель. Значение по умолчанию — заголовок подтверждения; security-потоки, которым эта
+   * же форма служит под своим поводом, называют себя сами.
+   */
+  title?: string;
   /**
    * Префикс ключа подсказки над полем: к нему добавляется метод подтверждения текущего звена.
    * Один и тот же метод в разных потоках объясняется по-разному — пароль на входе и пароль при
@@ -33,6 +49,15 @@ interface OperationConfirmProps {
   awaitingFinishText?: string;
   /** Запасной текст аннулированной операции — на случай, когда причины от сервера нет. */
   invalidatedText?: string;
+  /**
+   * Аварийный код принимается вместо второго фактора — тогда у поля появляется переключатель
+   * формата. Спека разрешает такую подмену обычному входу и отключению 2FA и не разрешает
+   * остальным операциям; в цепочках `.../recovery` аварийный код идёт отдельным звеном, и
+   * предъявить его раньше последнего звена негде. Различить это по снимку операции нельзя —
+   * звенья приходят по одному и о своём происхождении не рассказывают, — поэтому признак ставит
+   * вызывающий, который знает, какую операцию он начал.
+   */
+  allowRecoverySwap?: boolean;
 }
 
 /**
@@ -50,80 +75,49 @@ function mmss(total: number, padMinutes = false): string {
 const HINT_PREFIX = 'auth.confirm.hint';
 
 /**
- * Поле ввода на всех звеньях одно, а спрашивают они разное: пароль и аварийный код не цифровые, и
- * подпись «Код подтверждения» над полем пароля просто неверна. Звено с кодом из сообщения идёт по
- * умолчанию — оно и правда код из цифр.
+ * Формат, которого звено просит само. Код из сообщения идёт по умолчанию: телефонное звено от
+ * почтового отличается только тем, куда код отправлен.
  *
- * Пароль вдобавок скрыт точками: он живёт дольше одной операции, и подсматривание через плечо или
- * демонстрацию экрана переживёт только он. Одноразовому коду и аварийному коду скрывать нечего.
- *
- * Цифровое тут одно-единственное звено — с кодом из сообщения. Звено второго фактора цифровым не
- * назвать даже там, где спрашивает код из 2FA-приложения: спека разрешает ввести вместо него
- * аварийный код, и фильтр с короткой длиной закрыли бы этот путь совсем.
+ * Формат звена и формат поля — разные вещи: на звене второго фактора спека разрешает предъявить
+ * вместо пароля или кода из приложения аварийный код, и что именно набирают сейчас, говорит
+ * выбранный режим, а не звено.
  */
-interface SecretField {
-  label: string;
-  /** Цифровое звено: нецифры отбрасываются при вводе, длина ограничена продуктовым пределом. */
-  numeric: boolean;
-  type?: 'password';
-  /**
-   * Обрезать ли пробелы по краям перед отправкой. Обрезают все звенья, кроме парольного: в их
-   * форматы пробел не входит, а приезжает вставкой из буфера — из списка аварийных кодов или из
-   * сообщения. Уйди такой край на сервер, тот ответил бы «неверный код» и списал попытку за то,
-   * чего человек не набирал.
-   *
-   * У пароля же ограничений на символы нет вовсе, и краевой пробел в нём — часть секрета: обрежь
-   * его, и попытки сгорели бы на значении, которого никто не вводил.
-   */
-  trim: boolean;
-  /**
-   * Нижняя граница включает кнопку: заведомо короткое значение сервер всё равно отклонит, а попытка
-   * на звене сгорит — их всего три. Своя она только у цифрового звена, где формат известен точно;
-   * остальные обслуживают несколько форматов разом и меряются контрактной.
-   */
-  length: { min: number; max: number };
-}
-
-const SECRET_FIELD: Record<string, SecretField> = {
-  PASSWORD: {
-    label: 'auth.field.password',
-    numeric: false,
-    type: 'password',
-    trim: false,
-    // Границами пароля это звено не меряется: вместо пароля спека разрешает ввести аварийный код,
-    // формата которого контракт не объявляет вовсе, — ровно та же причина, что и у TOTP. Меряй
-    // звено паролем, и код короче парольного минимума не дошёл бы до сервера ни при каком вводе.
-    length: limits.secret,
-  },
-  RECOVERY: {
-    label: 'auth.field.recoveryCode',
-    numeric: false,
-    trim: true,
-    length: limits.secret,
-  },
-  TOTP: {
-    label: 'auth.field.code',
-    numeric: false,
-    trim: true,
-    length: limits.secret,
-  },
+const LINK_MODE: Record<string, SecretMode> = {
+  PASSWORD: 'PASSWORD',
+  TOTP: 'TOTP',
+  RECOVERY: 'RECOVERY',
 };
-const DEFAULT_SECRET_FIELD: SecretField = {
-  label: 'auth.field.code',
-  numeric: true,
-  trim: true,
-  length: limits.confirmCode,
+
+const SWAP_ICON: Record<SwapMode | 'RECOVERY', (props: { size?: number }) => ReactElement> = {
+  PASSWORD: KeyIcon,
+  TOTP: AuthenticatorIcon,
+  RECOVERY: LifeBuoyIcon,
 };
 
 export function OperationConfirm({
   flow,
+  title,
   hintPrefix = HINT_PREFIX,
   deadEndText,
   awaitingFinishText,
   invalidatedText,
+  allowRecoverySwap,
 }: OperationConfirmProps) {
   const { t } = useTranslation();
   const [code, setCode] = useState('');
+  const linkMode: SecretMode = flow.snapshot
+    ? (LINK_MODE[flow.snapshot.confirmMethod] ?? 'CODE')
+    : 'CODE';
+  const [mode, setMode] = useState<SecretMode>(linkMode);
+  const [shownLink, setShownLink] = useState(linkMode);
+
+  // Смена звена начинает всё заново: у нового звена свой формат, а набранное в прошлом ему заведомо
+  // не подходит.
+  if (shownLink !== linkMode) {
+    setShownLink(linkMode);
+    setMode(linkMode);
+    setCode('');
+  }
 
   if (!flow.snapshot) return null;
 
@@ -185,87 +179,115 @@ export function OperationConfirm({
         ? t('auth.confirm.exhaustedExpired')
         : t('auth.confirm.exhaustedAttempts');
   const lastResendUsed = !exhausted && !awaitingFinish && isResendApplicable && resendsLeft === 0;
-  const secretField = SECRET_FIELD[snapshot.confirmMethod] ?? DEFAULT_SECRET_FIELD;
   // Что уйдёт на сервер — по нему же и меряется нижняя граница: иначе пробелы по краям включали бы
   // кнопку, а до сервера доезжало бы значение короче минимума, и попытка сгорала бы впустую.
-  const secretValue = secretField.trim ? code.trim() : code;
+  const secret = secretValue(mode, code);
+  // Переключатель есть, только пока есть что переключать: подмена разрешена, звено её допускает, и
+  // поле на экране вообще присутствует — в тупике и в ожидании терминала вводить нечего.
+  const swapFrom =
+    allowRecoverySwap && !exhausted && !awaitingFinish && isSwapMode(linkMode) ? linkMode : null;
+  const options: Array<SecretModeOption<SecretMode>> = swapFrom
+    ? [
+        {
+          mode: swapFrom,
+          label: t(`auth.confirm.mode.${swapFrom}`),
+          Icon: SWAP_ICON[swapFrom],
+        },
+        {
+          mode: 'RECOVERY',
+          label: t('auth.confirm.mode.RECOVERY'),
+          Icon: SWAP_ICON.RECOVERY,
+        },
+      ]
+    : [];
+  // Сообщение — единственное место, где формат назван словом, поэтому говорит оно про формат
+  // выбранный, а не про формат звена. Пока не переключились, это одно и то же, но спрашивает
+  // сообщение именно звено: почтовое от телефонного отличается только тем, куда ушёл код, и
+  // выбранный режим у обоих один — «код из сообщения».
+  const hintMethod = mode === linkMode ? snapshot.confirmMethod : mode;
   // Подсказка потока необязательна: нет ключа под его префиксом — падаем на подсказку экрана
   // подтверждения по тому же методу, иначе на экран уехал бы сам ключ.
   const hint = awaitingFinish
     ? (awaitingFinishText ?? t('auth.confirm.awaitingFinish'))
-    : t(`${hintPrefix}.${snapshot.confirmMethod}`, {
-        defaultValue: t(`${HINT_PREFIX}.${snapshot.confirmMethod}`),
+    : t(`${hintPrefix}.${hintMethod}`, {
+        defaultValue: t(`${HINT_PREFIX}.${hintMethod}`),
       });
 
-  // У цифрового звена всё, кроме цифр, — заведомо не то: пробелы от вставки из буфера, буквы от
-  // промаха по раскладке. Отбрасываем их прямо при вводе, иначе сервер ответит «неверный код» и
-  // спишет попытку за то, чего человек не набирал. Пароль и аварийный код фильтровать нельзя: их
-  // алфавит цифрами не ограничен — что там делать с краями от вставки, решает уже отправка.
-  //
-  // Здесь же держится и продуктовая длина: браузер применяет maxLength к вставке ДО фильтра, и код,
-  // скопированный с пробелом или группами, обрезался бы по мусорным символам — «18 39 47» стало бы
-  // «1839». Само поле ограничено контрактной длиной, а лишнее срезается уже после фильтра.
-  //
-  // Набор в заполненный код при этом отклоняется целиком, а не вытесняет крайнюю цифру: иначе ввод
-  // в середину полного кода молча терял бы последнюю, и человек отправлял бы не то, что видит.
-  // Вставки это не касается — ей срез и нужен. Отличаем по длине: поле управляемое, до изменения
-  // в нём ровно `code`, и набор одного символа удлиняет сырое значение ровно на единицу.
-  function onChange(value: string) {
-    if (!secretField.numeric) {
-      setCode(value);
-      return;
-    }
-    const digits = value.replace(/\D/g, '');
-    if (digits.length > secretField.length.max && value.length === code.length + 1) return;
-    setCode(digits.slice(0, secretField.length.max));
+  // Переключение формата чистит поле: форматы несовместимы, набранное в одном другому заведомо не
+  // подойдёт, а хвост пароля, оставшийся в поле аварийного кода, был бы показан открытым текстом.
+  // Попытка при этом не тратится — счётчик про отправки на сервер, а переключение до него не
+  // доходит.
+  function onModeChange(next: SecretMode) {
+    // Знаки стоят парой, и по ним же читают, какой формат набирают сейчас: клик по выбранному —
+    // не переключение, и набранного он не касается.
+    if (next === mode) return;
+    setMode(next);
+    setCode('');
+    flow.clearError();
+  }
+
+  // Вердикт был про прошлое значение: правка снимает его вместе с красной рамкой. Остальное правка
+  // не лечит и не убирает — ни сорвавшуюся отправку нового кода, ни отказ без вердикта: связь от
+  // набора цифр не появится, и убрать эту строку значило бы забрать единственное объяснение.
+  function onCodeChange(next: string) {
+    setCode(next);
+    if (flow.errorFrom === 'confirm') flow.clearError();
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    await flow.confirm(secretValue);
+    await flow.confirm(secret);
     setCode('');
   }
 
   return (
     <Box>
-      <Typography
-        variant="body2"
-        sx={{
-          color: 'text.secondary',
-          mt: 0.5,
-          mb: 2,
-        }}
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1.5, minHeight: 28 }}
       >
-        {hint}
-      </Typography>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          {title ?? t('auth.confirm.title')}
+        </Typography>
+        {options.length > 0 && (
+          <SecretModeSwitch options={options} value={mode} onChange={onModeChange} />
+        )}
+      </Stack>
+      {/* Сообщения разных форматов разной высоты — у пароля строка, у аварийного кода две.
+          Переключение меняет высоту плавно, иначе поле и кнопка под ним скачут. */}
+      <UiSmoothHeight>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 0.5,
+            mb: 2,
+          }}
+        >
+          {hint}
+        </Typography>
+      </UiSmoothHeight>
+      {/* Место отказа решает, есть ли что делать с ним у поля. Под полем — то, что повторяют тем же
+          набором: и вердикт по нему, и лимит с обрывом связи. Наверху остаётся то, к чему поля нет:
+          тупик, предупреждение об отправках, срыв терминала (вводить уже нечего, и ошибка говорит
+          про само действие) и сорвавшаяся повторная отправка — она про кнопку, а не про набранные
+          цифры. Покраску поля решает второй вопрос, не этот: краснит его только вердикт. */}
       {exhausted ? (
         <UiAlert severity="error">{exhaustedAlert}</UiAlert>
-      ) : flow.error ? (
+      ) : flow.error && (awaitingFinish || flow.errorFrom === 'resend') ? (
         <UiAlert severity="error">{flow.error}</UiAlert>
       ) : lastResendUsed ? (
         <UiAlert severity="warning">{t('auth.confirm.lastResend')}</UiAlert>
       ) : null}
       <Box component="form" onSubmit={onSubmit} noValidate>
         {!exhausted && !awaitingFinish && (
-          <TextField
-            label={t(secretField.label)}
-            type={secretField.type}
+          <SecretInput
+            mode={mode}
             value={code}
-            onChange={(e) => onChange(e.target.value)}
-            fullWidth
-            size="small"
+            onChange={onCodeChange}
+            errorText={flow.errorFrom === 'confirm' ? (flow.error ?? undefined) : undefined}
+            noticeText={flow.errorFrom === 'notice' ? (flow.error ?? undefined) : undefined}
             autoFocus
-            slotProps={{
-              htmlInput: {
-                inputMode: secretField.numeric ? 'numeric' : 'text',
-                // Автозаполнение не предлагается ни на одном звене, включая парольное: спека
-                // разрешает ввести вместо пароля аварийный код, и менеджер паролей предложил бы
-                // заменить сохранённый пароль погашенным одноразовым кодом.
-                autoComplete: 'off',
-                minLength: secretField.length.min,
-                maxLength: limits.secret.max,
-              },
-            }}
           />
         )}
         {!exhausted && (
@@ -273,7 +295,7 @@ export function OperationConfirm({
             direction="row"
             sx={{
               justifyContent: 'space-between',
-              mt: 1,
+              // Отступ сверху держит блок поля — он же его сокращает, когда показана ошибка.
               mb: 1.5,
               fontSize: 12,
               minHeight: 20,
@@ -319,7 +341,7 @@ export function OperationConfirm({
             type="submit"
             label={t(awaitingFinish ? 'auth.confirm.retryFinish' : 'auth.confirm.submit')}
             disabled={
-              flow.submitting || (!awaitingFinish && secretValue.length < secretField.length.min)
+              flow.submitting || (!awaitingFinish && secret.length < SECRET_FORMAT[mode].length.min)
             }
           />
         )}

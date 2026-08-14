@@ -9,6 +9,7 @@ import { authTranslations } from '../i18n';
 import { confirmOperation, openSession } from '../api/authApi';
 import { saveConfirmReturn } from '../lib/confirmReturn';
 import { tr } from '../../../test/i18n';
+import { fillCode } from '../../../test/dom';
 import { ConfirmOperationNode } from './ConfirmOperationNode';
 
 /**
@@ -99,10 +100,10 @@ describe('ConfirmOperationNode: «revoke» returns to the screen the flow starte
 /**
  * Аварийный код вместо второго фактора спека допускает у обычного входа и не допускает в цепочке
  * резервного: там он идёт отдельным звеном, и заменять им пароль значило бы потратить за один вход
- * два кода. Признака потока в снимке нет — звенья приходят по одному, — поэтому подсказку выбирает
- * то, откуда человек сюда пришёл.
+ * два кода. Признака потока в снимке нет — звенья приходят по одному, — поэтому переключатель
+ * формата ставит то, откуда человек сюда пришёл.
  */
-describe('ConfirmOperationNode: the second-factor hint', () => {
+describe('ConfirmOperationNode: the recovery-code swap', () => {
   function renderFactorLink(origin?: string) {
     if (origin) saveConfirmReturn(origin);
     useOperationStore.getState().dispatch({
@@ -118,23 +119,29 @@ describe('ConfirmOperationNode: the second-factor hint', () => {
     renderConfirm();
   }
 
-  it('the sign-in flow: the hint offers a recovery code as well', () => {
+  it('the sign-in flow: the field offers a recovery code', () => {
     renderFactorLink('/signin');
-    expect(screen.getByText(tr('auth.signin.confirmHint.PASSWORD'))).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: tr('auth.confirm.mode.RECOVERY') }),
+    ).toBeInTheDocument();
   });
 
-  it('the recovery flow: the hint stays about the second factor alone', () => {
+  it('the recovery flow: the field stays about the second factor alone', () => {
     renderFactorLink('/signin/recovery');
-    expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: tr('auth.confirm.mode.RECOVERY') }),
+    ).not.toBeInTheDocument();
   });
 
   /**
    * Источника нет — потока не знает никто, и звать аварийный код не на чем: в цепочке резервного
    * входа его на этом звене не примут, а отказ стоил бы одной попытки из трёх.
    */
-  it('with no stored origin the hint stays about the second factor alone', () => {
+  it('with no stored origin the field stays about the second factor alone', () => {
     renderFactorLink();
-    expect(screen.getByText(tr('auth.confirm.hint.PASSWORD'))).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: tr('auth.confirm.mode.RECOVERY') }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -159,7 +166,7 @@ describe('ConfirmOperationNode: the terminal action is refused', () => {
       ),
     );
     renderConfirm();
-    fireEvent.change(screen.getByLabelText(tr('auth.field.code')), { target: { value: '183947' } });
+    fillCode('183947');
     fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.submit') }));
     // Ждём ТЕКСТ ОТКАЗА, а не кнопку «Повторить»: кнопку рисует уже фаза `confirmed`, то есть до
     // того, как приедет отказ openSession. На той ранней отрисовке сабмит ещё выключен (submitting),
@@ -171,7 +178,7 @@ describe('ConfirmOperationNode: the terminal action is refused', () => {
   it('the code field and resend go away, «retry» stays', async () => {
     await failOpenSession();
 
-    expect(screen.queryByLabelText(tr('auth.field.code'))).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: tr('auth.field.code') })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: tr('auth.confirm.submit') }),
     ).not.toBeInTheDocument();
@@ -230,11 +237,11 @@ describe('ConfirmOperationNode: the server invalidated the operation', () => {
       }),
     );
     renderConfirm();
-    fireEvent.change(screen.getByLabelText(tr('auth.field.code')), { target: { value: '183947' } });
+    fillCode('183947');
     fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.submit') }));
 
     expect(await screen.findByText(REALM_REVOKED_DETAIL)).toBeInTheDocument();
-    expect(screen.queryByLabelText(tr('auth.field.code'))).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: tr('auth.field.code') })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: tr('auth.confirm.submit') }),
     ).not.toBeInTheDocument();
@@ -257,6 +264,6 @@ describe('ConfirmOperationNode: the server invalidated the operation', () => {
     renderConfirm();
 
     expect(await screen.findByText(tr('auth.confirm.invalidated'))).toBeInTheDocument();
-    expect(screen.queryByLabelText(tr('auth.field.code'))).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: tr('auth.field.code') })).not.toBeInTheDocument();
   });
 });

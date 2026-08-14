@@ -5,6 +5,7 @@ import { AuthCard } from '../ui/AuthCard';
 import { AuthFooterLine } from '../ui/AuthFooterLine';
 import { AuthFooterNote } from '../ui/AuthFooterNote';
 import { AuthNavLink } from '../ui/AuthNavLink';
+import { ShieldDotsIcon } from '../ui/icons';
 
 /**
  * Резервный вход — тонкая обёртка над схемой auth.signinRecovery. Логика та же, что у обычного
@@ -17,13 +18,15 @@ export function SigninRecoveryPage() {
     <AuthCard
       footer={
         <>
-          <AuthFooterLine>
-            {t('auth.signinRecovery.emailSigninPrompt')}{' '}
+          {/* Что приготовить — сразу за кнопкой: это про предстоящий шаг формы, а не про выход с
+              экрана, поэтому и стоит вплотную к ней. Знак — щит двухфакторной защиты, тот же, что
+              метит её в профиле; цвет тут не украшение, а условие входа: без 2FA дальше никак. */}
+          <AuthFooterNote icon={ShieldDotsIcon} tone="warning.main">
+            {t('auth.signinRecovery.twoFaOnly')}
+          </AuthFooterNote>
+          <AuthFooterLine above="text">
             <AuthNavLink to="/signin">{t('auth.signinRecovery.emailSigninLink')}</AuthNavLink>
           </AuthFooterLine>
-          {/* Что приготовить — последней строкой: до формы это оговорка, а после неё подсказка
-              на следующий шаг, где эти доказательства и спросят. */}
-          <AuthFooterNote>{t('auth.signinRecovery.twoFaOnly')}</AuthFooterNote>
         </>
       }
     >

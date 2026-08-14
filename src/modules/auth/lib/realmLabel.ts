@@ -7,7 +7,7 @@ import type { TFunction } from 'i18next';
  * есть, а не пустотой и не ключом.
  */
 
-/** Имя кабинета: print-shop/admin → «Служебный». */
+/** Имя кабинета: account-template/admin → «Служебный». */
 export function realmLabel(t: TFunction, realm: string): string {
   return t(`deploy.realmLabel.${realm}`, { defaultValue: realm });
 }

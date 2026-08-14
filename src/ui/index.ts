@@ -1,6 +1,9 @@
-export { UiPage, UiSection, UiGrid } from './layout';
+export { UiBrandLockup } from './brand';
+export { UiPage, UiSection, UiGrid, UiSmoothHeight } from './layout';
 export { UiText, UiAlert, UiButton } from './display';
+export { uiFieldBlockSx } from './fieldBlock';
 export {
+  UiFieldMessage,
   UiTextField,
   UiSelect,
   UiCheckbox,
@@ -8,3 +11,4 @@ export {
   type UiSelectProps,
   type UiCheckboxProps,
 } from './inputs';
+export { UiCodeInput, type UiCodeInputProps } from './codeInput';

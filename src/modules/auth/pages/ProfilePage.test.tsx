@@ -323,7 +323,7 @@ describe('ProfilePage (realm data)', () => {
     // Кабинет совпадает с реалмом деплоя (config.realm) — но карточка одна, выделять не из чего.
     await withRealms([
       {
-        name: 'print-shop/standard',
+        name: 'account-template/standard',
         user_kind: 'customer',
         created_at: '2026-07-01T10:00:00Z',
         updated_at: '2026-07-02T11:00:00Z',
@@ -349,7 +349,7 @@ describe('ProfilePage (realm data)', () => {
 describe('ProfilePage (several realms)', () => {
   const REALMS = [
     {
-      name: 'print-shop/standard',
+      name: 'account-template/standard',
       user_kind: 'standard',
       last_location: 'Moscow, RU',
       last_logged_at: '2026-07-01T10:00:00Z',
@@ -357,7 +357,7 @@ describe('ProfilePage (several realms)', () => {
       updated_at: '2026-01-01T00:00:00Z',
     },
     {
-      name: 'print-shop/admin',
+      name: 'account-template/admin',
       user_kind: 'employee',
       created_at: '2025-03-02T14:30:00Z',
       updated_at: '2026-01-01T00:00:00Z',
@@ -369,28 +369,28 @@ describe('ProfilePage (several realms)', () => {
     await withRealms(REALMS);
 
     const { container } = renderProfile();
-    await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
+    await screen.findByText(tr('deploy.realmLabel.account-template/standard'));
 
     const titles = [...container.querySelectorAll('.MuiCard-root')].map(
       (card) => card.querySelector('.MuiTypography-subtitle2')?.textContent,
     );
     expect(titles).toEqual([
       tr('auth.profile.personalInfo'),
-      tr('deploy.realmLabel.print-shop/standard'),
-      tr('deploy.realmLabel.print-shop/admin'),
+      tr('deploy.realmLabel.account-template/standard'),
+      tr('deploy.realmLabel.account-template/admin'),
     ]);
 
     // Нейтральный заголовок — только когда кабинет один; сырое имя реалма наружу не течёт.
     expect(screen.queryByText(tr('auth.profile.account'))).toBeNull();
-    expect(screen.queryByText('print-shop/admin')).toBeNull();
+    expect(screen.queryByText('account-template/admin')).toBeNull();
     // Тип аккаунта — из deploy.userKind, он свой у каждого кабинета и не перепутан между блоками.
     expect(
-      within(cardWith(tr('deploy.realmLabel.print-shop/standard'))).getByText(
+      within(cardWith(tr('deploy.realmLabel.account-template/standard'))).getByText(
         tr('deploy.userKind.standard'),
       ),
     ).toBeInTheDocument();
     expect(
-      within(cardWith(tr('deploy.realmLabel.print-shop/admin'))).getByText(
+      within(cardWith(tr('deploy.realmLabel.account-template/admin'))).getByText(
         tr('deploy.userKind.employee'),
       ),
     ).toBeInTheDocument();
@@ -400,16 +400,16 @@ describe('ProfilePage (several realms)', () => {
     await i18next.changeLanguage('en');
     await withRealms(REALMS);
     renderProfile();
-    await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
+    await screen.findByText(tr('deploy.realmLabel.account-template/standard'));
 
-    // «Клиентский» (print-shop/standard) — реалм деплоя, т.е. кабинет текущей сессии.
+    // «Клиентский» (account-template/standard) — реалм деплоя, т.е. кабинет текущей сессии.
     expect(
-      within(cardWith(tr('deploy.realmLabel.print-shop/standard'))).getByText(
+      within(cardWith(tr('deploy.realmLabel.account-template/standard'))).getByText(
         tr('auth.profile.currentRealm'),
       ),
     ).toBeInTheDocument();
     expect(
-      within(cardWith(tr('deploy.realmLabel.print-shop/admin'))).queryByText(
+      within(cardWith(tr('deploy.realmLabel.account-template/admin'))).queryByText(
         tr('auth.profile.currentRealm'),
       ),
     ).toBeNull();
@@ -419,21 +419,19 @@ describe('ProfilePage (several realms)', () => {
     await i18next.changeLanguage('en');
     await withRealms(REALMS);
     renderProfile();
-    await screen.findByText(tr('deploy.realmLabel.print-shop/standard'));
+    await screen.findByText(tr('deploy.realmLabel.account-template/standard'));
 
     // Видимый текст ссылок один — «Сессии»; различает их доступное имя с названием кабинета, так
     // что глобальный поиск по роли находит каждую однозначно (иначе скринридеру — «Сессии, Сессии»).
     const sessionsOf = (realm: string) =>
       tr('auth.profile.sessionsOf', { realm: tr(`deploy.realmLabel.${realm}`) });
 
-    expect(screen.getByRole('link', { name: sessionsOf('print-shop/standard') })).toHaveAttribute(
-      'href',
-      '/sessions?realm=print-shop%2Fstandard',
-    );
-    expect(screen.getByRole('link', { name: sessionsOf('print-shop/admin') })).toHaveAttribute(
-      'href',
-      '/sessions?realm=print-shop%2Fadmin',
-    );
+    expect(
+      screen.getByRole('link', { name: sessionsOf('account-template/standard') }),
+    ).toHaveAttribute('href', '/sessions?realm=account-template%2Fstandard');
+    expect(
+      screen.getByRole('link', { name: sessionsOf('account-template/admin') }),
+    ).toHaveAttribute('href', '/sessions?realm=account-template%2Fadmin');
   });
 });
 

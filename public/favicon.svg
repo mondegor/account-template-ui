@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <!--
+    Тот же line-глиф «куб», что у BrandMark в src/ui/brand.tsx.
+    Линия толще, чем в компоненте (2.2 против 1.7): на 16 px тонкая вырождается в паутину.
+    Цвета — брендовые токены primary.main из светлой и тёмной темы.
+  -->
+  <style>
+    :root { stroke: #3b6ea5; }
+    @media (prefers-color-scheme: dark) {
+      :root { stroke: #5b8fc7; }
+    }
+  </style>
+  <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+  <path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" />
+</svg>

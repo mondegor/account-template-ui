@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Box, Card, CardContent } from '@mui/material';
+import { UiBrandLockup } from '@ui';
 import { AuthLayout } from './AuthLayout';
-import { BrandLockup } from './BrandLockup';
 
 /**
  * Обёртка публичных auth-экранов: центрированная карточка (Вариант A) + бренд. Внутрь рендерится
@@ -12,7 +12,7 @@ export function AuthCard({ children, footer }: { children: ReactNode; footer?: R
     <AuthLayout>
       <Card variant="outlined" sx={{ width: 340 }}>
         <CardContent sx={{ px: 3.5, pt: 3, pb: 3, '&:last-child': { pb: 3 } }}>
-          <BrandLockup />
+          <UiBrandLockup />
           <Box sx={{ mt: 1 }}>{children}</Box>
           {footer}
         </CardContent>

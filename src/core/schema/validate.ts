@@ -33,6 +33,7 @@ const nodeProps = z.strictObject({
   inputMode: z.enum(['text', 'numeric', 'tel', 'email']).optional(),
   fullWidth: z.boolean().optional(),
   autoFocus: z.boolean().optional(),
+  hideLabel: z.boolean().optional(),
 });
 
 const fieldValidation = z.strictObject({

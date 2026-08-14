@@ -12,10 +12,10 @@ import type { TFunction } from 'i18next';
 import { Box } from '@mui/material';
 import { ApiFieldError, apiErrorText } from '@core/api';
 import { getHandler, type SchemaNode } from '@core/schema';
-import { UiAlert, UiButton } from '@ui';
+import { UiAlert, UiButton, UiFieldMessage, uiFieldBlockSx } from '@ui';
 import { useHandlerContext } from './bindings';
 import { buildDefaults, buildFormSchema, collectFields } from './validationToZod';
-import { FormErrorContext, SubmitOnlyContext } from './formContext';
+import { FormErrorContext, LoneFieldContext, SubmitOnlyContext } from './formContext';
 
 type FormValues = Record<string, unknown>;
 
@@ -57,6 +57,7 @@ export function FormRenderer({
     [fields, t],
   );
   const defaults = useMemo(() => buildDefaults(fields) as FormValues, [fields]);
+  const loneField = fields.length === 1;
 
   // submitOnly (узел form) — UX обособленных auth-форм: валидация только по сабмиту (пустое/невалидное
   // поле не краснеет при фокусе/blur/вводе; формат-ошибки — по кнопке), reValidateMode='onSubmit' —
@@ -72,18 +73,33 @@ export function FormRenderer({
     shouldFocusError: !submitOnly,
   });
 
-  // submitOnly: кнопка неактивна, пока пусто хоть одно обязательное поле; пустой сабмит блокируется —
-  // поэтому ошибка «обязательное поле» не показывается вовсе (формат-ошибки работают по сабмиту).
-  const requiredNames = useMemo(
-    () => fields.filter((f) => f.validation?.required && f.name).map((f) => f.name as string),
+  // submitOnly: пока форма не набрана, кнопка неактивна, и сабмит с таким значением не проходит.
+  // «Не набрано» — это не отказ, а незаконченный ввод, поэтому под полем про него не пишут ничего:
+  // ни «обязательное поле», ни «минимум N» на экране не бывает вовсе. Ошибка формата — другое дело,
+  // там ввели не то, и она показывается по кнопке.
+  //
+  // Правила min при этом остаются в zod (validationToZod): схема зеркалит ограничения контракта,
+  // и без submitOnly гейта нет — сообщение там достижимо.
+  //
+  // Гейт держит только обязательные поля: необязательное запирало бы кнопку молча и без выхода —
+  // человеку не сказано ни что не так, ни что поле можно было вовсе не трогать.
+  const gatedFields = useMemo(
+    () => fields.filter((f) => f.name && f.validation?.required),
     [fields],
   );
   const watched = useWatch({ control: form.control }) as FormValues;
-  const requiredEmpty =
+  const notReady =
     submitOnly &&
-    requiredNames.some((name) => {
-      const v = watched?.[name];
-      return v === '' || v == null || v === false;
+    gatedFields.some((f) => {
+      const v = watched?.[f.name as string];
+      if (typeof v === 'string') {
+        if (v === '') return true;
+        // Сырая длина, как у z.string().min(): гейт не имеет права быть мягче схемы, иначе сабмит
+        // дойдёт до неё и покажет то самое «минимум N».
+        return v.length < (f.validation?.min ?? 0);
+      }
+      // Чекбоксу длину не меряют: набран он или нет — это и есть его значение.
+      return !v;
     });
 
   const submitValid = form.handleSubmit(async (values) => {
@@ -117,9 +133,9 @@ export function FormRenderer({
     }
   });
 
-  // Пустую форму не отправляем (в т.ч. по Enter) — валидация required не запускается.
+  // Ненабранную форму не отправляем (в т.ч. по Enter) — валидация до неё не доходит.
   const onSubmit = (e: FormEvent) => {
-    if (requiredEmpty) {
+    if (notReady) {
       e.preventDefault();
       return;
     }
@@ -129,19 +145,40 @@ export function FormRenderer({
   return (
     <FormProvider {...form}>
       <SubmitOnlyContext.Provider value={submitOnly}>
-        <FormErrorContext.Provider value={formErrorCtx}>
-          {formError && <UiAlert severity="error">{formError}</UiAlert>}
-          <Box component="form" onSubmit={onSubmit} noValidate>
-            {children}
-            {node.submit && (
-              <UiButton
-                type="submit"
-                label={t(node.submit.label)}
-                disabled={form.formState.isSubmitting || requiredEmpty}
-              />
-            )}
-          </Box>
-        </FormErrorContext.Provider>
+        <LoneFieldContext.Provider value={loneField}>
+          <FormErrorContext.Provider value={formErrorCtx}>
+            {formError && !loneField && <UiAlert severity="error">{formError}</UiAlert>}
+            <Box component="form" onSubmit={onSubmit} noValidate>
+              {children}
+              {/* У формы с одним полем сообщению место одно — под этим полем: разбирать, к полю
+                  относится отказ или ко всей форме, там не по чему. Строка стоит ниже блока поля,
+                  поэтому зазор за ней держит эта обёртка — блок его ей и отдал (messageBelow).
+                  Обёртка постоянная: UiFieldMessage уходит из разметки сам, по концу схлопывания,
+                  и снять его снаружи значило бы оборвать анимацию.
+                  Роль живёт на обёртке ровно поэтому: она на месте с первого кадра, и отказ
+                  вставляется внутрь готового региона — это его и объявляет. Повесь роль на саму
+                  строку, и объявлять было бы нечего: строка появляется вместе с текстом. Без неё
+                  многополевая форма говорит отказ через UiAlert, а однополевая молчала бы. */}
+              {loneField && (
+                <Box role="alert" sx={uiFieldBlockSx(formError ? 'message' : 'flush')}>
+                  <UiFieldMessage text={formError ?? undefined} tone="error" />
+                </Box>
+              )}
+              {node.submit && (
+                // У формы с одним полем зазор над кнопкой держат блок поля и строка под ним:
+                // сколько его нужно, знают только они. Многополевой форме отступ нужен свой —
+                // там поля его не держат.
+                <Box sx={{ mt: loneField ? 0 : 2 }}>
+                  <UiButton
+                    type="submit"
+                    label={t(node.submit.label)}
+                    disabled={form.formState.isSubmitting || notReady}
+                  />
+                </Box>
+              )}
+            </Box>
+          </FormErrorContext.Provider>
+        </LoneFieldContext.Provider>
       </SubmitOnlyContext.Provider>
     </FormProvider>
   );

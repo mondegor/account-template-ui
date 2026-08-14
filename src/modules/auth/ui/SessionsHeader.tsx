@@ -1,11 +1,11 @@
-import { FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
+import { FormControl, MenuItem, Select, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { realmLabel } from '../lib/realmLabel';
 import type { UserRealm } from '../api/types';
 
 /**
  * Строка заголовка. Реалм показываем, только если их больше одного: выбирать не из чего, а
- * «print-shop/standard» пользователю ничего не говорит — тогда просто «Сессии».
+ * «account-template/standard» пользователю ничего не говорит — тогда просто «Сессии».
  */
 export function SessionsHeader({
   realms,
@@ -40,14 +40,9 @@ export function SessionsHeader({
         {p('realmTitle')}
       </Typography>
       <FormControl size="small" sx={{ minWidth: 220 }}>
-        <InputLabel id="sessions-realm-label">{p('realm')}</InputLabel>
+        {/* Что выбирают, названо заголовком слева, поэтому имя селекта только в `aria-label`. */}
         {/* value — сырое имя реалма: уходит в query-ключ и в API; пользователь видит только label. */}
-        <Select
-          labelId="sessions-realm-label"
-          label={p('realm')}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
+        <Select aria-label={p('realm')} value={value} onChange={(e) => onChange(e.target.value)}>
           {realms.map((r) => (
             <MenuItem key={r.name} value={r.name}>
               {realmLabel(t, r.name)}

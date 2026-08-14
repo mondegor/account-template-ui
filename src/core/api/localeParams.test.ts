@@ -138,8 +138,8 @@ describe('interceptor: params and headers that are not ours', () => {
     authenticate();
     setLanguage('en');
 
-    const params = await call({ params: { realm: 'print-shop/admin' } });
-    expect(params.get('realm')).toBe('print-shop/admin');
+    const params = await call({ params: { realm: 'account-template/admin' } });
+    expect(params.get('realm')).toBe('account-template/admin');
     expect(params.get('lang')).toBe('en-US');
   });
 

@@ -5,12 +5,15 @@ import { setSettingsOverride } from '@core/request-meta';
 import type {
   ApplyByTokenRequest,
   ApplyTotpRequest,
+  CalcPasswordStrengthResponse,
   ChangePasswordRequest,
   ChangeUserSettingsRequest,
   ConfirmOperationRequest,
+  GeneratedPassword,
   LoginByTokenRequest,
   OpenSessionResult,
   OperationTokenRequest,
+  PasswordStrength,
   RecoveryCodes,
   SuccessAccess,
   TotpSecret,
@@ -76,6 +79,24 @@ export async function checkLogin(userLogin: string): Promise<boolean> {
     user_login: userLogin,
   });
   return res.status === 204;
+}
+
+/**
+ * Оценка надёжности пароля. Ручка гостевая: форма установки пароля спрашивает её на каждом наборе,
+ * и вешать на неё продление сессии незачем — префикс `/v1/check/` из обновления 401 исключён.
+ */
+export async function calcPasswordStrength(password: string): Promise<PasswordStrength> {
+  const res = await authClient.post<CalcPasswordStrengthResponse>(
+    '/v1/check/calc-password-strength',
+    { password },
+  );
+  return res.data.strength;
+}
+
+/** Пароль, придуманный сервером, — помощь на форме установки. Тела у запроса нет. */
+export async function generatePassword(): Promise<string> {
+  const res = await authClient.post<GeneratedPassword>('/v1/check/generate-password');
+  return res.data.password;
 }
 
 /** Подтверждение кода. 204 = операция подтверждена; 200 = следующее звено цепочки. */

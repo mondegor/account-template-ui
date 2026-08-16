@@ -2,7 +2,6 @@ import {
   Box,
   Card,
   CardContent,
-  CircularProgress,
   Divider,
   IconButton,
   Stack,
@@ -10,6 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { UiBusyIcon } from '@ui';
 import { fmtLong, useLocale } from '../lib/format';
 import { CurrentMark } from './CurrentMark';
 import { Row } from './Row';
@@ -23,7 +23,7 @@ import {
   NetworkIcon,
   TrashIcon,
 } from './icons';
-import { titleLine } from './titleLine';
+import { textLine } from './textLine';
 import type { UserSession } from '../api/types';
 
 /**
@@ -78,7 +78,7 @@ export function SessionCard({
                 display: 'flex',
                 alignItems: 'center',
                 flexShrink: 0,
-                height: titleLine('subtitle1'),
+                height: textLine('subtitle1'),
               }}
             >
               <MonitorIcon size={18} />
@@ -116,11 +116,7 @@ export function SessionCard({
                   disabled={isClosing || disabled}
                   onClick={onClose}
                 >
-                  {isClosing ? (
-                    <CircularProgress size={18} color="inherit" />
-                  ) : (
-                    <TrashIcon size={18} />
-                  )}
+                  {isClosing ? <UiBusyIcon size="small" /> : <TrashIcon size={18} />}
                 </IconButton>
               </span>
             </Tooltip>

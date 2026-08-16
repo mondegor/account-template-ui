@@ -7,6 +7,9 @@ import { ConfirmPage } from './pages/ConfirmPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SessionsPage } from './pages/SessionsPage';
+import { PasswordSetupPage } from './pages/PasswordSetupPage';
+import { SecurityConfirmPage } from './pages/SecurityConfirmPage';
+import { RecoveryCodesPage } from './pages/RecoveryCodesPage';
 import { ConfirmOperationNode } from './ui/ConfirmOperationNode';
 import { EmailFieldNode } from './ui/EmailFieldNode';
 import { authTranslations } from './i18n';
@@ -71,6 +74,32 @@ export const authModule: ModuleDefinition = {
       element: (
         <ProtectedRoute>
           <SessionsPage />
+        </ProtectedRoute>
+      ),
+    },
+    // Потоки защиты аккаунта. Подтверждение здесь своё, а не общее /confirm: те операции
+    // авторизованные, закрывает их свой apply-*, и заканчиваются они в настройках, а не в кабинете.
+    {
+      path: '/security/password',
+      element: (
+        <ProtectedRoute>
+          <PasswordSetupPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/security/confirm',
+      element: (
+        <ProtectedRoute>
+          <SecurityConfirmPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/security/codes',
+      element: (
+        <ProtectedRoute>
+          <RecoveryCodesPage />
         </ProtectedRoute>
       ),
     },

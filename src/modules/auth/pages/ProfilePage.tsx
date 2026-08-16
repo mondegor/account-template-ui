@@ -14,6 +14,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { PAGE_MAX_WIDTH } from '@ui';
 import { AppShell, LangFlag } from '@core/shell';
 import { apiErrorText } from '@core/api';
 import { realmProvider } from '@core/auth';
@@ -37,7 +38,7 @@ import {
   TagIcon,
   UserIcon,
 } from '../ui/icons';
-import { titleLine } from '../ui/titleLine';
+import { textLine } from '../ui/textLine';
 import type { UserInfo, UserRealm } from '../api/types';
 
 /**
@@ -46,7 +47,7 @@ import type { UserInfo, UserRealm } from '../api/types';
  * перекрасил бы заодно подпись, которая должна остаться text.primary.
  *
  * `caption` — мелкая строка под названием (признак текущего кабинета). Ради неё название и подпись
- * лежат в общей колонке, а глиф и действие ростом со строку названия (titleLine).
+ * лежат в общей колонке, а глиф и действие ростом со строку названия (textLine).
  */
 function CardHeading({
   icon,
@@ -85,7 +86,7 @@ function CardHeading({
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
-            height: titleLine('subtitle2'),
+            height: textLine('subtitle2'),
           }}
         >
           {icon}
@@ -109,7 +110,7 @@ function CardHeading({
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
-            height: titleLine('subtitle2'),
+            height: textLine('subtitle2'),
           }}
         >
           {action}
@@ -229,7 +230,7 @@ function ProfileView({ user }: { user: UserInfo }) {
   // переключается в шапке»). В профиле это была лишняя строка.
 
   return (
-    <Stack spacing={2} sx={{ maxWidth: 880, mx: 'auto' }}>
+    <Stack spacing={2} sx={{ maxWidth: PAGE_MAX_WIDTH, mx: 'auto' }}>
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
         {p('title')}
       </Typography>
@@ -310,7 +311,7 @@ export function ProfilePage() {
         </Box>
       )}
       {isError && (
-        <Alert severity="error" sx={{ maxWidth: 880, mx: 'auto' }}>
+        <Alert severity="error" sx={{ maxWidth: PAGE_MAX_WIDTH, mx: 'auto' }}>
           {apiErrorText(error, t)}
         </Alert>
       )}

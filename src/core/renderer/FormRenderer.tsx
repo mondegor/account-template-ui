@@ -172,7 +172,8 @@ export function FormRenderer({
                   <UiButton
                     type="submit"
                     label={t(node.submit.label)}
-                    disabled={form.formState.isSubmitting || notReady}
+                    busy={form.formState.isSubmitting}
+                    disabled={notReady}
                   />
                 </Box>
               )}

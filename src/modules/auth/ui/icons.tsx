@@ -186,6 +186,52 @@ export function LifeBuoyIcon({ size = 20 }: { size?: number }) {
   );
 }
 
+/**
+ * Лист со строками и стрелка вправо — «скопировать значение». Стрелка выходит из-под листа: без
+ * неё два прямоугольника читались бы как «документы», а не как перенос значения.
+ */
+export function CopyIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <rect x="3" y="3" width="11.5" height="18" rx="2" />
+      <path d="M6.4 8.6h4.7" />
+      <path d="M6.4 12.1h3.2" />
+      <path d="M14.5 16.4h6.2" />
+      <path d="m18.2 13.9 2.5 2.5-2.5 2.5" />
+    </Glyph>
+  );
+}
+
+/** Галочка — «сделано»: ею отвечает копирование, и ею же помечено сохранённое. */
+export function CheckIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d="m5 12.5 4.6 4.6L19 7" />
+    </Glyph>
+  );
+}
+
+/** Круговая стрелка — «спросить заново». Разрыв кольца и уголок стрелки стоят в правом верхнем углу. */
+export function RefreshIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d="M20.4 12a8.4 8.4 0 1 1-2.46-5.94L20.4 8.5" />
+      <path d="M20.4 4.2v4.3h-4.3" />
+    </Glyph>
+  );
+}
+
+/** Стрелка вниз над подставкой — «скачать файлом». */
+export function DownloadIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d="M12 3.5v11" />
+      <path d="m7.8 10.6 4.2 4.2 4.2-4.2" />
+      <path d="M4.5 17.5v1.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-1.5" />
+    </Glyph>
+  );
+}
+
 /** Шеврон вправо — «здесь есть куда перейти». */
 export function ChevronRightIcon({ size = 20 }: { size?: number }) {
   return (

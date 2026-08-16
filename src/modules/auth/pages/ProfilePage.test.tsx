@@ -467,14 +467,14 @@ describe('ProfilePage (account protection)', () => {
     },
   );
 
-  it('the strip leads to the settings', async () => {
+  it('the strip leads to the 2FA card in the settings', async () => {
     renderProfile();
     await screen.findByText(tr('auth.profile.twoFa.NONE.title'));
 
-    // Адрес тот же, что у ссылки в заголовке карточки, поэтому идём от самого призыва: список
-    // ссылок карточки был бы полон и без полосы.
+    // Идём от самого призыва: ссылка в заголовке карточки ведёт на ту же страницу, и список ссылок
+    // карточки был бы полон и без полосы.
     const cta = within(personalCard()).getByText(tr('auth.profile.twoFa.NONE.cta'));
-    expect(cta.closest('a')).toHaveAttribute('href', '/settings');
+    expect(cta.closest('a')).toHaveAttribute('href', '/settings#two-fa');
   });
 });
 

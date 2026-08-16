@@ -15,6 +15,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { PAGE_MAX_WIDTH, UiBusyIcon } from '@ui';
 import { AppShell } from '@core/shell';
 import { apiErrorText } from '@core/api';
 import { realmProvider } from '@core/auth';
@@ -160,7 +161,7 @@ export function SessionsPage() {
   if (user.isError) {
     return (
       <AppShell>
-        <Alert severity="error" sx={{ maxWidth: 880, mx: 'auto' }}>
+        <Alert severity="error" sx={{ maxWidth: PAGE_MAX_WIDTH, mx: 'auto' }}>
           {apiErrorText(user.error, t)}
         </Alert>
       </AppShell>
@@ -169,7 +170,7 @@ export function SessionsPage() {
 
   return (
     <AppShell>
-      <Stack spacing={2} sx={{ maxWidth: 880, mx: 'auto' }}>
+      <Stack spacing={2} sx={{ maxWidth: PAGE_MAX_WIDTH, mx: 'auto' }}>
         <SessionsHeader realms={realms} value={effective ?? ''} onChange={selectRealm} />
 
         {/* Ни одного кабинета — запрос сессий даже не уходит (нет realm), так что и спиннера,
@@ -199,9 +200,7 @@ export function SessionsPage() {
               color="error"
               variant="outlined"
               size="large"
-              startIcon={
-                bulkPending ? <CircularProgress size={20} color="inherit" /> : <PowerIcon />
-              }
+              startIcon={bulkPending ? <UiBusyIcon size="large" /> : <PowerIcon />}
               disabled={others.length === 0 || close.isPending}
               onClick={() => setConfirmOpen(true)}
             >

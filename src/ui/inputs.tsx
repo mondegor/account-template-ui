@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type Ref } from 'react';
+import { useId, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   Box,
   Checkbox,
@@ -124,6 +124,13 @@ export interface UiTextFieldProps {
   messageBelow?: boolean;
   /** Строку под полем объявляет экранный диктор — см. `UiFieldMessage.live`. */
   messageLive?: boolean;
+  /**
+   * id строки, которую рисует кто-то снаружи, — когда между полем и его сообщением стоит что-то
+   * третье и отдать строку полю значило бы это третье отодвинуть. Строк может быть несколько: их
+   * id идут через пробел в том же порядке, в каком они стоят на экране. Своя строка
+   * (`collapseHelper` с текстом) старше и перебивает их целиком: она ближайшая к полю.
+   */
+  describedBy?: string;
   /** Свой id поля — когда подпись рисует кто-то снаружи и связывает её через `htmlFor`. */
   id?: string;
   type?: 'text' | 'email' | 'password' | 'tel';
@@ -160,6 +167,17 @@ export interface UiTextFieldProps {
    */
   reveal?: { show: string; hide: string };
   /**
+   * Второй знак в конце поля — действие над значением (скопировать его, например). Стоит после
+   * глаза и уживается с ним: знаки в конце поля читаются слева направо, и показ значения идёт
+   * первым, потому что относится к самому полю, а не к тому, что с ним делают.
+   *
+   * Ни знака, ни подписи слой `ui` не придумывает: и то и другое приходит пропом, а вместе с ними
+   * — и состояние действия. Сменить знак на галочку после удачного копирования может только тот,
+   * кто знает, удалось ли оно: запись в буфер доступна не везде и умеет отказать. Оттуда же и
+   * `disabled`: делать над пустым значением обычно нечего, но что считать пустым, знает вызывающий.
+   */
+  action?: { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean };
+  /**
    * Моноширинный шрифт: нужен там, где значение читают с листа или из менеджера паролей, — на
    * пропорциональном 0/O и 1/I сближаются, и разбирать их приходится глазом.
    */
@@ -172,6 +190,7 @@ export function UiTextField({
   collapseHelper,
   messageBelow,
   messageLive,
+  describedBy,
   id,
   type = 'text',
   placeholder,
@@ -190,6 +209,7 @@ export function UiTextField({
   autoFocus,
   maxLength,
   reveal,
+  action,
   mono,
 }: UiTextFieldProps) {
   const [shown, setShown] = useState(false);
@@ -198,6 +218,7 @@ export function UiTextField({
   const labelShown = !!label && !hideLabel;
   // В режиме раскрытия helper рисует не MUI, поэтому и связать его с полем приходится самим.
   const messageId = collapseHelper && helperText ? `${fieldId}-message` : undefined;
+  const describedById = messageId ?? describedBy;
   return (
     <Box
       sx={
@@ -247,30 +268,47 @@ export function UiTextField({
             maxLength,
             // Подписи на экране нет — имя полю даёт она же, только невидимая.
             'aria-label': labelShown ? undefined : label,
-            // Ключ появляется только со своей строкой: свою подпись MUI связывает с полем этим же
-            // атрибутом, а `htmlInput` разливает поверх — пустое значение стёрло бы связь, и
-            // подпись под полем осталась бы непрочитанной.
-            ...(messageId ? { 'aria-describedby': messageId } : null),
+            // Ключ появляется только вместе со строкой — своей или внешней: свою подпись MUI
+            // связывает с полем этим же атрибутом, а `htmlInput` разливает поверх — пустое
+            // значение стёрло бы связь, и подпись под полем осталась бы непрочитанной.
+            ...(describedById ? { 'aria-describedby': describedById } : null),
             'data-testid': name ? `field-${name}` : 'ui-textfield',
           },
-          input: reveal
-            ? {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      // Enter в поле обязан отправлять форму, а не показывать значение.
-                      type="button"
-                      edge="end"
-                      size="small"
-                      aria-label={shown ? reveal.hide : reveal.show}
-                      onClick={() => setShown((v) => !v)}
-                    >
-                      <EyeIcon off={shown} />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }
-            : undefined,
+          input:
+            reveal || action
+              ? {
+                  // Знаки идут одним хвостом: `edge="end"` достаётся последнему из них, иначе
+                  // правое поле подобрал бы глаз, а действие за ним встало бы с отступом.
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {reveal && (
+                        <IconButton
+                          // Enter в поле обязан отправлять форму, а не показывать значение.
+                          type="button"
+                          edge={action ? false : 'end'}
+                          size="small"
+                          aria-label={shown ? reveal.hide : reveal.show}
+                          onClick={() => setShown((v) => !v)}
+                        >
+                          <EyeIcon off={shown} />
+                        </IconButton>
+                      )}
+                      {action && (
+                        <IconButton
+                          type="button"
+                          edge="end"
+                          size="small"
+                          aria-label={action.label}
+                          disabled={action.disabled}
+                          onClick={action.onClick}
+                        >
+                          {action.icon}
+                        </IconButton>
+                      )}
+                    </InputAdornment>
+                  ),
+                }
+              : undefined,
         }}
       />
       {collapseHelper && (

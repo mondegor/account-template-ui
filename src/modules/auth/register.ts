@@ -1,12 +1,10 @@
 import { registerHandler, type AsyncValidator, type SchemaHandler } from '@core/schema';
 import { i18next } from '@core/i18n';
 import { onForcedLogout } from '@core/auth';
-import { useOperationStore } from '@core/operation';
 import { signin, signinByRecovery, signup } from './api/authApi';
 import { checkEmailAvailability } from './lib/emailAvailability';
 import { saveConfirmReturn } from './lib/confirmReturn';
-import { clearSecurityFlow } from './lib/securityFlow';
-import { clearRecoveryCodes } from './lib/recoveryCodes';
+import { dropSessionScopedState } from './lib/sessionScopedState';
 
 /**
  * Императивная часть модуля auth — обработчики схем (связь «схема → логика») и подписки; зовётся
@@ -65,15 +63,8 @@ export function initAuthModule(): void {
   registerHandler('auth.signin', { handler: signinHandler });
   registerHandler('auth.signinRecovery', { handler: signinRecoveryHandler });
 
-  // Принудительный разлогин (протухший refresh, reuse токена вне grace-окна) не перезагружает
-  // вкладку, поэтому незавершённая операция пережила бы смену пользователя: следующий гость
-  // попал бы на /confirm с чужим подтверждением, а оборванная посреди 2FA операция — со своим
-  // securityFlow. Туда же и показанные аварийные коды — они принадлежат ушедшей сессии. Из core
-  // этого не сделать: всё перечисленное живёт в модуле, а импорт core → modules закрыт границами
-  // слоёв.
-  onForcedLogout(() => {
-    useOperationStore.getState().reset();
-    clearSecurityFlow();
-    clearRecoveryCodes();
-  });
+  // Принудительный разлогин (протухший refresh, reuse токена вне grace-окна) — момент, когда
+  // сессия кончилась, а вкладка осталась: всё, что ей принадлежало, гасим (см.
+  // dropSessionScopedState).
+  onForcedLogout(dropSessionScopedState);
 }

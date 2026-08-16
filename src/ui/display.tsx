@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Alert, Button, Typography } from '@mui/material';
+import { Alert, Button, CircularProgress, Typography } from '@mui/material';
 
 /** Презентационные атомы вывода/действий над MUI (плоские пропсы). */
 
@@ -34,11 +34,27 @@ export function UiAlert({
   );
 }
 
+/**
+ * Рост знака занятости по росту кнопки: MUI меряет знак в кнопке кеглем и сам его не подстраивает.
+ */
+const BUSY_SIZE = { small: 18, medium: 18, large: 20 };
+
+/**
+ * Знак занятости кнопки — одно определение на приложение. Спиннер встаёт на место знака кнопки, и
+ * разойдись он с ним в росте, подпись дёргалась бы на каждой отправке.
+ *
+ * Цвет берётся от кнопки: занятая кнопка погашена, и свой тон спиннера спорил бы с её серым.
+ */
+export function UiBusyIcon({ size = 'medium' }: { size?: keyof typeof BUSY_SIZE }) {
+  return <CircularProgress size={BUSY_SIZE[size]} color="inherit" />;
+}
+
 export function UiButton({
   label,
   type = 'button',
   onClick,
   disabled,
+  busy,
   fullWidth = true,
   variant = 'contained',
   color = 'primary',
@@ -47,6 +63,11 @@ export function UiButton({
   type?: 'button' | 'submit';
   onClick?: () => void;
   disabled?: boolean;
+  /**
+   * За кнопкой ушёл запрос. Одного гашения мало: серая кнопка у формы уже значит «отправлять
+   * нечего», и человек не отличает по ней идущий запрос от неготовой формы.
+   */
+  busy?: boolean;
   fullWidth?: boolean;
   variant?: 'contained' | 'outlined' | 'text';
   color?: 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
@@ -55,7 +76,12 @@ export function UiButton({
     <Button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      // Занятая кнопка гасится сама: нажимать её нечего, а два согласованных пропса на каждом
+      // вызове рано или поздно разойдутся.
+      disabled={disabled || busy}
+      // Гашение диктор не объявляет — без этого занятость доступна только глазу.
+      aria-busy={busy || undefined}
+      startIcon={busy ? <UiBusyIcon /> : undefined}
       fullWidth={fullWidth}
       variant={variant}
       color={color}

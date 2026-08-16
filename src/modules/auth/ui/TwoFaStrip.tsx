@@ -2,45 +2,33 @@ import { Box, ButtonBase, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
-import {
-  AlertCircleIcon,
-  ChevronRightIcon,
-  ShieldCheckIcon,
-  ShieldDotsIcon,
-  ShieldOffIcon,
-} from './icons';
+import { AlertCircleIcon, ChevronRightIcon } from './icons';
+import { LineGlyph } from './LineGlyph';
+import { TWO_FA_HREF } from './twoFaAnchor';
+import { TWO_FA_LADDER } from './twoFaLadder';
+import { codesLeftLevel, codesLeftTone } from '../lib/codesLeft';
 import type { UserAuth2fa } from '../api/types';
 
-/** Ступень лестницы защиты: тон и щит. Тон семантический, свои цвета компонент не заводит. */
-const LADDER: Record<
-  UserAuth2fa,
-  { tone: 'primary' | 'warning' | 'success'; Shield: typeof ShieldOffIcon }
-> = {
-  // Выключенная 2FA — незанятая ступень, а не поломка: тон нейтральный, брендовый. `info` тут не
-  // подходит — в MUI он голубой и с синим темы не совпадает.
-  NONE: { tone: 'primary', Shield: ShieldOffIcon },
-  PASSWORD: { tone: 'warning', Shield: ShieldDotsIcon },
-  TOTP: { tone: 'success', Shield: ShieldCheckIcon },
-};
-
-/** Остаток, на котором предупреждение становится красным: «запасного выхода почти нет». */
-const CODES_ALARM = 1;
-/** Остаток, ниже которого предупреждение вообще появляется; выше — строки нет. */
-const CODES_LOW = 4;
+/** Подпись ступени. `enough` своей строки не имеет: пока запаса хватает, предупреждать не о чем. */
+const CODES_LABEL = {
+  empty: 'recoveryCodesEmpty',
+  last: 'recoveryCodesLast',
+  low: 'recoveryCodesLow',
+} as const;
 
 /**
  * Остаток аварийных кодов — не показатель, а предупреждение, поэтому пока запаса хватает, на
  * профиле его нет вовсе. Отсутствие поля значит «показывать нечего» (2FA выключена), а не ноль.
  *
- * Крайние остатки названы своими словами, `recoveryCodesLow` со счётчиком достаётся ровно
- * диапазону CODES_ALARM+1..CODES_LOW-1 — на нём и держится набор форм множественного числа в
- * словарях. Раздвинув границы, добавьте недостающие формы.
+ * Крайние остатки названы своими словами, `recoveryCodesLow` со счётчиком достаётся ровно ступени
+ * `low` — на ней и держится набор форм множественного числа в словарях. Раздвинув границы ступеней
+ * (lib/codesLeft), добавьте недостающие формы.
  */
 function codesWarning(left: number | undefined, text: (key: string, count: number) => string) {
-  if (left === undefined || left >= CODES_LOW) return null;
-  if (left === 0) return { color: 'error.main', label: text('recoveryCodesEmpty', left) };
-  if (left <= CODES_ALARM) return { color: 'error.main', label: text('recoveryCodesLast', left) };
-  return { color: 'warning.main', label: text('recoveryCodesLow', left) };
+  if (left === undefined) return null;
+  const level = codesLeftLevel(left);
+  if (level === 'enough') return null;
+  return { color: `${codesLeftTone(level)}.main`, label: text(CODES_LABEL[level], left) };
 }
 
 /**
@@ -64,14 +52,16 @@ export function TwoFaStrip({
 }) {
   const { t } = useTranslation();
   const p = (key: string, opts?: Record<string, unknown>) => t(`auth.profile.${key}`, opts ?? {});
-  const { tone, Shield } = LADDER[type];
+  const { tone, Shield } = TWO_FA_LADDER[type];
   const warning = codesWarning(recoveryCodesLeft, (key, count) => p(key, { count }));
   const done = type === 'TOTP';
 
   return (
     <ButtonBase
       component={RouterLink}
-      to="/settings"
+      // Целимся в саму карточку защиты: настройки открываются формой профиля, и карточка на них
+      // лежит ниже — без якоря переход упирался бы в чужой экран.
+      to={TWO_FA_HREF}
       sx={{
         display: 'flex',
         alignItems: 'center',
@@ -113,9 +103,11 @@ export function TwoFaStrip({
             // Тест «предупреждения нет» иначе искал бы отсутствие текста регуляркой по подписи —
             // то есть проверял бы формулировку, а не наличие строки.
             data-testid="two-fa-codes-warning"
-            sx={{ alignItems: 'center', mt: 0.25, color: warning.color }}
+            sx={{ mt: 0.25, color: warning.color }}
           >
-            <AlertCircleIcon size={13} />
+            <LineGlyph>
+              <AlertCircleIcon size={13} />
+            </LineGlyph>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {warning.label}
             </Typography>

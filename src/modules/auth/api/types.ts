@@ -181,3 +181,28 @@ export interface TotpSecret {
   secret: string;
   otpauth_uri: string;
 }
+
+/**
+ * Надёжность пароля глазами сервера (`Auth.Enum.PasswordStrength`). Считает её он, а не клиент:
+ * правила у развёртывания свои, и своя оценка на экране расходилась бы с тем, что примет
+ * `POST /v1/security/password`.
+ */
+export type PasswordStrength = 'NOT_RATED' | 'WEAK' | 'MIDDLE' | 'STRONG' | 'THE_BEST';
+
+/** Тело POST /v1/check/calc-password-strength (границы те же 8..32, что и у самого пароля). */
+export interface CalcPasswordStrengthRequest {
+  password: string;
+}
+
+/** Ответ POST /v1/check/calc-password-strength. */
+export interface CalcPasswordStrengthResponse {
+  strength: PasswordStrength;
+}
+
+/**
+ * Ответ POST /v1/check/generate-password: пароль, придуманный за пользователя. По спеке его
+ * надёжность всегда `THE_BEST`, поэтому оценку для него не запрашивают.
+ */
+export interface GeneratedPassword {
+  password: string;
+}

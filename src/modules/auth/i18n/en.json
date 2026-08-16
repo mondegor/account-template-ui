@@ -43,7 +43,7 @@
       "title": "Recovery sign-in",
       "enterLogin": "Enter the email or phone linked to your account.",
       "submit": "Sign in",
-      "twoFaOnly": "Requires two-factor protection: your password or authenticator code, plus a recovery code.",
+      "twoFaOnly": "Requires 2FA to be on: your password or authenticator code, plus a recovery code.",
       "emailSigninLink": "Back to the main sign-in method"
     },
     "confirm": {
@@ -84,6 +84,86 @@
       "deadEndExpiredNoResend": "The time to confirm has run out. Start signing in again.",
       "invalidated": "This operation can no longer be completed. Start signing in again."
     },
+    "security": {
+      "password": {
+        "title": "Set a password",
+        "hint": {
+          "EMAIL": "We sent a code to your email — it confirms that you are the one setting the password."
+        },
+        "deadEnd": "There is nothing left to confirm the password setup with. Start it again from the settings.",
+        "awaitingFinish": "The code was accepted, but 2FA could not be turned on. No need to confirm again — just retry.",
+        "invalidated": "This password setup can no longer be completed. Start it again from the settings."
+      },
+      "recoveryCodes": {
+        "title": "Reissue recovery codes",
+        "hint": {
+          "EMAIL": "We sent a code to your email — the reissue starts with it.",
+          "PASSWORD": "Enter your password: the reissue replaces the code set itself, so it asks for your 2FA method as well.",
+          "TOTP": "Enter the code from your authenticator app: the reissue replaces the code set itself, so it asks for your 2FA method as well."
+        },
+        "deadEnd": "There is nothing left to confirm the reissue with. Start it again from the settings.",
+        "awaitingFinish": "The confirmation was accepted, but the codes could not be issued. No need to confirm again — just retry.",
+        "invalidated": "This reissue can no longer be completed. Start it again from the settings."
+      },
+      "disable2fa": {
+        "title": "Turn 2FA off",
+        "hint": {
+          "EMAIL": "We sent a code to your email: once 2FA is off, the account rests on your mailbox alone, so you have to prove you own it.",
+          "PASSWORD": "Enter your password — or switch and enter one of your recovery codes.",
+          "TOTP": "Enter the code from your authenticator app — or switch and enter one of your recovery codes.",
+          "RECOVERY": "Enter one of your single-use recovery codes."
+        },
+        "deadEnd": "There is nothing left to confirm turning 2FA off. Start it again from the settings.",
+        "awaitingFinish": "The confirmation was accepted, but 2FA could not be turned off. No need to confirm again — just retry.",
+        "invalidated": "Turning 2FA off can no longer be completed. Start it again from the settings."
+      }
+    },
+    "password": {
+      "title": "Set a password",
+      "lead": "The password becomes your 2FA method: after the code we send, signing in will ask for it as well. Next step — confirmation by a code.",
+      "new": "New password",
+      "newPlaceholder": "Come up with a password",
+      "repeat": "Repeat the password",
+      "generate": "Generate a strong password",
+      "lengthHint": "From {{min}} to {{max}} characters",
+      "checking": "Checking the strength…",
+      "unknown": "Strength unknown",
+      "retry": "Check the strength again",
+      "strength": {
+        "NOT_RATED": "Password not rated",
+        "WEAK": "Weak password",
+        "MIDDLE": "Fair password",
+        "STRONG": "Strong password",
+        "THE_BEST": "Excellent password"
+      },
+      "copy": "Copy the password",
+      "copied": "Password copied",
+      "copyFailed": "Could not copy the password — save it by hand.",
+      "generateFailed": "Could not generate a password — try again or come up with your own.",
+      "mismatch": "The passwords do not match",
+      "submit": "Continue",
+      "cancel": "Cancel",
+      "conflict": "2FA is already on — a new password can only be set after turning it off.",
+      "conflictLink": "Go to the settings"
+    },
+    "codes": {
+      "title": "Recovery codes",
+      "warning": "Save the codes now: we will not show them again, and reloading the page loses them.",
+      "lead": "Each code works once. Use it instead of your password or authenticator code when you cannot reach them.",
+      "leadReissued": "The set has been reissued — the old codes no longer work. Each code works once and is used instead of your password or authenticator code when you cannot reach them.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "download": "Download",
+      "done": "I have saved the codes",
+      "doneHint": "The button turns on once the codes are copied or downloaded.",
+      "copyFailed": "Could not copy the codes — save them by hand or download the file.",
+      "downloadFailed": "Could not download the file — copy the codes or save them by hand.",
+      "goneOnce": "Recovery codes are shown once, and that showing is already closed — not even we can restore the list.",
+      "goneReissue": "If you did not save them, reissue the set: the old codes stop working and you get a new one.",
+      "goneNo2fa": "Recovery codes come with 2FA, and yours is off — there is nothing to reissue. Turn 2FA on, and a new set is issued with it.",
+      "goneSettingsLink": "Go to the settings",
+      "reissue": "Reissue the codes"
+    },
     "profile": {
       "title": "Profile",
       "personalInfo": "Personal info",
@@ -109,8 +189,8 @@
       "tzUnsupported": "your browser does not know this zone, dates are shown in the device time zone",
       "twoFa": {
         "NONE": {
-          "title": "Account is not protected by two-factor auth",
-          "hint": "Sign-in is confirmed by your email password only",
+          "title": "Account is not protected by 2FA",
+          "hint": "Signing in is confirmed by the code we send alone",
           "cta": "Turn on"
         },
         "PASSWORD": {
@@ -119,7 +199,7 @@
           "cta": "Strengthen"
         },
         "TOTP": {
-          "title": "Account is under two-factor protection",
+          "title": "Account is protected by 2FA",
           "hint": "Sign-in is confirmed by an authenticator app",
           "cta": "Manage"
         }
@@ -127,6 +207,7 @@
     },
     "settings": {
       "title": "Settings",
+      "regional": "My language and time zone",
       "lang": "Language",
       "tz": "Time zone",
       "auto": "Auto (from my environment)",
@@ -135,6 +216,43 @@
       "save": "Save",
       "saved": "Settings saved. Information shown may differ from them for a while — to apply them instantly, sign in again.",
       "substituted": "The closest available zone was saved: {{zone}} — its time differs from yours."
+    },
+    "twoFa": {
+      "title": "Two-factor protection",
+      "on": "Enabled",
+      "off": "Disabled",
+      "lead": {
+        "NONE": "Signing in is confirmed by the code we send alone. 2FA adds one more step to it — a password or a code from an app.",
+        "PASSWORD": "Signing in is confirmed by the code we send and your password.",
+        "TOTP": "Signing in is confirmed by the code we send and a code from your authenticator app."
+      },
+      "method": {
+        "password": {
+          "name": "Password",
+          "how": "Asked on every sign-in — after the code we send",
+          "plus": "Nothing to install: works on any device",
+          "minus": "Never changes — once leaked, 2FA stops protecting",
+          "cta": "Set up"
+        },
+        "totp": {
+          "name": "Authenticator app",
+          "how": "An app on your phone shows a code that changes every 30 seconds",
+          "plus": "The code lives on your device only and burns out fast",
+          "minus": "Needs a phone with the app; lose it and you sign in with a recovery code",
+          "cta": "Connect"
+        }
+      },
+      "codesPromise": "Turning 2FA on issues recovery codes — a spare way in if the password or the phone is lost. They are shown exactly once.",
+      "codesLeft": {
+        "empty": "No recovery codes left",
+        "last": "One recovery code left",
+        "low_other": "{{count}} recovery codes left",
+        "enough_other": "{{count}} recovery codes left"
+      },
+      "reissue": "Reissue",
+      "changeHint": "Changing the 2FA method — switching to the other one or setting a new password — is only possible after turning 2FA off. Turning it off is confirmed by the code we send and your current password (or a recovery code), and the next time you turn it on you get new recovery codes.",
+      "disable": "Turn 2FA off",
+      "disableShort": "Turn off"
     },
     "sessions": {
       "title": "Sessions",
@@ -167,7 +285,10 @@
       "wrongCode": "Wrong code",
       "finish": "Could not complete sign-in. Please try again.",
       "resend": "Could not resend the code.",
-      "resendUnavailable": "Resend is not available yet"
+      "resendUnavailable": "Resend is not available yet",
+      "finishPassword": "Could not turn 2FA on. Please try again.",
+      "finishRecoveryCodes": "Could not issue new recovery codes. Please try again.",
+      "finishDisable2fa": "Could not turn 2FA off. Please try again."
     }
   }
 }

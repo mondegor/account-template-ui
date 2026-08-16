@@ -634,7 +634,11 @@ paths:
   /v1/check/generate-password:
     post:
       summary: Auth/CK/R3. Метод генерации пароля
-      description: Метод предназначен для помощи пользователю при установке нового пароля.
+      description: |-
+        Метод предназначен для помощи пользователю при установке нового пароля.
+
+        Сгенерированный пароль гарантированно имеет надёжность `THE_BEST` по оценке метода
+        `POST /v1/check/calc-password-strength`, поэтому запрашивать её для него не требуется.
       operationId: generatePassword
       tags:
         - Auth.Check
@@ -2477,7 +2481,9 @@ components:
         - password
       properties:
         password:
-          description: Сгенерированный пароль для пользователя
+          description: |-
+            Сгенерированный пароль для пользователя.
+            Его надёжность (см. Auth.Enum.PasswordStrength) всегда `THE_BEST`.
           type: string
           maxLength: 32
           example: L$QI.qA6eu7zG%7w

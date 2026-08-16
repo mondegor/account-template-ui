@@ -10,6 +10,7 @@ import {
 import { isoIn, matchHeaderTz } from './serverTime';
 import type {
   ConfirmMethod,
+  PasswordStrength,
   SuccessAccess,
   UserAuth2fa,
   UserInfo,
@@ -112,6 +113,31 @@ const RECOVERY_CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
  * сессии — тем же токеном и уже без `secret`.
  */
 const MOCK_SESSION_LIMIT = import.meta.env.VITE_MOCK_SESSION_LIMIT === '1';
+
+/**
+ * Мок-онли: оценка надёжности пароля отвечает `500`. Так руками видна ветка, где шкала остаётся
+ * пустой и серой: оценки нет, а форма без неё не пропускает, и без следа причины она стояла бы
+ * заблокированной молча.
+ */
+const MOCK_PASSWORD_STRENGTH_FAIL = import.meta.env.VITE_MOCK_PASSWORD_STRENGTH_FAIL === '1';
+
+/**
+ * Мок-онли: генератор пароля отвечает `500`. Так руками видна ветка, где помощь не сработала: поле
+ * остаётся с тем, что в нём было, а под кнопкой встаёт объяснение — без него нажатие выглядело бы
+ * не сработавшим.
+ */
+const MOCK_GENERATE_PASSWORD_FAIL = import.meta.env.VITE_MOCK_GENERATE_PASSWORD_FAIL === '1';
+
+/** Алфавиты, из которых мок собирает пароль и по которым же считает его надёжность. */
+const PASSWORD_CLASSES = [
+  'abcdefghijkmnopqrstuvwxyz',
+  'ABCDEFGHJKLMNPQRSTUVWXYZ',
+  '23456789',
+  '!#$%&*+-.:=?@',
+];
+
+/** Сколько символов в пароле, который мок придумывает за пользователя. */
+const GENERATED_PASSWORD_LENGTH = 16;
 
 /**
  * Назначение операции. Завершающий метод сверяется с ним раньше, чем с подтверждённостью: свой
@@ -242,6 +268,38 @@ function issueRecoveryCodes(): string[] {
   ];
   recoveryCodesLeft = list.length;
   return list;
+}
+
+/**
+ * Надёжность пароля, как её видит мок: длина плюс число задействованных классов символов.
+ * Настоящий сервер считает иначе, но ступени нужны все — на них стоят ворота формы.
+ */
+function passwordStrength(password: string): PasswordStrength {
+  const classes = PASSWORD_CLASSES.filter((set) =>
+    [...password].some((c) => set.includes(c)),
+  ).length;
+  // Значение из одного алфавита не оценивается вовсе: считать там нечего.
+  if (classes <= 1) return 'NOT_RATED';
+  if (classes === 2 && password.length < 12) return 'WEAK';
+  if (classes === 2 || password.length < 12) return 'MIDDLE';
+  if (classes === 3 || password.length < 16) return 'STRONG';
+  return 'THE_BEST';
+}
+
+function generatedPassword(): string {
+  // По символу из каждого класса, остальное — вперемешку: так сгенерированное всегда THE_BEST.
+  const pick = (set: string) => set[crypto.getRandomValues(new Uint8Array(1))[0]! % set.length]!;
+  const all = PASSWORD_CLASSES.join('');
+  const chars = [
+    ...PASSWORD_CLASSES.map(pick),
+    ...Array.from({ length: GENERATED_PASSWORD_LENGTH - PASSWORD_CLASSES.length }, () => pick(all)),
+  ];
+  // Перемешивание Фишера — Йетса: без него первые четыре позиции всегда шли бы по классам.
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = crypto.getRandomValues(new Uint8Array(1))[0]! % (i + 1);
+    [chars[i], chars[j]] = [chars[j]!, chars[i]!];
+  }
+  return chars.join('');
 }
 
 function hex(len: number): string {
@@ -447,7 +505,7 @@ function linkMessage(op: MockOperation): string {
       return 'Enter one of your single-use recovery codes';
     case 'PASSWORD':
     case 'TOTP':
-      return 'Confirm the operation with your second factor';
+      return 'Confirm the operation with your 2FA method';
     default:
       // Код всегда уходит на емаил: по логину-телефону — на емаил, привязанный к аккаунту.
       return 'Enter the code sent to your email';
@@ -862,6 +920,27 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
+  // --- Оценка надёжности пароля (для формы установки пароля) ---
+  http.post(`${BASE}/v1/check/calc-password-strength`, async ({ request }) => {
+    if (MOCK_PASSWORD_STRENGTH_FAIL) {
+      return problem(500, 'Internal Server Error', 'The strength service is unavailable');
+    }
+    const body = (await request.json()) as { password?: string };
+    const password = body.password ?? '';
+    if (password.length < 8 || password.length > 32) {
+      return fieldError('ValidateError/password', 'The password must be 8 to 32 characters');
+    }
+    return HttpResponse.json({ strength: passwordStrength(password) });
+  }),
+
+  // --- Генерация пароля (помощь на форме установки) ---
+  http.post(`${BASE}/v1/check/generate-password`, () => {
+    if (MOCK_GENERATE_PASSWORD_FAIL) {
+      return problem(500, 'Internal Server Error', 'The password generator is unavailable');
+    }
+    return HttpResponse.json({ password: generatedPassword() });
+  }),
+
   // --- Шаг 1 регистрации ---
   http.post(`${BASE}/v1/signup`, async ({ request }) => {
     const body = (await request.json()) as { realm?: string; user_email?: string };
@@ -1239,7 +1318,7 @@ export const handlers = [
     }
     // Активный второй фактор не перезаписывается — сначала его нужно отключить.
     if (auth2fa !== 'NONE') {
-      return problem(409, 'Conflict', 'Two-factor protection is already on — turn it off first');
+      return problem(409, 'Conflict', '2FA is already on — turn it off first');
     }
     return HttpResponse.json(
       startSecurityOperation(
@@ -1258,7 +1337,7 @@ export const handlers = [
     const found = confirmedOperation(body.token, ['password'], wrongOperationType());
     if (found instanceof Response) return found;
     if (auth2fa !== 'NONE') {
-      return problem(409, 'Conflict', 'Two-factor protection is already on — turn it off first');
+      return problem(409, 'Conflict', '2FA is already on — turn it off first');
     }
     auth2fa = 'PASSWORD';
     operations.delete(found.token);
@@ -1269,7 +1348,7 @@ export const handlers = [
   http.post(`${BASE}/v1/security/totp`, ({ request }) => {
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
     if (auth2fa !== 'NONE') {
-      return problem(409, 'Conflict', 'Two-factor protection is already on — turn it off first');
+      return problem(409, 'Conflict', '2FA is already on — turn it off first');
     }
     return HttpResponse.json(
       startSecurityOperation(
@@ -1316,7 +1395,7 @@ export const handlers = [
       return fieldError('TOTPCodeIsIncorrect/totp_code', 'The code did not match — check the app');
     }
     if (auth2fa !== 'NONE') {
-      return problem(409, 'Conflict', 'Two-factor protection is already on — turn it off first');
+      return problem(409, 'Conflict', '2FA is already on — turn it off first');
     }
     auth2fa = 'TOTP';
     operations.delete(found.token);
@@ -1327,7 +1406,7 @@ export const handlers = [
   http.post(`${BASE}/v1/security/recovery-codes`, ({ request }) => {
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
     if (auth2fa === 'NONE') {
-      return problem(409, 'Conflict', 'Two-factor protection is off — nothing to reissue');
+      return problem(409, 'Conflict', '2FA is off — nothing to reissue');
     }
     // Перевыпуск требует оба постоянных доказательства: доступ к емаилу и второй фактор.
     return HttpResponse.json(
@@ -1347,7 +1426,7 @@ export const handlers = [
     const found = confirmedOperation(body.token, ['recovery-codes'], wrongOperationType());
     if (found instanceof Response) return found;
     if (auth2fa === 'NONE') {
-      return problem(409, 'Conflict', 'Two-factor protection is off — nothing to reissue');
+      return problem(409, 'Conflict', '2FA is off — nothing to reissue');
     }
     operations.delete(found.token);
     return HttpResponse.json({ recovery_codes: issueRecoveryCodes() });
@@ -1357,7 +1436,7 @@ export const handlers = [
   http.post(`${BASE}/v1/security/disable2fa`, ({ request }) => {
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
     if (auth2fa === 'NONE') {
-      return problem(409, 'Conflict', 'Two-factor protection is already off');
+      return problem(409, 'Conflict', '2FA is already off');
     }
     return HttpResponse.json(
       startSecurityOperation(

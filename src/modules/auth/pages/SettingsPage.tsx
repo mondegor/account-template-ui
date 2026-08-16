@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,6 +9,7 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Divider,
   FormControl,
   FormLabel,
   MenuItem,
@@ -15,7 +17,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { UiFieldMessage, uiFieldBlockSx } from '@ui';
+import { PAGE_MAX_WIDTH, UiBusyIcon, UiFieldMessage, uiFieldBlockSx } from '@ui';
 import { AppShell, LangFlag } from '@core/shell';
 import { ApiFieldError, apiErrorText } from '@core/api';
 import {
@@ -29,7 +31,9 @@ import {
   timeZoneLabel,
 } from '@core/i18n';
 import { moduleQueryKey } from '@core/module-registry';
-import { ClockIcon } from '../ui/icons';
+import { ClockIcon, GlobeIcon } from '../ui/icons';
+import { TWO_FA_ANCHOR } from '../ui/twoFaAnchor';
+import { TwoFaCard } from '../ui/TwoFaCard';
 import { changeUserSettings, getUserInfo } from '../api/authApi';
 import type { ChangeUserSettingsRequest, UserInfo, UserSettings } from '../api/types';
 
@@ -208,159 +212,182 @@ function SettingsForm({ user }: { user: UserInfo }) {
     (fieldError(name) ?? hint[name]) ? ('message' as const) : ('quiet' as const);
 
   return (
-    <Stack spacing={2} sx={{ maxWidth: 640, mx: 'auto' }}>
-      <Typography variant="h5" sx={{ fontWeight: 600 }}>
-        {p('title')}
-      </Typography>
-      <Card variant="outlined">
-        {/* Зазор под каждым блоком поля держит сам блок (uiFieldBlockSx): он вдвое меньше, когда
-            под полем показана строка, и знает об этом только он. Общего `spacing` у карточки
-            поэтому нет — иначе он складывался бы с этим отступом. */}
-        <CardContent>
-          {/* Подтверждение сохранения, а не отражение состояния сервера: показываем всегда после
-              успешного save. Живёт в состоянии мутации, поэтому уходит само при следующем заходе
-              на страницу — отдельного «закрыть» и отдельного признака с сервера для этого не нужно.
-              Единственное место, где сказано про окно применения: постоянной справки под кнопкой
-              нет, потому что оговорка нужна ровно в момент сохранения. Отсюда и часы вместо
-              галочки — сохранение удалось (severity success), но с нюансом по времени. */}
-          {save.isSuccess && (
-            <Alert
-              severity="success"
-              icon={<ClockIcon size={20} />}
-              // Плашку тесты ищут как элемент: её текст — длинная оговорка про окно применения, и
-              // поиск по нему проверял бы формулировку, а не то, что плашка появилась и ушла.
-              data-testid="settings-saved"
-              // `mb` — свой зазор до первого поля: общего `spacing` у карточки нет.
-              // Дальше — про иконку. MUI держит её у ВЕРХА сообщения (`.MuiAlert-icon` — flex с
-              // padding 7px 0), и на двухстрочном тексте она заметно повисает над первой строкой.
-              // Выравниваем по этой строке: коробке иконки задаём ровно её высоту — отступы
-              // сообщения (8px сверху и снизу) плюс сама строка (line-height body2, типографики
-              // самого Alert), — а иконку внутри ставим по центру. Свой padding при этом обнуляем,
-              // иначе он сместил бы центр. `mt` — оптическая поправка на глаз поверх геометрии:
-              // у строки визуальный центр чуть выше середины line-box (снизу висит место под
-              // выносные элементы букв).
-              sx={{
-                mb: 2,
-                '& .MuiAlert-icon': {
-                  alignItems: 'center',
-                  py: 0,
-                  height: 'calc(16px + 1.43em)',
-                  mt: '-1px',
-                },
+    <Card variant="outlined">
+      {/* Зазор под каждым блоком поля держит сам блок (uiFieldBlockSx): он вдвое меньше, когда
+          под полем показана строка, и знает об этом только он. Общего `spacing` у карточки
+          поэтому нет — иначе он складывался бы с этим отступом. */}
+      <CardContent>
+        {/* Заголовок карточки называет её предмет — язык и часовой пояс; заголовок раздела над
+            колонкой называет раздел целиком. Шапка повторяет шапку соседней карточки: обе стоят
+            на одном экране, и расходиться им нельзя. Глобус идёт брендовым тоном — цвету здесь
+            нечего означать, в отличие от щита, метящего ступень защиты. */}
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+          <Box sx={{ color: 'primary.main', display: 'flex', flexShrink: 0 }}>
+            <GlobeIcon size={22} />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            {p('regional')}
+          </Typography>
+        </Stack>
+        <Divider sx={{ mb: 1.5 }} />
+        {/* Подтверждение сохранения, а не отражение состояния сервера: показываем всегда после
+            успешного save. Живёт в состоянии мутации, поэтому уходит само при следующем заходе
+            на страницу — отдельного «закрыть» и отдельного признака с сервера для этого не нужно.
+            Единственное место, где сказано про окно применения: постоянной справки под кнопкой
+            нет, потому что оговорка нужна ровно в момент сохранения. Отсюда и часы вместо
+            галочки — сохранение удалось (severity success), но с нюансом по времени. */}
+        {save.isSuccess && (
+          <Alert
+            severity="success"
+            icon={<ClockIcon size={20} />}
+            // Плашку тесты ищут как элемент: её текст — длинная оговорка про окно применения, и
+            // поиск по нему проверял бы формулировку, а не то, что плашка появилась и ушла.
+            data-testid="settings-saved"
+            // `mb` — свой зазор до первого поля: общего `spacing` у карточки нет.
+            // Дальше — про иконку. MUI держит её у ВЕРХА сообщения (`.MuiAlert-icon` — flex с
+            // padding 7px 0), и на двухстрочном тексте она заметно повисает над первой строкой.
+            // Выравниваем по этой строке: коробке иконки задаём ровно её высоту — отступы
+            // сообщения (8px сверху и снизу) плюс сама строка (line-height body2, типографики
+            // самого Alert), — а иконку внутри ставим по центру. Свой padding при этом обнуляем,
+            // иначе он сместил бы центр. `mt` — оптическая поправка на глаз поверх геометрии:
+            // у строки визуальный центр чуть выше середины line-box (снизу висит место под
+            // выносные элементы букв).
+            sx={{
+              mb: 2,
+              '& .MuiAlert-icon': {
+                alignItems: 'center',
+                py: 0,
+                height: 'calc(16px + 1.43em)',
+                mt: '-1px',
+              },
+            }}
+          >
+            {p('saved')}
+          </Alert>
+        )}
+        <Box sx={uiFieldBlockSx(fieldGap('lang'))}>
+          <FormControl fullWidth size="small" error={Boolean(fieldError('lang'))}>
+            <FormLabel id="settings-lang-label" sx={{ fontSize: 13, mb: 0.5 }}>
+              {p('lang')}
+            </FormLabel>
+            <Select
+              labelId="settings-lang-label"
+              aria-describedby={describedBy('lang')}
+              value={lang}
+              onChange={(e) => {
+                setLang(e.target.value);
+                forgetLastSave();
               }}
             >
-              {p('saved')}
-            </Alert>
-          )}
-          <Box sx={uiFieldBlockSx(fieldGap('lang'))}>
-            <FormControl fullWidth size="small" error={Boolean(fieldError('lang'))}>
-              <FormLabel id="settings-lang-label" sx={{ fontSize: 13, mb: 0.5 }}>
-                {p('lang')}
-              </FormLabel>
-              <Select
-                labelId="settings-lang-label"
-                aria-describedby={describedBy('lang')}
-                value={lang}
-                onChange={(e) => {
-                  setLang(e.target.value);
-                  forgetLastSave();
-                }}
-              >
-                <MenuItem value={AUTO}>{p('auto')}</MenuItem>
-                {langOptions.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{
-                        alignItems: 'center',
-                      }}
-                    >
-                      <LangFlag lang={findLanguage(o.value)?.code ?? ''} />
-                      <span>{o.label}</span>
-                    </Stack>
-                  </MenuItem>
-                ))}
-              </Select>
-              {/* Отказ сервера подсказку не вытесняет, а встаёт над ней: подсказка объясняет, что
-                  это за поле, и после ошибки нужна не меньше, чем до неё. */}
-              <UiFieldMessage
-                id="settings-lang-error"
-                text={fieldError('lang')}
-                tone="error"
-                align="start"
-              />
-              <UiFieldMessage id="settings-lang-hint" text={hint.lang} align="start" />
-            </FormControl>
-          </Box>
+              <MenuItem value={AUTO}>{p('auto')}</MenuItem>
+              {langOptions.map((o) => (
+                <MenuItem key={o.value} value={o.value}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: 'center',
+                    }}
+                  >
+                    <LangFlag lang={findLanguage(o.value)?.code ?? ''} />
+                    <span>{o.label}</span>
+                  </Stack>
+                </MenuItem>
+              ))}
+            </Select>
+            {/* Отказ сервера подсказку не вытесняет, а встаёт над ней: подсказка объясняет, что
+                это за поле, и после ошибки нужна не меньше, чем до неё. */}
+            <UiFieldMessage
+              id="settings-lang-error"
+              text={fieldError('lang')}
+              tone="error"
+              align="start"
+            />
+            <UiFieldMessage id="settings-lang-hint" text={hint.lang} align="start" />
+          </FormControl>
+        </Box>
 
-          <Box sx={uiFieldBlockSx(fieldGap('tz'))}>
-            <FormControl fullWidth size="small" error={Boolean(fieldError('tz'))}>
-              <FormLabel id="settings-tz-label" sx={{ fontSize: 13, mb: 0.5 }}>
-                {p('tz')}
-              </FormLabel>
-              <Select
-                labelId="settings-tz-label"
-                aria-describedby={describedBy('tz')}
-                value={tz}
-                onChange={(e) => {
-                  setTz(e.target.value);
-                  forgetLastSave();
-                }}
-              >
-                <MenuItem value={AUTO}>{p('auto')}</MenuItem>
-                {tzOptions.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    {o.label}
-                  </MenuItem>
-                ))}
-              </Select>
-              <UiFieldMessage
-                id="settings-tz-error"
-                text={fieldError('tz')}
-                tone="error"
-                align="start"
-              />
-              <UiFieldMessage id="settings-tz-hint" text={hint.tz} align="start" />
-            </FormControl>
-          </Box>
+        <Box sx={uiFieldBlockSx(fieldGap('tz'))}>
+          <FormControl fullWidth size="small" error={Boolean(fieldError('tz'))}>
+            <FormLabel id="settings-tz-label" sx={{ fontSize: 13, mb: 0.5 }}>
+              {p('tz')}
+            </FormLabel>
+            <Select
+              labelId="settings-tz-label"
+              aria-describedby={describedBy('tz')}
+              value={tz}
+              onChange={(e) => {
+                setTz(e.target.value);
+                forgetLastSave();
+              }}
+            >
+              <MenuItem value={AUTO}>{p('auto')}</MenuItem>
+              {tzOptions.map((o) => (
+                <MenuItem key={o.value} value={o.value}>
+                  {o.label}
+                </MenuItem>
+              ))}
+            </Select>
+            <UiFieldMessage
+              id="settings-tz-error"
+              text={fieldError('tz')}
+              tone="error"
+              align="start"
+            />
+            <UiFieldMessage id="settings-tz-hint" text={hint.tz} align="start" />
+          </FormControl>
+        </Box>
 
-          {otherError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {otherError}
-            </Alert>
-          )}
-          {/* Тоже с testid: подпись собирается из имени подобранной зоны, и искать плашку по
-              тексту значило бы повторять в тесте всю подстановку. */}
-          {substituted && (
-            <Alert severity="warning" data-testid="settings-substituted" sx={{ mb: 2 }}>
-              {p('substituted', { zone: substituted })}
-            </Alert>
-          )}
+        {otherError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {otherError}
+          </Alert>
+        )}
+        {/* Тоже с testid: подпись собирается из имени подобранной зоны, и искать плашку по
+            тексту значило бы повторять в тесте всю подстановку. */}
+        {substituted && (
+          <Alert severity="warning" data-testid="settings-substituted" sx={{ mb: 2 }}>
+            {p('substituted', { zone: substituted })}
+          </Alert>
+        )}
 
+        {/* Действие карточки стоит по правому краю, как и отключение защиты в соседней: карточки
+            читаются сверху вниз и кончаются действием там, где взгляд уже оказался. Ширина у
+            кнопки своя — растянутая на всю карточку, она обещала бы больше, чем делает. На узком
+            экране растягиваем: там правый край и есть вся ширина. Размер кнопки — как у соседней:
+            рост действия говорит о его весе, и сохранение настроек не крупнее отключения защиты. */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
-            size="large"
-            // Ширину кнопке задаёт она сама: блоки полей идут в потоке, растягивать её некому.
-            fullWidth
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
             disabled={save.isPending}
             onClick={submit}
-            startIcon={save.isPending ? <CircularProgress size={20} color="inherit" /> : undefined}
+            startIcon={save.isPending ? <UiBusyIcon /> : undefined}
           >
             {p('save')}
           </Button>
-        </CardContent>
-      </Card>
-    </Stack>
+        </Box>
+      </CardContent>
+    </Card>
   );
 }
 
 export function SettingsPage() {
   const { t } = useTranslation();
+  const { hash } = useLocation();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: moduleQueryKey('auth', 'user'),
     queryFn: getUserInfo,
   });
+
+  // Пришедшие по якорю доводим до карточки сами: при переходе внутри приложения браузер по адресу
+  // не прокручивает, да и карточки в этот момент ещё нет — она приезжает вместе с профилем.
+  // Условие на сам факт данных, а не на объект: обновление профиля не повод прокручивать снова.
+  const ready = Boolean(data);
+  useEffect(() => {
+    if (!ready || hash !== `#${TWO_FA_ANCHOR}`) return;
+    document.getElementById(TWO_FA_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [hash, ready]);
 
   return (
     <AppShell>
@@ -370,14 +397,25 @@ export function SettingsPage() {
         </Box>
       )}
       {isError && (
-        <Alert severity="error" sx={{ maxWidth: 640, mx: 'auto' }}>
+        <Alert severity="error" sx={{ maxWidth: PAGE_MAX_WIDTH, mx: 'auto' }}>
           {apiErrorText(error, t)}
         </Alert>
       )}
-      {/* Без key: перемонтирование на смене профиля сбрасывало бы и плашку сохранения, и
+      {/* Заголовок и колонка карточек — здесь, а не в форме: карточек на странице несколько, и
+          общий заголовок принадлежит разделу, а не первой из них.
+
+          Без key: перемонтирование на смене профиля сбрасывало бы и плашку сохранения, и
           предупреждение о подменённой зоне — а показывать их надо как раз после сохранения.
           Новые значения профиля форма подхватывает сама, сравнением с прошлым (см. SettingsForm). */}
-      {data && <SettingsForm user={data} />}
+      {data && (
+        <Stack spacing={2} sx={{ maxWidth: PAGE_MAX_WIDTH, mx: 'auto' }}>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            {t('auth.settings.title')}
+          </Typography>
+          <SettingsForm user={data} />
+          <TwoFaCard type={data.auth_2fa_type} recoveryCodesLeft={data.recovery_codes_left} />
+        </Stack>
+      )}
     </AppShell>
   );
 }

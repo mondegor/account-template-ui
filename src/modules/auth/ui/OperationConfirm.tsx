@@ -1,6 +1,6 @@
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Link, Stack, Typography } from '@mui/material';
+import { Box, Divider, Link, Stack, Typography } from '@mui/material';
 import { UiAlert, UiButton, UiSmoothHeight } from '@ui';
 import type { ConfirmFlow } from '../hooks/useConfirmFlow';
 import {
@@ -30,6 +30,16 @@ interface OperationConfirmProps {
    * же форма служит под своим поводом, называют себя сами.
    */
   title?: string;
+  /**
+   * Глиф слева от заголовка — метка потока, та же, что у остальных экранов защиты. У подтверждения,
+   * которое называет себя само, метить нечего: поток там и есть подтверждение.
+   */
+  icon?: ReactNode;
+  /**
+   * Тон глифа. Брендовый по умолчанию — как у знака секции в профиле; цветом отказа метится поток,
+   * который защиту снимает, а не ставит.
+   */
+  iconTone?: 'primary' | 'error';
   /**
    * Префикс ключа подсказки над полем: к нему добавляется метод подтверждения текущего звена.
    * Один и тот же метод в разных потоках объясняется по-разному — пароль на входе и пароль при
@@ -97,6 +107,8 @@ const SWAP_ICON: Record<SwapMode | 'RECOVERY', (props: { size?: number }) => Rea
 export function OperationConfirm({
   flow,
   title,
+  icon,
+  iconTone = 'primary',
   hintPrefix = HINT_PREFIX,
   deadEndText,
   awaitingFinishText,
@@ -246,13 +258,23 @@ export function OperationConfirm({
         direction="row"
         sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1.5, minHeight: 28 }}
       >
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          {title ?? t('auth.confirm.title')}
-        </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+          {icon && (
+            <Box sx={{ color: `${iconTone}.main`, display: 'flex', flexShrink: 0 }}>{icon}</Box>
+          )}
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            {title ?? t('auth.confirm.title')}
+          </Typography>
+        </Stack>
         {options.length > 0 && (
           <SecretModeSwitch options={options} value={mode} onChange={onModeChange} />
         )}
       </Stack>
+      {/* Названный поток — это шапка карточки в разделе защиты, а шапки там отбиты линией; форма,
+          называющая себя подтверждением, стоит в узкой карточке входа, и отбивать ей нечего. */}
+      {/* Отступы вокруг линии повторяют шапку соседних карточек; нижний берёт в счёт отступ самой
+          подсказки, которая идёт следом. */}
+      {title && <Divider sx={{ mt: 1, mb: 1 }} />}
       {/* Сообщения разных форматов разной высоты — у пароля строка, у аварийного кода две.
           Переключение меняет высоту плавно, иначе поле и кнопка под ним скачут. */}
       <UiSmoothHeight>
@@ -332,6 +354,9 @@ export function OperationConfirm({
                   ? t('auth.confirm.requestNewCodeTimer', { time: mmss(resendLeft) })
                   : t('auth.confirm.requestNewCode')
               }
+              busy={flow.resending}
+              // Готовность держит не только полёт запроса: тут и отсчёт до следующей отправки, и
+              // её остаток, — поэтому гашение остаётся своим.
               disabled={!resendReady}
               onClick={() => void flow.resend()}
             />
@@ -340,9 +365,8 @@ export function OperationConfirm({
           <UiButton
             type="submit"
             label={t(awaitingFinish ? 'auth.confirm.retryFinish' : 'auth.confirm.submit')}
-            disabled={
-              flow.submitting || (!awaitingFinish && secret.length < SECRET_FORMAT[mode].length.min)
-            }
+            busy={flow.submitting}
+            disabled={!awaitingFinish && secret.length < SECRET_FORMAT[mode].length.min}
           />
         )}
       </Box>

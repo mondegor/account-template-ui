@@ -15,6 +15,7 @@ import { changeUserSettings, getUserInfo } from '../api/authApi';
 import type { UserInfo } from '../api/types';
 import { SettingsPage } from './SettingsPage';
 import { tr } from '../../../test/i18n';
+import { cardWith } from '../../../test/dom';
 
 /**
  * Форма настроек: что показано (префилл, плашки) и что уходит на сервер (тело запроса).
@@ -90,10 +91,11 @@ afterEach(cleanup);
 
 function renderSettings(
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  path = '/settings',
 ) {
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <SettingsPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -338,6 +340,20 @@ describe('SettingsPage', () => {
     }
   });
 
+  /** Заголовок называет саму карточку — стоит внутри неё, при полях, а не только над колонкой. */
+  it('heads the card itself: the title sits with the fields', async () => {
+    renderSettings();
+    await formReady();
+
+    const card = cardWith(tr('auth.settings.regional'));
+    expect(
+      within(card).getByRole('combobox', { name: tr('auth.settings.lang') }),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByRole('combobox', { name: tr('auth.settings.tz') }),
+    ).toBeInTheDocument();
+  });
+
   /** Отказ по полю подсказку не вытесняет: она объясняет, что это за поле, и после ошибки тоже. */
   it('an error under the field joins the hint instead of replacing it', async () => {
     vi.mocked(changeUserSettings).mockRejectedValue(
@@ -367,5 +383,37 @@ describe('SettingsPage', () => {
 
     expect(document.querySelectorAll('.MuiFormHelperText-root')).toHaveLength(1);
     expect(screen.getByText(tr('auth.settings.langHint'))).toBeInTheDocument();
+  });
+});
+
+/**
+ * Переход по якорю. Карточка защиты лежит ниже формы, а приезжает вместе с профилем — к моменту
+ * перехода прокручивать ещё некуда, поэтому страница доводит взгляд сама.
+ *
+ * jsdom прокрутки не умеет вовсе, так что подменяем её и смотрим, что именно попросили подвинуть.
+ */
+describe('SettingsPage (anchor)', () => {
+  const scrolled: Element[] = [];
+
+  beforeEach(() => {
+    scrolled.length = 0;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    };
+  });
+
+  it('brings the 2FA card into view when the address points at it', async () => {
+    renderSettings(undefined, '/settings#two-fa');
+    await formReady();
+
+    await waitFor(() => expect(scrolled).toHaveLength(1));
+    expect(scrolled[0]).toBe(document.getElementById('two-fa'));
+  });
+
+  it('leaves the page where it is without the anchor', async () => {
+    renderSettings();
+    await formReady();
+
+    expect(scrolled).toHaveLength(0);
   });
 });

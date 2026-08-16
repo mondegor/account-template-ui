@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_MOCK_2FA?: string;
   readonly VITE_MOCK_RECOVERY_CODES?: string;
   readonly VITE_MOCK_SESSION_LIMIT?: string;
+  readonly VITE_MOCK_PASSWORD_STRENGTH_FAIL?: string;
+  readonly VITE_MOCK_GENERATE_PASSWORD_FAIL?: string;
 }
 
 interface ImportMeta {

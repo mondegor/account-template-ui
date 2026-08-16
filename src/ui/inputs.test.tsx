@@ -39,6 +39,29 @@ function FieldWithHelper({ collapseHelper }: { collapseHelper?: boolean }) {
   );
 }
 
+/** Строка, которую рисует не поле, а тот, кто его поставил, — тут это литерал теста. */
+const OUTER = 'The server refused this value';
+const OUTER_ID = 'outer-message';
+
+function FieldWithOuterMessage({ helperText }: { helperText?: string }) {
+  return (
+    <>
+      <UiTextField
+        name="user_email"
+        label="Email"
+        value=""
+        onChange={() => {}}
+        error
+        collapseHelper
+        messageBelow
+        describedBy={OUTER_ID}
+        helperText={helperText}
+      />
+      <UiFieldMessage id={OUTER_ID} text={OUTER} tone="error" />
+    </>
+  );
+}
+
 /** Что диктор прочитает вместе с полем: строки всех связанных с ним узлов. */
 function describedText(field: HTMLElement) {
   return (field.getAttribute('aria-describedby') ?? '')
@@ -58,6 +81,31 @@ function PasswordField() {
       value={value}
       onChange={setValue}
       reveal={REVEAL}
+    />
+  );
+}
+
+/** Подпись и знак действия приходят пропами — тут это литералы теста. */
+const ACTION_LABEL = 'Copy password';
+
+function FieldWithAction({
+  onAction,
+  reveal,
+  disabled,
+}: {
+  onAction: () => void;
+  reveal?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <UiTextField
+      name="password"
+      label="Password"
+      type="password"
+      value="secret"
+      onChange={() => {}}
+      reveal={reveal ? REVEAL : undefined}
+      action={{ label: ACTION_LABEL, icon: <span>copy</span>, onClick: onAction, disabled }}
     />
   );
 }
@@ -114,11 +162,75 @@ describe('UiTextField', () => {
     expect(describedText(screen.getByTestId('field-user_email'))).toContain(HELPER);
   });
 
+  /**
+   * Строку рисуют и снаружи — там, где между полем и ней стоит что-то третье. Своя строка при этом
+   * старше: у поля одно описание, и оно ближайшее.
+   */
+  it('reads the message drawn outside, and its own one ahead of it', () => {
+    const { rerender } = render(<FieldWithOuterMessage />);
+    expect(describedText(screen.getByTestId('field-user_email'))).toContain(OUTER);
+
+    rerender(<FieldWithOuterMessage helperText={HELPER} />);
+    const described = describedText(screen.getByTestId('field-user_email'));
+    expect(described).toContain(HELPER);
+    expect(described).not.toContain(OUTER);
+  });
+
   /** Кнопки нет вовсе там, где её не просили: скрывать нечего у обычного поля. */
   it('has no eye without the labels for it', () => {
     render(<Field />);
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Действие над значением зовёт своё, а не показывает поле: у знака рядом с глазом должен быть
+   * свой обработчик, иначе клик по нему открывал бы пароль.
+   */
+  it('calls the action in the tail of the field', () => {
+    const onAction = vi.fn();
+    render(<FieldWithAction onAction={onAction} />);
+
+    fireEvent.click(screen.getByRole('button', { name: ACTION_LABEL }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('field-password')).toHaveAttribute('type', 'password');
+  });
+
+  /**
+   * Делать над значением бывает нечего, и тогда знак не ждёт нажатия: доступным его состояние
+   * решает вызывающий — что считать пустым значением, знает он.
+   */
+  it('the disabled action takes no clicks', () => {
+    const onAction = vi.fn();
+    render(<FieldWithAction onAction={onAction} disabled />);
+
+    const button = screen.getByRole('button', { name: ACTION_LABEL });
+    expect(button).toBeDisabled();
+
+    fireEvent.click(button);
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  /** Enter в поле обязан отправлять форму, а не запускать действие. */
+  it('the action never submits the form', () => {
+    render(<FieldWithAction onAction={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: ACTION_LABEL })).toHaveAttribute('type', 'button');
+  });
+
+  /** Глаз и действие уживаются в одном хвосте: показ значения и действие над ним независимы. */
+  it('keeps the eye next to the action', () => {
+    const onAction = vi.fn();
+    render(<FieldWithAction onAction={onAction} reveal />);
+    const field = screen.getByTestId('field-password');
+
+    fireEvent.click(screen.getByRole('button', { name: REVEAL.show }));
+    expect(field).toHaveAttribute('type', 'text');
+
+    fireEvent.click(screen.getByRole('button', { name: ACTION_LABEL }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    // Действие значения не прячет: показ им не управляется.
+    expect(field).toHaveAttribute('type', 'text');
   });
 });
 

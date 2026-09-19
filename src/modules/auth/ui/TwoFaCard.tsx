@@ -15,8 +15,9 @@ import {
 } from '@mui/material';
 import { UiBusyIcon } from '@ui';
 import { apiErrorText } from '@core/api';
-import { startDisable2fa, startRecoveryCodesReissue } from '../api/authApi';
+import { startDisable2fa, startRecoveryCodesReissue, startTotpSetup } from '../api/authApi';
 import { codesLeftLevel, codesLeftTone } from '../lib/codesLeft';
+import type { SecurityFlowKind } from '../lib/securityFlow';
 import { useStartSecurityFlow } from '../hooks/useStartSecurityFlow';
 import { LineGlyph } from './LineGlyph';
 import {
@@ -28,7 +29,7 @@ import {
 } from './icons';
 import { TWO_FA_ANCHOR } from './twoFaAnchor';
 import { TWO_FA_LADDER } from './twoFaLadder';
-import type { UserAuth2fa } from '../api/types';
+import type { UserAuth2fa, WaitingConfirmOperation } from '../api/types';
 
 /**
  * Двухфакторная защита на `/settings`: состояние `auth_2fa_type`, оба метода второго фактора и
@@ -48,14 +49,34 @@ interface Method {
   /** Ветка ключей описания метода (`auth.twoFa.method.<...>`). */
   keys: string;
   Icon: (props: { size?: number }) => ReactElement;
-  /** Куда ведёт призыв. Метода без своего экрана в шаблоне не подключить — призыва у него нет. */
+  /**
+   * Куда ведёт призыв — на экран, где у метода спрашивают то, что нужно ДО создания операции.
+   * У метода, которому спрашивать нечего, вместо адреса стоит инициатор потока.
+   */
   route?: string;
+  /**
+   * Поток начинается прямо отсюда: у инициатора нет тела, и экрана перед ним не нужно — секрет
+   * генератора создаёт сама операция. Вид потока едет вместе с инициатором: разъехавшись, они
+   * записали бы операцию не тому экрану подтверждения.
+   */
+  start?: { kind: SecurityFlowKind; run: () => Promise<WaitingConfirmOperation> };
 }
 
 const METHODS: Method[] = [
   { type: 'PASSWORD', keys: 'password', Icon: ShieldDotsIcon, route: '/security/password' },
-  { type: 'TOTP', keys: 'totp', Icon: ShieldCheckIcon },
+  {
+    type: 'TOTP',
+    keys: 'totp',
+    Icon: ShieldCheckIcon,
+    start: { kind: 'totp', run: startTotpSetup },
+  },
 ];
+
+/**
+ * Погасший вид нажатой ссылки — единственный её ответ, пока идёт начатое ею действие: своего
+ * disabled-состояния MUI ссылке не рисует, и без этого нажатие не отвечало бы ничем.
+ */
+const DIMMED_WHEN_DISABLED = { '&:disabled': { color: 'text.disabled', cursor: 'default' } };
 
 /** Как плитка себя ведёт: зовёт, помечена текущей либо затенена. */
 type TileMode = 'open' | 'current' | 'off';
@@ -79,10 +100,10 @@ export function TwoFaCard({
   // Отключение зовут двое — плитка включённого метода и кнопка внизу, — но инициатор у них один.
   const disable = () => flow.mutate({ kind: 'disable2fa', start: startDisable2fa });
 
-  /** Метод доступен, только пока защита выключена и у него есть свой экран. */
+  /** Метод доступен, только пока защита выключена и его есть чем начать. */
   const mode = (method: Method): TileMode => {
     if (method.type === type) return 'current';
-    return !on && method.route ? 'open' : 'off';
+    return !on && (method.route || method.start) ? 'open' : 'off';
   };
 
   return (
@@ -122,15 +143,19 @@ export function TwoFaCard({
             gap: 1.5,
           }}
         >
-          {METHODS.map((method) => (
-            <MethodTile
-              key={method.type}
-              method={method}
-              mode={mode(method)}
-              onDisable={disable}
-              flowPending={flow.isPending}
-            />
-          ))}
+          {METHODS.map((method) => {
+            const { start } = method;
+            return (
+              <MethodTile
+                key={method.type}
+                method={method}
+                mode={mode(method)}
+                onStart={start && (() => flow.mutate({ kind: start.kind, start: start.run }))}
+                onDisable={disable}
+                flowPending={flow.isPending}
+              />
+            );
+          })}
         </Box>
 
         {flow.error && (
@@ -183,8 +208,8 @@ export function TwoFaCard({
 
 /**
  * Предложение метода: щит и название сверху, «как работает», плюс и минус, действие по низу справа.
- * Доступный метод зовёт на свой экран, включённый предлагает себя снять, затенённому предложить
- * нечего — и различает их одно затенение.
+ * Доступный метод зовёт дальше — на свой экран либо сразу на подтверждение, если спрашивать до
+ * операции нечего, — включённый предлагает себя снять, затенённому предложить нечего.
  *
  * Отключение здесь то же самое, что и кнопка внизу карточки, и инициатор у них общий. Дубль
  * намеренный: снять можно ровно тот метод, что показан включённым, и видно это должно быть у самого
@@ -197,17 +222,25 @@ export function TwoFaCard({
 function MethodTile({
   method,
   mode,
+  onStart,
   onDisable,
   flowPending,
 }: {
   method: Method;
   mode: TileMode;
+  /** Начать подключение метода, у которого нет своего экрана. Есть ровно у такого метода. */
+  onStart?: () => void;
   /** Снять включённый метод. Плитка не в состоянии `current` его не показывает. */
   onDisable?: () => void;
   /**
-   * Действие над защитой уже идёт — второе начинать нечем. Снятие метода зовут отсюда ссылкой, и
-   * знака занятости у неё не бывает: спиннер посреди строки текста читается мусором. Ответ ссылки
-   * на нажатие — сам переход на экран подтверждения.
+   * Действие над защитой уже идёт — второе начинать нечем. Знака занятости у ссылок плитки нет ни
+   * у призыва, ни у снятия, хотя обе зовут сервер: спиннер посреди строки текста читается мусором,
+   * а рост знака занятости задан по кнопке и рядом с шевроном дёргал бы подпись. Ответ на нажатие —
+   * погасшая ссылка, а следом экран, который открывает поток.
+   *
+   * Гаснет и ссылка на свой экран метода: ответ начатого потока всё равно уводит на подтверждение,
+   * и ушедшего по ссылке он снял бы с его формы. У `<a>` выключенного состояния нет, поэтому на время
+   * потока призыв рисуется выключенной кнопкой того же вида.
    */
   flowPending?: boolean;
 }) {
@@ -216,18 +249,44 @@ function MethodTile({
   const tone = method.type === 'PASSWORD' ? 'warning' : 'success';
   const off = mode === 'off';
 
-  // Шеврон стоит только у призыва: он значит переход, а отключение никуда не ведёт.
+  // Шеврон стоит только у призыва: он значит переход, а отключение никуда не ведёт. Ведёт призыв
+  // всегда, и неважно, стоит ли за ним свой экран метода или сразу экран подтверждения.
+  const callSx = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 0.75,
+    fontWeight: 600,
+    ...DIMMED_WHEN_DISABLED,
+  };
+  const call = (
+    <>
+      {p('cta')}
+      <ChevronRightIcon size={14} />
+    </>
+  );
+
   const footer =
     mode === 'open' ? (
-      <Link
-        component={RouterLink}
-        to={method.route ?? ''}
-        variant="body2"
-        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, fontWeight: 600 }}
-      >
-        {p('cta')}
-        <ChevronRightIcon size={14} />
-      </Link>
+      method.route && flowPending ? (
+        <Link component="button" type="button" variant="body2" disabled sx={callSx}>
+          {call}
+        </Link>
+      ) : method.route ? (
+        <Link component={RouterLink} to={method.route} variant="body2" sx={callSx}>
+          {call}
+        </Link>
+      ) : (
+        <Link
+          component="button"
+          type="button"
+          variant="body2"
+          disabled={flowPending}
+          onClick={onStart}
+          sx={callSx}
+        >
+          {call}
+        </Link>
+      )
     ) : mode === 'current' && onDisable ? (
       <Link
         component="button"
@@ -236,7 +295,7 @@ function MethodTile({
         variant="body2"
         disabled={flowPending}
         onClick={onDisable}
-        sx={{ fontWeight: 600 }}
+        sx={{ fontWeight: 600, ...DIMMED_WHEN_DISABLED }}
       >
         {t('auth.twoFa.disableShort')}
       </Link>

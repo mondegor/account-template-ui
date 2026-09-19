@@ -90,11 +90,11 @@ model is spelled out in a comment in `eslint.config.js` and pinned by `src/test/
 change the rule only together with that test.
 
 Tests look UI phrases up by key — `tr('auth.profile.tz')` from `src/test/i18n.ts`, never the phrase
-itself, in any language. Lint covers these query forms: `*ByText`, `*ByLabelText`, the `name` option
-of `*ByRole`, `toHaveTextContent`, and the `cardWith`/`rowValue`/`selectValue`/`choose` helpers.
-The rest — `*ByPlaceholderText`, `*ByTitle`, `*ByDisplayValue`, `*ByAltText`,
-`toHaveAccessibleName` — the rule does not see; the first test to reach for one extends the
-selector in `eslint.config.js`. Everything a test makes up itself — fixtures, server `detail`
+itself, in any language. Lint covers these query forms: `*ByText`, `*ByLabelText`, `*ByAltText`,
+the `name` option of `*ByRole`, `toHaveTextContent`, and the
+`cardWith`/`rowValue`/`selectValue`/`choose` helpers. The rest — `*ByPlaceholderText`, `*ByTitle`,
+`*ByDisplayValue`, `toHaveAccessibleName` — the rule does not see; the first test to reach for one
+extends the selector in `eslint.config.js`. Everything a test makes up itself — fixtures, server `detail`
 values, props the component is handed — stays a literal, and those literals are English.
 
 UI tests run with the interface in **English** (`setLanguage('en')`), so expected values fall out

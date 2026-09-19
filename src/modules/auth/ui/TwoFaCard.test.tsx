@@ -7,7 +7,7 @@ import { ApiProblemError } from '@core/api';
 import { useOperationStore } from '@core/operation';
 import { tr } from '../../../test/i18n';
 import { authTranslations } from '../i18n';
-import { startDisable2fa, startRecoveryCodesReissue } from '../api/authApi';
+import { startDisable2fa, startRecoveryCodesReissue, startTotpSetup } from '../api/authApi';
 import { loadSecurityFlow } from '../lib/securityFlow';
 import type { UserAuth2fa, WaitingConfirmOperation } from '../api/types';
 import { TwoFaCard } from './TwoFaCard';
@@ -20,6 +20,7 @@ import { TwoFaCard } from './TwoFaCard';
 vi.mock('../api/authApi', () => ({
   startDisable2fa: vi.fn(),
   startRecoveryCodesReissue: vi.fn(),
+  startTotpSetup: vi.fn(),
 }));
 
 const OPERATION: WaitingConfirmOperation = {
@@ -79,6 +80,7 @@ beforeEach(() => {
   useOperationStore.getState().reset();
   vi.mocked(startRecoveryCodesReissue).mockReset().mockResolvedValue(OPERATION);
   vi.mocked(startDisable2fa).mockReset().mockResolvedValue(OPERATION);
+  vi.mocked(startTotpSetup).mockReset().mockResolvedValue(OPERATION);
 });
 
 afterEach(cleanup);
@@ -114,6 +116,45 @@ describe('TwoFaCard', () => {
     expect(
       within(passwordTile()).getByRole('link', { name: tr('auth.twoFa.method.password.cta') }),
     ).toHaveAttribute('href', '/security/password');
+  });
+
+  /**
+   * Пока поток приложения стартует, ссылка на экран пароля погашена: ответ потока увёл бы на
+   * подтверждение уже с формы пароля.
+   */
+  it('holds the password link while the totp flow is starting', async () => {
+    vi.mocked(startTotpSetup).mockReturnValue(new Promise(() => {}));
+    renderCard('NONE');
+
+    fireEvent.click(
+      within(totpTile()).getByRole('button', { name: tr('auth.twoFa.method.totp.cta') }),
+    );
+
+    await waitFor(() =>
+      expect(
+        within(passwordTile()).getByRole('button', {
+          name: tr('auth.twoFa.method.password.cta'),
+        }),
+      ).toBeDisabled(),
+    );
+    expect(within(passwordTile()).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  /**
+   * У подключения приложения спрашивать до операции нечего — секрет создаёт сама операция, — поэтому
+   * призыв начинает поток сразу, без своего экрана перед ним.
+   */
+  it('starts the totp flow straight from its tile', async () => {
+    renderCard('NONE');
+
+    fireEvent.click(
+      within(totpTile()).getByRole('button', { name: tr('auth.twoFa.method.totp.cta') }),
+    );
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/security/confirm'));
+    expect(startTotpSetup).toHaveBeenCalled();
+    expect(loadSecurityFlow()?.kind).toBe('totp');
+    expect(useOperationStore.getState().snapshot?.token).toBe(OPERATION.token);
   });
 
   /**

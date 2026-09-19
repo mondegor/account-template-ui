@@ -143,6 +143,15 @@ describe('eslint.config.js: Russian phrases in text queries', { timeout: 60000 }
     expect(msgs).toHaveLength(1);
   });
 
+  // Картинку ищут по её alt, и это тоже фраза с экрана: её читает вслух экранный диктор.
+  it('catches an alt text in a ByAltText query', async () => {
+    const msgs = await restricted(
+      "export const found = () => screen.getByAltText('QR-код с секретом');\n",
+      TEST_FILE,
+    );
+    expect(msgs).toHaveLength(1);
+  });
+
   // У ByRole фраза лежит не аргументом, а в опции `name`, — на неё нужен свой селектор, иначе
   // самая частая форма поиска кнопок прошла бы мимо запрета.
   it('catches an accessible name in a ByRole query', async () => {

@@ -52,6 +52,7 @@ vi.mock('../api/authApi', () => ({
   revokeOperation: vi.fn(),
   getUserSessions: vi.fn(),
   closeUserSessions: vi.fn(),
+  startTotpSetup: vi.fn(),
 }));
 
 const PROFILE: UserInfo = {

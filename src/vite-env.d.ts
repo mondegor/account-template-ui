@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   readonly VITE_MOCK_SESSION_LIMIT?: string;
   readonly VITE_MOCK_PASSWORD_STRENGTH_FAIL?: string;
   readonly VITE_MOCK_GENERATE_PASSWORD_FAIL?: string;
+  readonly VITE_MOCK_TOTP_QR_FAIL?: string;
+  readonly VITE_MOCK_TOTP_SECRET_FAIL?: string;
 }
 
 interface ImportMeta {

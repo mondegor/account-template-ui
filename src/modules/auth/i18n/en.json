@@ -94,6 +94,15 @@
         "awaitingFinish": "The code was accepted, but 2FA could not be turned on. No need to confirm again — just retry.",
         "invalidated": "This password setup can no longer be completed. Start it again from the settings."
       },
+      "totp": {
+        "title": "Connect the app",
+        "hint": {
+          "EMAIL": "We sent a code to your email — it confirms that you are the one connecting the app."
+        },
+        "deadEnd": "There is nothing left to confirm connecting the app with. Start it again from the settings.",
+        "awaitingFinish": "The code was accepted, but the app connection screen could not be opened. No need to confirm again — just retry.",
+        "invalidated": "Connecting the app can no longer be completed. Start it again from the settings."
+      },
       "recoveryCodes": {
         "title": "Reissue recovery codes",
         "hint": {
@@ -144,6 +153,30 @@
       "submit": "Continue",
       "cancel": "Cancel",
       "conflict": "2FA is already on — a new password can only be set after turning it off.",
+      "conflictLink": "Go to the settings"
+    },
+    "totp": {
+      "title": "Connect the app",
+      "lead": "Scan the code with an authenticator app (Google Authenticator, 1Password and the like) — or enter the secret by hand if you have nothing to scan with.",
+      "qrAlt": "QR code with the authenticator secret",
+      "qrFailed": "The QR code did not load — add the authenticator by hand",
+      "retry": "Retry",
+      "retryQr": "Retry loading the QR code",
+      "retrySecret": "Retry loading the secret",
+      "secretReveal": "Show the secret for manual entry",
+      "secretLabel": "Authenticator secret",
+      "secretLoading": "Loading the secret…",
+      "secretFailed": "Could not get the secret.",
+      "openInApp": "Open in the app",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Could not copy the secret — write it down by hand.",
+      "codeLead": "Enter the code your app shows: that is how we make sure the authenticator was added correctly.",
+      "submit": "Connect",
+      "cancel": "Cancel",
+      "gone": "This setup can no longer be completed: the authenticator blank only worked inside the operation, and that operation is gone. Start connecting again.",
+      "restart": "Start again",
+      "conflict": "Two-factor protection is already on — the app can only be connected after turning it off.",
       "conflictLink": "Go to the settings"
     },
     "codes": {
@@ -288,7 +321,8 @@
       "resendUnavailable": "Resend is not available yet",
       "finishPassword": "Could not turn 2FA on. Please try again.",
       "finishRecoveryCodes": "Could not issue new recovery codes. Please try again.",
-      "finishDisable2fa": "Could not turn 2FA off. Please try again."
+      "finishDisable2fa": "Could not turn 2FA off. Please try again.",
+      "finishTotp": "Could not open the app connection screen. Please try again."
     }
   }
 }

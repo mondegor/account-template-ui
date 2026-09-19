@@ -7,14 +7,9 @@ import {
   resendSecondsLeft,
 } from '@core/operation';
 import { useTranslation } from 'react-i18next';
-import {
-  ApiFieldError,
-  ApiProblemError,
-  ApiRateLimitError,
-  apiErrorText,
-  parseErrorCode,
-} from '@core/api';
+import { ApiFieldError, ApiProblemError, ApiRateLimitError, apiErrorText } from '@core/api';
 import { confirmOperation, resendOperation, revokeOperation } from '../api/authApi';
+import { isOperationGone } from '../lib/operationGone';
 import type { WaitingConfirmOperation } from '../api/types';
 
 interface UseConfirmFlowArgs {
@@ -34,31 +29,6 @@ interface UseConfirmFlowArgs {
    * установке пароля отправило бы искать проблему совсем не там.
    */
   finishErrorKey?: string;
-}
-
-/**
- * Причины отказа 400, после которых операции больше нет: токен неизвестен, истёк или уже
- * использован (`OperationInvalid`), вышел её срок жизни (`OperationAlreadyExpired`) либо она не
- * подтверждена, а терминальный метод уже позвали (`OperationIsNotConfirmed` — спека называет его
- * только у `POST /v1/security/apply-*`). Остальные спека называет и у подтверждения кода, и у
- * открытия сессии, и у повторной отправки. Завершить такую операцию нельзя ничем, поэтому исход
- * тот же, что у 409/403, — тупик и новая операция.
- *
- * `ConfirmCodeIsRequired/secret` (открытие сессии по не до конца подтверждённой операции) сюда
- * намеренно НЕ входит: операция цела, попытка по спеке не расходуется, а тело несёт
- * `operation_state` — снимок возвращается из `confirmed` в `active`, то есть к вводу секрета
- * текущего звена. То же и с `ResendCodeIsNotSupported/token`: по звену, которое подтверждается
- * доказательством без сообщения (второй фактор либо аварийный код), отправлять нечего — у цепочек
- * резервных методов это верно с самого первого звена, — но сама операция жива.
- */
-const TERMINAL_OPERATION_REASONS: ReadonlySet<string> = new Set([
-  'OperationInvalid',
-  'OperationAlreadyExpired',
-  'OperationIsNotConfirmed',
-]);
-
-function isOperationGone(e: ApiFieldError): boolean {
-  return e.fields.some((f) => TERMINAL_OPERATION_REASONS.has(parseErrorCode(f.code).reason));
 }
 
 /**
@@ -92,8 +62,8 @@ interface FlowFailure {
  * не сдвинув операцию ни на шаг. Поэтому вход один — confirm(secret), — но при `confirmed` он идёт
  * сразу в терминал, а secret не спрашиваем (вводить уже нечего).
  *
- * Отсюда же главное различие в разборе отказа: 429 повторяем (снимок цел), а 409, 403 и
- * TERMINAL_OPERATION_REASONS в теле 400 неисправимы — операция помечается мёртвой, и экран уводит
+ * Отсюда же главное различие в разборе отказа: 429 повторяем (снимок цел), а 409, 403 и причины
+ * `isOperationGone` в теле 400 неисправимы — операция помечается мёртвой, и экран уводит
  * на новую операцию. Ветка 409/403 обслуживает только терминалы: 409 отдают завершающие методы
  * второго фактора — `apply-password`, `apply-totp` и `apply-recovery-codes` (состояние 2FA
  * изменилось уже после создания операции), 403 — чужая операция или операция не того типа.

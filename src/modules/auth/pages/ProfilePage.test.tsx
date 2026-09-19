@@ -55,6 +55,7 @@ vi.mock('../api/authApi', () => ({
   confirmOperation: vi.fn(),
   resendOperation: vi.fn(),
   revokeOperation: vi.fn(),
+  startTotpSetup: vi.fn(),
 }));
 
 beforeAll(() => {
@@ -372,7 +373,7 @@ describe('ProfilePage (several realms)', () => {
     await screen.findByText(tr('deploy.realmLabel.account-template/standard'));
 
     const titles = [...container.querySelectorAll('.MuiCard-root')].map(
-      (card) => card.querySelector('.MuiTypography-subtitle2')?.textContent,
+      (card) => card.querySelector('.MuiTypography-subtitle1')?.textContent,
     );
     expect(titles).toEqual([
       tr('auth.profile.personalInfo'),

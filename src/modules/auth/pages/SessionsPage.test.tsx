@@ -98,6 +98,7 @@ vi.mock('../api/authApi', () => ({
   confirmOperation: vi.fn(),
   resendOperation: vi.fn(),
   revokeOperation: vi.fn(),
+  startTotpSetup: vi.fn(),
 }));
 
 beforeAll(() => {

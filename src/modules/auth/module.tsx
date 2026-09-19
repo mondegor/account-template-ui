@@ -8,6 +8,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SessionsPage } from './pages/SessionsPage';
 import { PasswordSetupPage } from './pages/PasswordSetupPage';
+import { TotpSetupPage } from './pages/TotpSetupPage';
 import { SecurityConfirmPage } from './pages/SecurityConfirmPage';
 import { RecoveryCodesPage } from './pages/RecoveryCodesPage';
 import { ConfirmOperationNode } from './ui/ConfirmOperationNode';
@@ -84,6 +85,14 @@ export const authModule: ModuleDefinition = {
       element: (
         <ProtectedRoute>
           <PasswordSetupPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/security/totp',
+      element: (
+        <ProtectedRoute>
+          <TotpSetupPage />
         </ProtectedRoute>
       ),
     },

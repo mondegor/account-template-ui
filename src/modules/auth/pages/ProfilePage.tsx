@@ -86,13 +86,13 @@ function CardHeading({
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
-            height: textLine('subtitle2'),
+            height: textLine('subtitle1'),
           }}
         >
           {icon}
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {title}
           </Typography>
           {/* Подпись — своей строкой с мелкой типографикой: иначе строку разгоняет межстрочный
@@ -110,7 +110,7 @@ function CardHeading({
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
-            height: textLine('subtitle2'),
+            height: textLine('subtitle1'),
           }}
         >
           {action}

@@ -90,6 +90,9 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  // Счётчики вызовов считает каждый тест сам: без сброса «этот метод не звали» видел бы вызовы
+  // соседнего теста.
+  vi.clearAllMocks();
   sessionStorage.clear();
   clearRecoveryCodes();
   useOperationStore.getState().reset();
@@ -209,16 +212,24 @@ describe('SecurityConfirmPage', () => {
   });
 
   /**
-   * Поток, экрана под который здесь нет (установка TOTP-генератора): вести операцию нечем, и
-   * оставленная запись гоняла бы её между /confirm и этим экраном без выхода.
+   * У подключения генератора терминала здесь нет: код с емаила операцию только подтверждает, а
+   * применяет её экран привязки — туда и уходит токен последнего звена.
    */
-  it('drops a flow it cannot run instead of leaving the record behind', async () => {
+  it('hands the confirmed token over to the totp screen instead of applying anything', async () => {
     saveSecurityFlow({ kind: 'totp' });
     useOperationStore.getState().dispatch(EMAIL_LINK);
     renderPage();
+    expect(screen.getByText(tr('auth.security.totp.title'))).toBeInTheDocument();
 
-    expect(screen.getByTestId('loc')).toHaveTextContent('/settings');
-    await waitFor(() => expect(loadSecurityFlow()).toBeNull());
-    expect(useOperationStore.getState().snapshot).toBeNull();
+    submit('183947');
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/security/totp'));
+    // Операция не применена ничем: включает 2FA уже apply-totp с кодом из приложения.
+    expect(applyPassword).not.toHaveBeenCalled();
+    expect(applyRecoveryCodes).not.toHaveBeenCalled();
+    expect(applyOperation).not.toHaveBeenCalled();
+    expect(getRecoveryCodes()).toBeNull();
+    // Запись переживает переход вместе с токеном: без неё завершать операцию нечем.
+    expect(loadSecurityFlow()).toEqual({ kind: 'totp', token: EMAIL_LINK.parts.token });
   });
 });

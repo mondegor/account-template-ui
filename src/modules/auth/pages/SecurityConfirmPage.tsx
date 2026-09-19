@@ -1,16 +1,21 @@
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useRef, type ReactElement } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useOperationStore } from '@core/operation';
 import { moduleQueryKey } from '@core/module-registry';
 import { applyOperation, applyPassword, applyRecoveryCodes } from '../api/authApi';
-import { clearSecurityFlow, loadSecurityFlow, type SecurityFlowKind } from '../lib/securityFlow';
+import {
+  clearSecurityFlow,
+  loadSecurityFlow,
+  saveSecurityFlow,
+  type SecurityFlowKind,
+} from '../lib/securityFlow';
 import { clearRecoveryCodes, setRecoveryCodes } from '../lib/recoveryCodes';
 import { useConfirmFlow } from '../hooks/useConfirmFlow';
 import { OperationConfirm } from '../ui/OperationConfirm';
 import { SecurityPage } from '../ui/SecurityPage';
-import { LifeBuoyIcon, ShieldDotsIcon, ShieldOffIcon } from '../ui/icons';
+import { LifeBuoyIcon, ShieldCheckIcon, ShieldDotsIcon, ShieldOffIcon } from '../ui/icons';
 
 /**
  * Подтверждение security-операции. Авторизованный близнец `/confirm`: экран тот же
@@ -22,9 +27,16 @@ import { LifeBuoyIcon, ShieldDotsIcon, ShieldOffIcon } from '../ui/icons';
  */
 
 interface SecurityFlowScreen {
-  /** Завершающий метод потока: токен последнего звена, секрета по спеке он уже не ждёт. */
-  terminal: (token: string) => Promise<void>;
-  /** Куда уходит закрытая операция. */
+  /**
+   * Завершающий метод потока: токен последнего звена, секрета по спеке он уже не ждёт.
+   *
+   * Его отсутствие и есть признак потока, который применяется на своём экране (`done`): код с
+   * емаила такую операцию только подтверждает, а закрывает её метод, которому нужно доказательство,
+   * собираемое там же. Тогда подтверждение передаёт дальше токен последнего звена — больше его
+   * взять неоткуда: снимок операции к тому моменту стёрт.
+   */
+  terminal?: (token: string) => Promise<void>;
+  /** Куда уходит закрытая операция — либо экран, который её применяет. */
   done: string;
   /** Ветка ключей текстов потока (`auth.security.<...>`) — заголовок, подсказки звеньев, тупики. */
   keys: string;
@@ -47,16 +59,24 @@ interface SecurityFlowScreen {
 }
 
 /**
- * Потоки, которые ведёт этот экран. Установка TOTP-генератора сюда не входит: её терминал
- * спрашивает код из приложения, то есть отдельный экран, которого в шаблоне нет.
+ * Потоки, которые ведёт этот экран, — все до единого: запись с неизвестным видом отсеивает уже
+ * `loadSecurityFlow`, поэтому экран под прочитанную запись есть всегда.
  */
-const FLOWS: Partial<Record<SecurityFlowKind, SecurityFlowScreen>> = {
+const FLOWS: Record<SecurityFlowKind, SecurityFlowScreen> = {
   password: {
     terminal: async (token) => setRecoveryCodes((await applyPassword({ token })).recovery_codes),
     done: '/security/codes',
     keys: 'password',
     finishErrorKey: 'auth.errors.finishPassword',
     icon: ShieldDotsIcon,
+  },
+  // Единственный поток без терминала: 2FA включает код из приложения, а собирает его экран привязки
+  // генератора — туда и уходит подтверждённая операция.
+  totp: {
+    done: '/security/totp',
+    keys: 'totp',
+    finishErrorKey: 'auth.errors.finishTotp',
+    icon: ShieldCheckIcon,
   },
   'recovery-codes': {
     terminal: async (token) =>
@@ -91,18 +111,6 @@ export function SecurityConfirmPage() {
   const record = loadSecurityFlow();
   const screen = record ? FLOWS[record.kind] : undefined;
 
-  // Запись есть, а экрана под её поток нет: закрыть операцию нечем, и оставленные лежать запись со
-  // снимком встречали бы человека на каждом заходе на подтверждение — /confirm отдавал бы операцию
-  // сюда, а мы уводили бы её обратно. Убираем оба, как убирает их брошенный поток; аварийные коды
-  // не трогаем — сессия жива, и набор мог быть только что выдан. Эффектом, чтобы рендер не зависел
-  // от того, сколько раз его позвали.
-  const deadFlow = Boolean(record) && !screen;
-  useEffect(() => {
-    if (!deadFlow) return;
-    clearSecurityFlow();
-    useOperationStore.getState().reset();
-  }, [deadFlow]);
-
   // Куда уходит страница, оставшаяся без снимка. Запоминается в момент закрытия операции, потому
   // что к рендеру без снимка запись потока уже стёрта, а исход у потоков разный: закрытая операция
   // уводит на свой экран, брошенная и вовсе не начатая — в настройки.
@@ -114,12 +122,21 @@ export function SecurityConfirmPage() {
       // подтверждать становится что-то. Проверка стоит потому, что хук нельзя позвать условно, а
       // отказ выбран вместо тихого пропуска: пропустив терминал, экран объявил бы закрытой
       // операцию, которую никто не применил.
-      if (!screen) throw new Error('Security flow is unknown');
-      await screen.terminal(token);
+      if (!record || !screen) throw new Error('Security flow is unknown');
+      if (screen.terminal) {
+        await screen.terminal(token);
+        return;
+      }
+      // Терминала нет — операцию применяет свой экран: кладём ему токен последнего звена. Запись
+      // потока при этом остаётся жить: до применения операция не закрыта, а закрыть её нечем, кроме
+      // этого токена.
+      saveSecurityFlow({ kind: record.kind, token });
     },
     onDone: () => {
       exitTo.current = screen?.done ?? '/settings';
-      clearSecurityFlow();
+      // Поток, который применяется дальше, унёс токен в свою запись — гасить её здесь значило бы
+      // отобрать у него операцию.
+      if (screen?.terminal) clearSecurityFlow();
       if (screen?.revokesRecoveryCodes) clearRecoveryCodes();
       // Сессии и токены завершающие методы не трогают — по спеке достаточно перечитать профиль:
       // из него берут состояние 2FA и остаток аварийных кодов и карточка настроек, и полоса профиля.
@@ -139,10 +156,11 @@ export function SecurityConfirmPage() {
   if (!snapshot) return <Navigate to={exitTo.current} replace />;
   // Записи нет — операция не наша: вход и регистрацию ведёт /confirm, и уводим мы её туда.
   if (!record) return <Navigate to="/confirm" replace />;
-  // Запись есть, а экрана под её поток нет: вести операцию нечем (её гасит эффект выше).
-  if (!screen) return <Navigate to="/settings" replace />;
 
-  const p = (key: string) => t(`auth.security.${screen.keys}.${key}`);
+  // Экран берётся из той же таблицы, что и у обработчиков выше, но своим чтением: там запись ещё
+  // могла быть пустой, здесь она уже проверена.
+  const { keys, icon: Icon, iconTone, allowRecoverySwap } = FLOWS[record.kind];
+  const p = (key: string) => t(`auth.security.${keys}.${key}`);
 
   return (
     // Шапку карточки рисует форма подтверждения, а не схема страницы: там строка заголовка делит
@@ -152,13 +170,13 @@ export function SecurityConfirmPage() {
       <OperationConfirm
         flow={flow}
         title={p('title')}
-        icon={<screen.icon size={22} />}
-        iconTone={screen.iconTone}
-        hintPrefix={`auth.security.${screen.keys}.hint`}
+        icon={<Icon size={22} />}
+        iconTone={iconTone}
+        hintPrefix={`auth.security.${keys}.hint`}
         deadEndText={p('deadEnd')}
         awaitingFinishText={p('awaitingFinish')}
         invalidatedText={p('invalidated')}
-        allowRecoverySwap={screen.allowRecoverySwap}
+        allowRecoverySwap={allowRecoverySwap}
       />
     </SecurityPage>
   );

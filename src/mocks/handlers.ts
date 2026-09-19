@@ -128,6 +128,20 @@ const MOCK_PASSWORD_STRENGTH_FAIL = import.meta.env.VITE_MOCK_PASSWORD_STRENGTH_
  */
 const MOCK_GENERATE_PASSWORD_FAIL = import.meta.env.VITE_MOCK_GENERATE_PASSWORD_FAIL === '1';
 
+/**
+ * Мок-онли: QR-код заготовки генератора отвечает `500`. Так руками видна ветка, где картинки нет:
+ * плита называет причину и предлагает повтор, а секрет строкой раскрывается сам — без него завести
+ * генератор было бы нечем.
+ */
+const MOCK_TOTP_QR_FAIL = import.meta.env.VITE_MOCK_TOTP_QR_FAIL === '1';
+
+/**
+ * Мок-онли: секрет заготовки генератора отвечает `500`. Так руками видна ветка, где не пришла
+ * вторая дорога к той же заготовке: отказ говорится строкой на месте значения — QR при этом жив, и
+ * основной путь остаётся открытым.
+ */
+const MOCK_TOTP_SECRET_FAIL = import.meta.env.VITE_MOCK_TOTP_SECRET_FAIL === '1';
+
 /** Алфавиты, из которых мок собирает пароль и по которым же считает его надёжность. */
 const PASSWORD_CLASSES = [
   'abcdefghijkmnopqrstuvwxyz',
@@ -1350,6 +1364,11 @@ export const handlers = [
     if (auth2fa !== 'NONE') {
       return problem(409, 'Conflict', '2FA is already on — turn it off first');
     }
+    // Секрет генератора рождается вместе с операцией, поэтому и код от него печатается здесь: у
+    // заготовки две ручки, и обе умеют отказывать по флагу — печатай мы из любой, ветка отказа
+    // осталась бы без кода, которым её проходят дальше.
+    // eslint-disable-next-line no-console
+    console.info(`[MSW] TOTP authenticator code: ${MOCK_TOTP_CODE}`);
     return HttpResponse.json(
       startSecurityOperation(
         request,
@@ -1366,8 +1385,9 @@ export const handlers = [
     // Токен пришёл path-параметром, поэтому суффикса поля у кодов ошибок нет.
     const found = confirmedOperation(String(params.token), ['totp'], wrongOperationType(), '');
     if (found instanceof Response) return found;
-    // eslint-disable-next-line no-console
-    console.info(`[MSW] TOTP authenticator code: ${MOCK_TOTP_CODE}`);
+    if (MOCK_TOTP_SECRET_FAIL) {
+      return problem(500, 'Internal Server Error', 'The authenticator secret is unavailable');
+    }
     return HttpResponse.json({ secret: MOCK_TOTP_SECRET, otpauth_uri: MOCK_TOTP_URI });
   }),
 
@@ -1376,6 +1396,9 @@ export const handlers = [
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
     const found = confirmedOperation(String(params.token), ['totp'], wrongOperationType(), '');
     if (found instanceof Response) return found;
+    if (MOCK_TOTP_QR_FAIL) {
+      return problem(500, 'Internal Server Error', 'The QR code service is unavailable');
+    }
     return HttpResponse.arrayBuffer(MOCK_QR_PNG.buffer as ArrayBuffer, {
       headers: { 'Content-Type': 'image/png' },
     });

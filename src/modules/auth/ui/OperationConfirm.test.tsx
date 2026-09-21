@@ -52,6 +52,7 @@ const flow: ConfirmFlow = {
   confirm: vi.fn(),
   resend: vi.fn(),
   revoke: vi.fn(),
+  leave: vi.fn(),
 };
 
 // Ветка auth.test.* — стенд под проп hintPrefix: в приложении её нет, а проверять подмену префикса
@@ -807,5 +808,67 @@ describe('OperationConfirm: the terminal texts', () => {
     render(<OperationConfirm flow={invalidated} invalidatedText={DEAD_END} />);
 
     expect(screen.getByText(REVOKED_DETAIL)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Нижняя ссылка экрана — это выход с него, и чем он оказывается, решает судьба операции. Операция,
+ * которая уход не переживает, уходит вместе с экраном: у такого потока выход один — отмена.
+ * Операция, которую сервер держит и отдаёт в профиле, ждёт возвращения, и отменять её ради ухода
+ * незачем — отмена у неё живёт там, где она ждёт.
+ */
+describe('OperationConfirm: the way out of the screen', () => {
+  const active: ConfirmFlow = {
+    ...flow,
+    snapshot: { ...snapshot, phase: 'active', remainingAttempts: 3 },
+  };
+
+  it('a flow whose operation ends with the screen offers only the cancellation', () => {
+    const revoke = vi.fn();
+    render(<OperationConfirm flow={{ ...active, revoke }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.revoke') }));
+
+    expect(revoke).toHaveBeenCalled();
+    expect(screen.queryByText(tr('auth.confirm.later'))).not.toBeInTheDocument();
+  });
+
+  it('a resumable operation is left alone instead of cancelled', () => {
+    const onLeave = vi.fn();
+    const revoke = vi.fn();
+    render(<OperationConfirm flow={{ ...active, revoke }} onLeave={onLeave} />);
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.later') }));
+
+    expect(onLeave).toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled();
+    expect(screen.queryByText(tr('auth.confirm.revoke'))).not.toBeInTheDocument();
+  });
+
+  /** Код уже принят: вводить нечего, и звать «ввести позже» было бы не за чем возвращаться. */
+  it('an accepted code turns the way out into finishing later', () => {
+    const finishing: ConfirmFlow = {
+      ...active,
+      snapshot: { ...snapshot, phase: 'confirmed' },
+      awaitingFinish: true,
+    };
+    render(<OperationConfirm flow={finishing} onLeave={vi.fn()} />);
+
+    expect(screen.getByText(tr('auth.confirm.finishLater'))).toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.confirm.later'))).not.toBeInTheDocument();
+  });
+
+  /**
+   * В тупике возвращаться не к чему: операция исчерпана, и «позже» звало бы в никуда. Отмена там
+   * не только честнее, но и полезнее — она убирает из профиля запись, которой уже нечем помочь.
+   */
+  it('a dead end falls back to the cancellation', () => {
+    const revoke = vi.fn();
+    render(<OperationConfirm flow={{ ...flow, revoke }} onLeave={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.revoke') }));
+
+    expect(revoke).toHaveBeenCalled();
+    expect(screen.queryByText(tr('auth.confirm.later'))).not.toBeInTheDocument();
   });
 });

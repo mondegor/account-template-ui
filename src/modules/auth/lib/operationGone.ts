@@ -23,6 +23,21 @@ const GONE_REASONS: ReadonlySet<string> = new Set([
   'OperationIsNotConfirmed',
 ]);
 
+/**
+ * `EmailAlreadyExists` без поля — из той же породы, хотя сама операция формально жива: смену емаила
+ * завершают `apply-email` и `apply-operation`, и этот ответ значит, что новый адрес заняли, пока шло
+ * подтверждение. Повтор ответит тем же, новый код не поможет — смену начинают заново с другим
+ * адресом.
+ *
+ * Причины выше спека называет и по звену, поэтому суффикс у них отбрасывается; здесь наоборот —
+ * сравниваем код целиком. По полю (`EmailAlreadyExists/new_email`) тот же код приходит инициатору,
+ * и это поправимый отказ формы: принять его за тупик значило бы отобрать операцию у того, кому
+ * достаточно набрать другой адрес.
+ */
+const GONE_CODES: ReadonlySet<string> = new Set(['EmailAlreadyExists']);
+
 export function isOperationGone(e: ApiFieldError): boolean {
-  return e.fields.some((f) => GONE_REASONS.has(parseErrorCode(f.code).reason));
+  return e.fields.some(
+    (f) => GONE_CODES.has(f.code) || GONE_REASONS.has(parseErrorCode(f.code).reason),
+  );
 }

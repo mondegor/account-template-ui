@@ -29,6 +29,18 @@ describe('securityFlow', () => {
     expect(loadSecurityFlow()).toEqual({ kind: 'disable2fa' });
   });
 
+  it('the value the flow sets travels with the record', () => {
+    saveSecurityFlow({ kind: 'email-confirm', value: 'new@example.com' });
+
+    expect(loadSecurityFlow()).toEqual({ kind: 'email-confirm', value: 'new@example.com' });
+  });
+
+  it('a value that is not a string is dropped, the record survives', () => {
+    sessionStorage.setItem('auth:securityFlow', JSON.stringify({ kind: 'phone', value: 42 }));
+
+    expect(loadSecurityFlow()).toEqual({ kind: 'phone' });
+  });
+
   it('clearing removes the flow marker', () => {
     saveSecurityFlow({ kind: 'password' });
     clearSecurityFlow();

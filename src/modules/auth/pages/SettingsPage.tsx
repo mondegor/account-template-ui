@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -34,6 +34,10 @@ import { moduleQueryKey } from '@core/module-registry';
 import { ClockIcon, GlobeIcon } from '../ui/icons';
 import { TWO_FA_ANCHOR } from '../ui/twoFaAnchor';
 import { TwoFaCard } from '../ui/TwoFaCard';
+import { EMAIL_ANCHOR, PHONE_ANCHOR } from '../ui/contactAnchors';
+import { EmailCard } from '../ui/EmailCard';
+import { PhoneCard } from '../ui/PhoneCard';
+import { readContactDone } from '../lib/contactResult';
 import { changeUserSettings, getUserInfo } from '../api/authApi';
 import type { ChangeUserSettingsRequest, UserInfo, UserSettings } from '../api/types';
 
@@ -372,9 +376,32 @@ function SettingsForm({ user }: { user: UserInfo }) {
   );
 }
 
+/** Карточки, к которым страница доводит взгляд по якорю адреса. */
+const ANCHORS: ReadonlySet<string> = new Set([TWO_FA_ANCHOR, EMAIL_ANCHOR, PHONE_ANCHOR]);
+
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { hash } = useLocation();
+  const { hash, pathname, search, state } = useLocation();
+  const navigate = useNavigate();
+
+  // Правка открыта не больше чем в одной карточке: открыть вторую — значит закрыть первую.
+  const [editing, setEditing] = useState<'email' | 'phone' | null>(null);
+
+  // Итог смены, с которым вернул экран подтверждения. Читается один раз и сразу снимается с записи
+  // истории: иначе перезагрузка страницы рассказала бы о смене ещё раз. Гаснет, как только начата
+  // следующая правка, — он про прошлую смену.
+  const [done, setDone] = useState(() => readContactDone(state));
+  const edit = (card: 'email' | 'phone') => {
+    setDone(undefined);
+    setEditing(card);
+  };
+  useEffect(() => {
+    // Адрес переписываем целиком, как он есть: снять нужно только состояние записи истории, а
+    // потерянная по дороге query-строка увела бы страницу с того адреса, на котором человек стоит.
+    if (readContactDone(state)) {
+      navigate({ pathname, search, hash }, { replace: true, state: null });
+    }
+  }, [state, pathname, search, hash, navigate]);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: moduleQueryKey('auth', 'user'),
     queryFn: getUserInfo,
@@ -385,8 +412,9 @@ export function SettingsPage() {
   // Условие на сам факт данных, а не на объект: обновление профиля не повод прокручивать снова.
   const ready = Boolean(data);
   useEffect(() => {
-    if (!ready || hash !== `#${TWO_FA_ANCHOR}`) return;
-    document.getElementById(TWO_FA_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const target = hash.slice(1);
+    if (!ready || !ANCHORS.has(target)) return;
+    document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [hash, ready]);
 
   return (
@@ -413,6 +441,21 @@ export function SettingsPage() {
             {t('auth.settings.title')}
           </Typography>
           <SettingsForm user={data} />
+          <EmailCard
+            user={data}
+            editing={editing === 'email'}
+            anyEditing={editing !== null}
+            onEdit={() => edit('email')}
+            onClose={() => setEditing(null)}
+            done={done === 'email'}
+          />
+          <PhoneCard
+            user={data}
+            editing={editing === 'phone'}
+            onEdit={() => edit('phone')}
+            onClose={() => setEditing(null)}
+            done={done === 'phone'}
+          />
           <TwoFaCard type={data.auth_2fa_type} recoveryCodesLeft={data.recovery_codes_left} />
         </Stack>
       )}

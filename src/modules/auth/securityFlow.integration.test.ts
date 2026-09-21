@@ -4,6 +4,7 @@ import { ApiFieldError, ApiProblemError } from '@core/api';
 import { initI18n } from '@core/i18n';
 import { resetMockState } from '@mocks/handlers';
 import {
+  applyEmail,
   applyOperation,
   applyPassword,
   applyRecoveryCodes,
@@ -13,9 +14,13 @@ import {
   getTotpSecret,
   getUserInfo,
   openSession,
+  revokeOperation,
   signin,
   startDisable2fa,
+  startEmailChange,
+  startEmailChangeByRecovery,
   startPasswordSetup,
+  startPhoneChange,
   startRecoveryCodesReissue,
   startTotpSetup,
 } from './api/authApi';
@@ -172,6 +177,130 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     const token = await confirmChain(op.token, [CODE]);
     await expect(openSession({ token })).rejects.toSatisfy(
       (e) => e instanceof ApiProblemError && e.status === 403,
+    );
+  });
+
+  it('changing the email takes two operations: the address changes only after the second', async () => {
+    const op = await startEmailChange({ new_email: 'new@example.com' });
+    expect(op.confirm_method).toBe('EMAIL');
+
+    const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
+    expect(second.confirm_method).toBe('EMAIL');
+    // Подтверждение нового адреса ждёт человека долго — порядка трёх суток, а не минуты.
+    expect(second.expires_in).toBeGreaterThan(24 * 60 * 60);
+    expect((await getUserInfo()).email).toBe('user@example.com');
+
+    await applyOperation({ token: await confirmChain(second.token, [CODE]) });
+    expect((await getUserInfo()).email).toBe('new@example.com');
+  });
+
+  /** По этой записи карточка настроек возвращает человека к вводу кода — без лишнего запроса. */
+  it('the pending confirmation of the new address is in the profile with its counters', async () => {
+    const op = await startEmailChange({ new_email: 'new@example.com' });
+    const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
+
+    const pending = (await getUserInfo()).pending_operations?.find(
+      (o) => o.type === 'CHANGE_EMAIL_CONFIRM',
+    );
+    expect(pending).toMatchObject({
+      token: second.token,
+      extra_value: 'new@example.com',
+      status: 'OPENED',
+      confirm_method: 'EMAIL',
+      remaining_attempts: second.remaining_attempts,
+      remaining_resends: second.remaining_resends,
+    });
+
+    await revokeOperation({ token: second.token });
+    const left = (await getUserInfo()).pending_operations ?? [];
+    expect(left.some((o) => o.type === 'CHANGE_EMAIL_CONFIRM')).toBe(false);
+  });
+
+  /** Профиль ищет операции по логину аккаунта, а смена емаила меняет и логин. */
+  it('a finished email change keeps the other pending operations in the profile', async () => {
+    const phone = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
+
+    const op = await startEmailChange({ new_email: 'new@example.com' });
+    const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
+    await applyOperation({ token: await confirmChain(second.token, [CODE]) });
+
+    const user = await getUserInfo();
+    expect(user.email).toBe('new@example.com');
+    expect(user.pending_operations?.find((o) => o.type === 'CHANGE_PHONE')?.token).toBe(
+      phone.token,
+    );
+  });
+
+  it('a new change closes the one still waiting for its code', async () => {
+    const first = await startEmailChange({ new_email: 'first@example.com' });
+    const firstPending = await applyEmail({ token: await confirmChain(first.token, [CODE]) });
+
+    const again = await startEmailChange({ new_email: 'second@example.com' });
+    await applyEmail({ token: await confirmChain(again.token, [CODE]) });
+
+    const pending = (await getUserInfo()).pending_operations ?? [];
+    expect(pending.filter((o) => o.type === 'CHANGE_EMAIL_CONFIRM')).toHaveLength(1);
+    await expect(confirmOperation({ token: firstPending.token, secret: CODE })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
+    );
+  });
+
+  it('with 2FA on, the first step asks for the second factor too', async () => {
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
+
+    const op = await startEmailChange({ new_email: 'new@example.com' });
+    const next = await confirmOperation({ token: op.token, secret: CODE });
+    expect(next?.confirm_method).toBe('PASSWORD');
+    // Аварийный код вместо второго фактора смена емаила не принимает.
+    await expect(confirmOperation({ token: next!.token, secret: RECOVERY_CODE })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'ConfirmCodeIsIncorrect/secret',
+    );
+  });
+
+  it('without access to the email: the second factor, a recovery code, then the new address', async () => {
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
+
+    const op = await startEmailChangeByRecovery({ new_email: 'new@example.com' });
+    expect(op.confirm_method).toBe('PASSWORD');
+    const next = await confirmOperation({ token: op.token, secret: PASSWORD });
+    expect(next?.confirm_method).toBe('RECOVERY');
+
+    const second = await applyEmail({ token: await confirmChain(next!.token, [RECOVERY_CODE]) });
+    await applyOperation({ token: await confirmChain(second.token, [CODE]) });
+    expect((await getUserInfo()).email).toBe('new@example.com');
+  });
+
+  it('without 2FA there is no email-less path', async () => {
+    await expect(startEmailChangeByRecovery({ new_email: 'new@example.com' })).rejects.toSatisfy(
+      (e) => e instanceof ApiProblemError && e.status === 409,
+    );
+  });
+
+  it('a taken or malformed email is refused under the field', async () => {
+    await expect(startEmailChange({ new_email: 'taken@example.com' })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'EmailAlreadyExists/new_email',
+    );
+    await expect(startEmailChange({ new_email: 'not-an-email' })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'ValidateError/new_email',
+    );
+  });
+
+  it('setting the phone is confirmed with the email code', async () => {
+    const op = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
+    expect(op.confirm_method).toBe('EMAIL');
+
+    await applyOperation({ token: await confirmChain(op.token, [CODE]) });
+    expect((await getUserInfo()).phone).toBe('+7 912 345 67 89');
+  });
+
+  it('a taken or malformed phone is refused under the field', async () => {
+    await expect(startPhoneChange({ new_phone: '+7 (900) 000-00-00' })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'PhoneAlreadyExists/new_phone',
+    );
+    await expect(startPhoneChange({ new_phone: '+7 999 12' })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'ValidateError/new_phone',
     );
   });
 });

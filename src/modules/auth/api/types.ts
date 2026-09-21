@@ -84,7 +84,12 @@ export type OperationStatus = 'OPENED' | 'CONFIRMED';
 
 /**
  * Незакрытая операция пользователя в его профиле: тем же токеном она подтверждается,
- * переотправляет код, отзывается и применяется завершающим методом своего потока.
+ * переотправляет код, отзывается и применяется завершающим методом своего потока. Токен — последнего
+ * звена цепочки.
+ *
+ * Операция, ждущая подтверждения (`OPENED`), несёт ещё метод текущего звена и счётчики — те же, что
+ * `WaitingConfirmOperation`: по ним снимок строится сразу, без запроса. У `CONFIRMED` их нет —
+ * подтверждать там нечего.
  */
 export interface PendingOperation {
   token: string;
@@ -93,6 +98,11 @@ export interface PendingOperation {
   extra_value?: string;
   expires_at: string;
   status: OperationStatus;
+  confirm_method?: ConfirmMethod;
+  remaining_attempts?: number;
+  /** Вместе с `resends_in` отсутствует, если повторная отправка к звену неприменима. */
+  remaining_resends?: number;
+  resends_in?: number;
 }
 
 /**
@@ -112,7 +122,7 @@ export interface UserInfo {
    */
   recovery_codes_left?: number;
   realms: UserRealm[];
-  /** Действующие операции, ожидающие подтверждения либо применения. Экрана-потребителя пока нет. */
+  /** Действующие операции, ожидающие подтверждения либо применения. */
   pending_operations?: PendingOperation[];
   /** Состояние учётной записи. Интерфейс его не показывает: распоряжается им не пользователь. */
   status: UserStatus;
@@ -148,6 +158,16 @@ export interface UserSession {
 export type OpenSessionResult =
   | { kind: 'waiting'; operation: WaitingConfirmOperation }
   | { kind: 'access'; access: SuccessAccess };
+
+/** Тело POST /v1/security/email и /email/recovery (границы 7..64). */
+export interface ChangeEmailRequest {
+  new_email: string;
+}
+
+/** Тело POST /v1/security/phone (границы строки 10..32). */
+export interface ChangePhoneRequest {
+  new_phone: string;
+}
 
 /** Тело POST /v1/security/password: пароль устанавливается вторым фактором (границы 8..32). */
 export interface ChangePasswordRequest {

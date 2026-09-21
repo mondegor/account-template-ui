@@ -13,13 +13,50 @@
 
 const KEY = 'auth:securityFlow';
 
-export type SecurityFlowKind = 'password' | 'totp' | 'recovery-codes' | 'disable2fa';
+/**
+ * Смена емаила — две операции подряд, и у каждой свой вид: первая (`email`, либо `email-recovery`
+ * без доступа к текущему адресу) доказывает владение аккаунтом, вторая (`…-confirm`) — владение
+ * новым адресом. Вторую открывает терминал первой, и вид записи меняется вместе с ней: по нему
+ * экран выбирает и тексты, и следующий терминал.
+ *
+ * К второй операции возвращаются и из профиля — из другой вкладки или с другого устройства. Каким
+ * был шаг 1, запись профиля не говорит, поэтому у возврата свой вид (`email-confirm-resume`): он
+ * ведёт себя как `email-confirm`, но ступеней не показывает — назвать пройденный путь нечем.
+ */
+export type SecurityFlowKind =
+  | 'password'
+  | 'totp'
+  | 'recovery-codes'
+  | 'disable2fa'
+  | 'email'
+  | 'email-recovery'
+  | 'email-confirm'
+  | 'email-recovery-confirm'
+  | 'email-confirm-resume'
+  | 'phone';
 
-const KINDS: readonly SecurityFlowKind[] = ['password', 'totp', 'recovery-codes', 'disable2fa'];
+const KINDS: readonly SecurityFlowKind[] = [
+  'password',
+  'totp',
+  'recovery-codes',
+  'disable2fa',
+  'email',
+  'email-recovery',
+  'email-confirm',
+  'email-recovery-confirm',
+  'email-confirm-resume',
+  'phone',
+];
 
 export interface SecurityFlowRecord {
   kind: SecurityFlowKind;
   token?: string;
+  /**
+   * Новое значение, которое поток устанавливает, — емаил или номер. Снимок операции его не несёт,
+   * а экран подтверждения называет его в подсказке: код с нового адреса иначе не отличить от кода
+   * с текущего.
+   */
+  value?: string;
 }
 
 export function saveSecurityFlow(record: SecurityFlowRecord): void {
@@ -43,6 +80,7 @@ export function loadSecurityFlow(): SecurityFlowRecord | null {
     return {
       kind: parsed.kind,
       token: typeof parsed.token === 'string' ? parsed.token : undefined,
+      value: typeof parsed.value === 'string' ? parsed.value : undefined,
     };
   } catch {
     sessionStorage.removeItem(KEY);

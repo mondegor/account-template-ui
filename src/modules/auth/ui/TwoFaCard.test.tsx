@@ -45,11 +45,11 @@ function LocationProbe() {
   return <div data-testid="loc">{useLocation().pathname}</div>;
 }
 
-function renderCard(type: UserAuth2fa, recoveryCodesLeft?: number) {
+/** Клиент кэша возвращается наружу: по нему видно, какие запросы карточка велела перечитать. */
+function renderCard(type: UserAuth2fa, recoveryCodesLeft?: number): QueryClient {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/settings']}>
         <Routes>
           <Route
@@ -61,6 +61,7 @@ function renderCard(type: UserAuth2fa, recoveryCodesLeft?: number) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return client;
 }
 
 /** Плитку ищем как элемент: по содержимому это была бы проверка формулировки, а не раскладки. */
@@ -255,5 +256,37 @@ describe('TwoFaCard', () => {
 
     expect(await screen.findByText(CONFLICT.details.detail)).toBeInTheDocument();
     expect(screen.queryByTestId('loc')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Карточка нарисована по устаревшему профилю: без перечитывания кнопка, которой отказали, осталась
+   * бы на месте и отказывала бы снова. Плашка при этом остаётся — она и объясняет перерисовку.
+   */
+  it('a 409 re-reads the profile, so the card catches up with the server', async () => {
+    vi.mocked(startDisable2fa).mockRejectedValue(CONFLICT);
+    const client = renderCard('PASSWORD', 8);
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.twoFa.disable') }));
+
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'user'] }));
+  });
+
+  it('a refusal other than 409 leaves the profile alone: the state did not change', async () => {
+    const failure = new ApiProblemError({
+      title: 'Internal Server Error',
+      status: 500,
+      detail: 'Something broke',
+      instance: '',
+      time: '',
+    });
+    vi.mocked(startDisable2fa).mockRejectedValue(failure);
+    const client = renderCard('PASSWORD', 8);
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.twoFa.disable') }));
+
+    expect(await screen.findByText(failure.details.detail)).toBeInTheDocument();
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { addTranslations, i18next, initI18n, setLanguage } from '@core/i18n';
 import { deployTranslations } from '@app';
@@ -90,14 +90,22 @@ beforeEach(async () => {
 
 afterEach(cleanup);
 
+/** Адрес, на котором стоит страница: итог смены снимается с записи истории правкой адреса. */
+function LocationProbe() {
+  const { search } = useLocation();
+  return <div data-testid="search">{search}</div>;
+}
+
 function renderSettings(
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-  path = '/settings',
+  path:
+    string | { pathname: string; search?: string; hash?: string; state?: unknown } = '/settings',
 ) {
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <SettingsPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -393,6 +401,46 @@ describe('SettingsPage', () => {
  *
  * jsdom прокрутки не умеет вовсе, так что подменяем её и смотрим, что именно попросили подвинуть.
  */
+describe('SettingsPage (email and phone)', () => {
+  it('keeps one edit open at a time: opening the phone closes the email', async () => {
+    renderSettings();
+    await formReady();
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.contacts.change') }));
+    expect(screen.getByLabelText(tr('auth.contacts.email.new'))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.contacts.add') }));
+
+    expect(screen.queryByLabelText(tr('auth.contacts.email.new'))).not.toBeInTheDocument();
+    expect(screen.getByLabelText(tr('auth.contacts.phone.field'))).toBeInTheDocument();
+  });
+
+  /** Итог — про прошлую смену: следующая правка его гасит, и закрытие правки не возвращает. */
+  it('the result the confirmation came back with goes away with the next edit', async () => {
+    renderSettings(undefined, { pathname: '/settings', state: { contactDone: 'email' } });
+    await formReady();
+    expect(screen.getByText(tr('auth.contacts.email.done'))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.contacts.change') }));
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.contacts.cancel') }));
+
+    expect(screen.queryByText(tr('auth.contacts.email.done'))).not.toBeInTheDocument();
+  });
+
+  /** С записи истории снимается только итог: адрес, на котором стоит страница, остаётся прежним. */
+  it('keeps the query string when the result is taken off the history entry', async () => {
+    renderSettings(undefined, {
+      pathname: '/settings',
+      search: '?from=email',
+      state: { contactDone: 'email' },
+    });
+    await formReady();
+
+    expect(screen.getByText(tr('auth.contacts.email.done'))).toBeInTheDocument();
+    expect(screen.getByTestId('search')).toHaveTextContent('?from=email');
+  });
+});
+
 describe('SettingsPage (anchor)', () => {
   const scrolled: Element[] = [];
 
@@ -409,6 +457,14 @@ describe('SettingsPage (anchor)', () => {
 
     await waitFor(() => expect(scrolled).toHaveLength(1));
     expect(scrolled[0]).toBe(document.getElementById('two-fa'));
+  });
+
+  it('brings the email card into view when a finished change returns to it', async () => {
+    renderSettings(undefined, '/settings#email');
+    await formReady();
+
+    await waitFor(() => expect(scrolled).toHaveLength(1));
+    expect(scrolled[0]).toBe(document.getElementById('email'));
   });
 
   it('leaves the page where it is without the anchor', async () => {

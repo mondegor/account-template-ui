@@ -9,11 +9,14 @@ import { useAuthStore } from '@core/auth';
 import { tr } from '../../../test/i18n';
 import { authTranslations } from '../i18n';
 import { fillCode } from '../../../test/dom';
+import { ApiFieldError } from '@core/api';
 import {
+  applyEmail,
   applyOperation,
   applyPassword,
   applyRecoveryCodes,
   confirmOperation,
+  revokeOperation,
 } from '../api/authApi';
 import {
   areRecoveryCodesReissued,
@@ -37,6 +40,7 @@ vi.mock('../api/authApi', () => ({
   applyPassword: vi.fn(),
   applyRecoveryCodes: vi.fn(),
   applyOperation: vi.fn(),
+  applyEmail: vi.fn(),
   startRecoveryCodesReissue: vi.fn(),
 }));
 
@@ -57,7 +61,14 @@ const EMAIL_LINK = {
 };
 
 function LocationProbe() {
-  return <div data-testid="loc">{useLocation().pathname}</div>;
+  const { pathname, hash, state } = useLocation();
+  return (
+    <>
+      <div data-testid="loc">{pathname}</div>
+      <div data-testid="hash">{hash}</div>
+      <div data-testid="state">{JSON.stringify(state)}</div>
+    </>
+  );
 }
 
 function renderPage() {
@@ -101,6 +112,7 @@ beforeEach(() => {
   vi.mocked(applyPassword).mockResolvedValue({ recovery_codes: CODES });
   vi.mocked(applyRecoveryCodes).mockResolvedValue({ recovery_codes: CODES });
   vi.mocked(applyOperation).mockResolvedValue(undefined);
+  vi.mocked(revokeOperation).mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -231,5 +243,222 @@ describe('SecurityConfirmPage', () => {
     expect(getRecoveryCodes()).toBeNull();
     // Запись переживает переход вместе с токеном: без неё завершать операцию нечем.
     expect(loadSecurityFlow()).toEqual({ kind: 'totp', token: EMAIL_LINK.parts.token });
+  });
+
+  /**
+   * Шаг 1 смены емаила кончается apply-email, который адрес ещё не меняет, а открывает подтверждение
+   * нового: экран остаётся на месте, а поток переезжает на следующий вид вместе с новым адресом.
+   */
+  it('the first email step opens the confirmation of the new address in place', async () => {
+    const NEW = {
+      ...EMAIL_LINK.parts,
+      confirm_method: 'EMAIL' as const,
+      token: 's'.repeat(64),
+      expires_in: 72 * 3600,
+    };
+    vi.mocked(applyEmail).mockResolvedValue(NEW);
+    saveSecurityFlow({ kind: 'email', value: 'new@example.com' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+    expect(screen.getByText(tr('auth.security.email.title'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.settings.title'))).toBeInTheDocument();
+
+    submit('183947');
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(tr('auth.security.emailConfirm.hint.EMAIL', { value: 'new@example.com' })),
+      ).toBeInTheDocument(),
+    );
+    expect(applyEmail).toHaveBeenCalledWith({ token: EMAIL_LINK.parts.token });
+    expect(applyOperation).not.toHaveBeenCalled();
+    expect(useOperationStore.getState().snapshot?.token).toBe(NEW.token);
+    expect(loadSecurityFlow()).toEqual({ kind: 'email-confirm', value: 'new@example.com' });
+    // Ступени сдвинулись: текущий адрес пройден, спрашивают новый.
+    expect(screen.getByText(tr('auth.security.steps.new')).closest('li')).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+  });
+
+  it('the second email step applies the change and returns to the email card with the result', async () => {
+    saveSecurityFlow({ kind: 'email-confirm', value: 'new@example.com' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+
+    submit('183947');
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/settings'));
+    expect(applyOperation).toHaveBeenCalledWith({ token: EMAIL_LINK.parts.token });
+    expect(screen.getByTestId('hash')).toHaveTextContent('#email');
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toEqual({ contactDone: 'email' });
+    expect(loadSecurityFlow()).toBeNull();
+  });
+
+  /**
+   * К шагу 2 вернулись из профиля: путь шага 1 оттуда не виден, поэтому ступеней нет — указатель
+   * с чужим путём назвал бы доказательство, которого человек не предъявлял.
+   */
+  it('the change resumed from the profile confirms the new address without steps', async () => {
+    saveSecurityFlow({ kind: 'email-confirm-resume', value: 'new@example.com' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+    expect(
+      screen.getByText(tr('auth.security.emailConfirm.hint.EMAIL', { value: 'new@example.com' })),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.security.steps.current'))).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.security.steps.factor'))).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.security.steps.new'))).not.toBeInTheDocument();
+
+    submit('183947');
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/settings'));
+    expect(applyOperation).toHaveBeenCalledWith({ token: EMAIL_LINK.parts.token });
+    expect(screen.getByTestId('hash')).toHaveTextContent('#email');
+  });
+
+  /** Адрес заняли, пока шло подтверждение: повтор ответит тем же — смену начинают заново. */
+  it('a taken address at the end is a dead end, not a retry', async () => {
+    const detail = 'This email was taken while the change was being confirmed';
+    vi.mocked(applyOperation).mockRejectedValue(
+      new ApiFieldError([{ code: 'EmailAlreadyExists', detail }], 400),
+    );
+    saveSecurityFlow({ kind: 'email-confirm', value: 'new@example.com' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+
+    submit('183947');
+
+    expect(await screen.findByText(detail)).toBeInTheDocument();
+    expect(useOperationStore.getState().snapshot?.phase).toBe('dead');
+    expect(
+      screen.queryByRole('button', { name: tr('auth.confirm.retryFinish') }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['PASSWORD', 'factor'],
+    ['RECOVERY', 'recovery'],
+  ])('the email-less change marks the current step by the link: %s', (method, step) => {
+    saveSecurityFlow({ kind: 'email-recovery', value: 'new@example.com' });
+    useOperationStore.getState().dispatch({
+      ...EMAIL_LINK,
+      parts: {
+        ...EMAIL_LINK.parts,
+        confirm_method: method,
+        remaining_resends: undefined,
+        resends_in: undefined,
+      },
+    });
+    renderPage();
+
+    expect(screen.getByText(tr(`auth.security.steps.${step}`)).closest('li')).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+  });
+
+  it('the phone flow names the number and returns to the phone card with the result', async () => {
+    saveSecurityFlow({ kind: 'phone', value: '+7 912 345 67 89' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+    expect(
+      screen.getByText(tr('auth.security.phone.hint.EMAIL', { value: '+7 912 345 67 89' })),
+    ).toBeInTheDocument();
+    // Ступень у телефона одна — указателя нет.
+    expect(screen.queryByText(tr('auth.security.steps.current'))).not.toBeInTheDocument();
+    expect(screen.queryByText(tr('auth.security.steps.new'))).not.toBeInTheDocument();
+
+    submit('183947');
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/settings'));
+    expect(screen.getByTestId('hash')).toHaveTextContent('#phone');
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toEqual({ contactDone: 'phone' });
+  });
+
+  /**
+   * Отмена возвращает туда, откуда смену начали, — к карточке. Итога при этом нет: показывать
+   * нечего, адрес остался прежним.
+   */
+  it('cancelling a contact flow returns to the card the change started from', async () => {
+    saveSecurityFlow({ kind: 'email', value: 'new@example.com' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.revoke') }));
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/settings'));
+    expect(revokeOperation).toHaveBeenCalledWith({ token: EMAIL_LINK.parts.token });
+    expect(screen.getByTestId('hash')).toHaveTextContent('#email');
+    // Итога у отмены нет: в записи истории пусто, и карточка ничего не покажет.
+    expect(JSON.parse(screen.getByTestId('state').textContent!)).toBeNull();
+    expect(loadSecurityFlow()).toBeNull();
+  });
+
+  /**
+   * Шаг 2 смены емаила уход переживает: сервер держит операцию долго и отдаёт её в профиле. Выход
+   * с экрана там не отменяет её, а оставляет ждать — и ведёт туда же, к карточке, где она видна
+   * вместе со сроком и отменой.
+   */
+  it('leaving the new-address step keeps the operation waiting', async () => {
+    saveSecurityFlow({ kind: 'email-confirm', value: 'new@example.com' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.later') }));
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/settings'));
+    expect(screen.getByTestId('hash')).toHaveTextContent('#email');
+    expect(revokeOperation).not.toHaveBeenCalled();
+    // Экран закрыт целиком: и запись потока, и снимок — иначе возврат через карточку столкнулся бы
+    // со вчерашними счётчиками.
+    expect(loadSecurityFlow()).toBeNull();
+    expect(useOperationStore.getState().snapshot).toBeNull();
+  });
+
+  /**
+   * Уход без отмены есть ровно у тех потоков, чья операция его переживает: сервер держит только
+   * подтверждение нового адреса. Операция любого другого потока уходит вместе с экраном, и выход
+   * у него один — отмена. Перечисление полное: поток, заведённый позже, попадёт в один из списков
+   * осознанно, а не по умолчанию.
+   */
+  describe.each([
+    ['email-confirm', true],
+    ['email-recovery-confirm', true],
+    ['email-confirm-resume', true],
+    ['password', false],
+    ['totp', false],
+    ['recovery-codes', false],
+    ['disable2fa', false],
+    ['email', false],
+    ['email-recovery', false],
+    ['phone', false],
+  ] as const)('the way out of %s', (kind, resumable) => {
+    it(`offers ${resumable ? 'leaving' : 'only the cancellation'}`, () => {
+      saveSecurityFlow({ kind, value: 'new@example.com' });
+      useOperationStore.getState().dispatch(EMAIL_LINK);
+      renderPage();
+
+      const leaving = screen.queryByText(tr('auth.confirm.later'));
+      const cancelling = screen.queryByText(tr('auth.confirm.revoke'));
+      expect(Boolean(leaving)).toBe(resumable);
+      expect(Boolean(cancelling)).toBe(!resumable);
+    });
+  });
+
+  /**
+   * У остальных потоков исход живёт на своём экране, и тот ждёт доведённую до конца операцию:
+   * брошенной там делать нечего, поэтому отмена уводит в настройки.
+   */
+  it('cancelling a flow with a screen of its own still leaves for the settings', async () => {
+    saveSecurityFlow({ kind: 'password' });
+    useOperationStore.getState().dispatch(EMAIL_LINK);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.revoke') }));
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/settings'));
+    expect(screen.getByTestId('hash')).toBeEmptyDOMElement();
+    expect(applyPassword).not.toHaveBeenCalled();
   });
 });

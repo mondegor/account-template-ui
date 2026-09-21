@@ -7,6 +7,7 @@ import { resetMockState } from '@mocks/handlers';
 import {
   applyOperation,
   applyPassword,
+  applyTotp,
   changeUserSettings,
   checkLogin,
   closeUserSessions,
@@ -20,6 +21,7 @@ import {
   signup,
   startDisable2fa,
   startPasswordSetup,
+  startTotpSetup,
 } from './api/authApi';
 
 /** Проходит цепочку звеньев подряд и возвращает токен ПОСЛЕДНЕГО: у каждого звена он свой. */
@@ -42,6 +44,15 @@ async function enable2fa() {
   await openSession({ token: op.token });
   const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
   await applyPassword({ token: await confirmChain(setup.token, ['183947']) });
+}
+
+/** То же, но второй фактор — генератор TOTP: привязывается кодом из приложения. */
+async function enableTotp() {
+  const op = await signin('user@example.com');
+  await confirmOperation({ token: op.token, secret: '183947' });
+  await openSession({ token: op.token });
+  const setup = await startTotpSetup();
+  await applyTotp({ token: await confirmChain(setup.token, ['183947']), totp_code: '246810' });
 }
 
 /**
@@ -192,6 +203,26 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect(factor?.resends_in).toBeUndefined();
 
     const result = await openSession({ token: factor!.token, secret: 'MockPass2026!' });
+    expect(result.kind).toBe('access');
+  });
+
+  /**
+   * Приложение у человека одно: звено TOTP ждёт тот же код, которым генератор привязывали, а код из
+   * письма там не проходит.
+   */
+  it('a sign-in with TOTP on takes the authenticator code on the second link', async () => {
+    await enableTotp();
+    useAuthStore.getState().setAnonymous();
+
+    const op = await signin('user@example.com');
+    const factor = await confirmOperation({ token: op.token, secret: '183947' });
+    expect(factor?.confirm_method).toBe('TOTP');
+
+    await expect(confirmOperation({ token: factor!.token, secret: '183947' })).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof ApiFieldError && e.fields[0]?.code === 'ConfirmCodeIsIncorrect/secret',
+    );
+    const result = await openSession({ token: factor!.token, secret: '246810' });
     expect(result.kind).toBe('access');
   });
 

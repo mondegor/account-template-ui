@@ -102,4 +102,18 @@ describe('field limits match the openapi contract', () => {
     ).toBe(true);
     expect(secretFormatLine('TOTP')).toContain(`- ${limits.totpCode.max}-`);
   });
+
+  it('new_email 7/64 (ChangeEmail)', () => {
+    expect(limits.newEmail).toEqual({ min: 7, max: 64 });
+    expect(
+      hasMinMax(schemaBlock('Auth.Security.Request.Model.ChangeEmail'), 'new_email', 7, 64),
+    ).toBe(true);
+  });
+
+  it('new_phone 10/32 (ChangePhone)', () => {
+    expect(limits.newPhone).toEqual({ min: 10, max: 32 });
+    expect(
+      hasMinMax(schemaBlock('Auth.Security.Request.Model.ChangePhone'), 'new_phone', 10, 32),
+    ).toBe(true);
+  });
 });

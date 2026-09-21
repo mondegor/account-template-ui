@@ -6,7 +6,9 @@ import type {
   ApplyByTokenRequest,
   ApplyTotpRequest,
   CalcPasswordStrengthResponse,
+  ChangeEmailRequest,
   ChangePasswordRequest,
+  ChangePhoneRequest,
   ChangeUserSettingsRequest,
   ConfirmOperationRequest,
   GeneratedPassword,
@@ -210,6 +212,41 @@ export async function closeUserSessions(sessionIds: string[]): Promise<void> {
  * без секрета. Сессий и токенов эти операции не затрагивают: после успеха достаточно перечитать
  * профиль.
  */
+
+/**
+ * Инициатор смены емаила, шаг 1: код уходит на ТЕКУЩИЙ адрес (+ звено 2FA, если она включена) —
+ * операция собирает доказательства владения аккаунтом, а не новым адресом.
+ */
+export async function startEmailChange(req: ChangeEmailRequest): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/email', req);
+  return res.data;
+}
+
+/**
+ * Тот же шаг 1 без доступа к текущему адресу: письма нет, цепочка — второй фактор и аварийный код.
+ * 409 — 2FA выключена, и смена идёт обычным путём.
+ */
+export async function startEmailChangeByRecovery(
+  req: ChangeEmailRequest,
+): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/email/recovery', req);
+  return res.data;
+}
+
+/**
+ * Завершение шага 1 смены емаила. Адрес ещё НЕ меняется: ответ — новая операция подтверждения
+ * владения новым адресом (код ушёл на него), которую закрывает `applyOperation`.
+ */
+export async function applyEmail(req: ApplyByTokenRequest): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/apply-email', req);
+  return res.data;
+}
+
+/** Инициатор установки/смены телефона: код уходит на емаил, а не на номер (+ звено 2FA). */
+export async function startPhoneChange(req: ChangePhoneRequest): Promise<WaitingConfirmOperation> {
+  const res = await authClient.post<WaitingConfirmOperation>('/v1/security/phone', req);
+  return res.data;
+}
 
 /** Инициатор: установить пароль вторым фактором. 409 — 2FA уже включена (сначала отключить). */
 export async function startPasswordSetup(

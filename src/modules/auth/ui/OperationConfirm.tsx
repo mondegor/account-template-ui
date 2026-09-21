@@ -10,6 +10,7 @@ import {
   type SecretMode,
   type SwapMode,
 } from '../lib/secretFormat';
+import { mmss } from '../lib/countdown';
 import { AuthenticatorIcon, KeyIcon, LifeBuoyIcon } from './icons';
 import { SecretInput } from './SecretInput';
 import { SecretModeSwitch, type SecretModeOption } from './SecretModeSwitch';
@@ -68,18 +69,20 @@ interface OperationConfirmProps {
    * вызывающий, который знает, какую операцию он начал.
    */
   allowRecoverySwap?: boolean;
-}
-
-/**
- * Нулём минуты дополняются только там, где отсчёт переваливает за десять минут, — у срока жизни
- * операции: иначе на переходе через десять ширина числа меняется и подпись дёргается. Отсчёты
- * повторной отправки минуты не достигают вовсе, и ведущий ноль был бы у них просто шумом.
- */
-function mmss(total: number, padMinutes = false): string {
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  const mm = padMinutes ? String(m).padStart(2, '0') : String(m);
-  return `${mm}:${String(s).padStart(2, '0')}`;
+  /**
+   * Ступени потока под шапкой — там, где кодов несколько и приходят они на разные адреса: без
+   * указателя код с нового адреса не отличить от кода с текущего.
+   */
+  steps?: ReactNode;
+  /** Значения для подсказки потока — например, адрес, на который ушёл код. */
+  hintValues?: Record<string, string>;
+  /**
+   * Уход с экрана, не трогающий операцию: она переживает закрытие — её отдаёт профиль, и ввести
+   * код можно позже. Такому потоку отмена внизу не нужна: она живёт там же, где операция ждёт,
+   * рядом с её описанием и сроком. Потоки, чья операция уходит вместе с экраном, уходить которым
+   * некуда, отмену оставляют себе.
+   */
+  onLeave?: () => void;
 }
 
 const HINT_PREFIX = 'auth.confirm.hint';
@@ -114,6 +117,9 @@ export function OperationConfirm({
   awaitingFinishText,
   invalidatedText,
   allowRecoverySwap,
+  steps,
+  hintValues,
+  onLeave,
 }: OperationConfirmProps) {
   const { t } = useTranslation();
   const [code, setCode] = useState('');
@@ -191,6 +197,9 @@ export function OperationConfirm({
         ? t('auth.confirm.exhaustedExpired')
         : t('auth.confirm.exhaustedAttempts');
   const lastResendUsed = !exhausted && !awaitingFinish && isResendApplicable && resendsLeft === 0;
+  // Уход, не трогающий операцию: он есть у потока и операции есть что ждать. Тупик сюда не входит —
+  // там ждать уже нечего.
+  const canLeave = Boolean(onLeave) && !deadEnd;
   // Что уйдёт на сервер — по нему же и меряется нижняя граница: иначе пробелы по краям включали бы
   // кнопку, а до сервера доезжало бы значение короче минимума, и попытка сгорала бы впустую.
   const secret = secretValue(mode, code);
@@ -222,6 +231,7 @@ export function OperationConfirm({
   const hint = awaitingFinish
     ? (awaitingFinishText ?? t('auth.confirm.awaitingFinish'))
     : t(`${hintPrefix}.${hintMethod}`, {
+        ...hintValues,
         defaultValue: t(`${HINT_PREFIX}.${hintMethod}`),
       });
 
@@ -275,6 +285,7 @@ export function OperationConfirm({
       {/* Отступы вокруг линии повторяют шапку соседних карточек; нижний берёт в счёт отступ самой
           подсказки, которая идёт следом. */}
       {title && <Divider sx={{ mt: 1, mb: 1 }} />}
+      {steps}
       {/* Сообщения разных форматов разной высоты — у пароля строка, у аварийного кода две.
           Переключение меняет высоту плавно, иначе поле и кнопка под ним скачут. */}
       <UiSmoothHeight>
@@ -405,10 +416,15 @@ export function OperationConfirm({
                 : t('auth.confirm.resendLink')}
             </Typography>
           ))}
+        {/* Уйти и вернуться можно, только пока операция жива: в тупике возвращаться не к чему, и
+            «позже» звало бы в никуда. Там остаётся отмена — она же убирает из профиля запись,
+            которой уже нечем помочь. Зовут уход по тому, что осталось сделать: пока код ждут —
+            ввести его, а принятому коду остаётся только довести операцию до конца. Так же
+            называет эти два состояния и карточка, куда уход ведёт. */}
         <Link
           component="button"
           type="button"
-          onClick={() => void flow.revoke()}
+          onClick={canLeave ? onLeave : () => void flow.revoke()}
           sx={{
             color: 'text.secondary',
             verticalAlign: 'baseline',
@@ -417,7 +433,9 @@ export function OperationConfirm({
             p: 0,
           }}
         >
-          {t('auth.confirm.revoke')}
+          {canLeave
+            ? t(awaitingFinish ? 'auth.confirm.finishLater' : 'auth.confirm.later')
+            : t('auth.confirm.revoke')}
         </Link>
       </Stack>
     </Box>

@@ -24,6 +24,12 @@ interface UseConfirmFlowArgs {
   onDone: () => void;
   onRevoked: () => void;
   /**
+   * Экран закрыт, а операция осталась жить на сервере: её отдаёт профиль, и вернуться к ней можно
+   * позже. Есть только у потоков, которые уход переживают, — остальным уходить некуда, и снимок
+   * такой операции гаснет вместе с экраном насовсем.
+   */
+  onLeft?: () => void;
+  /**
    * Запасной текст на случай, когда сорвался сам терминал, а сервер деталь не прислал. Он называет
    * ШАГ, на котором сорвалось, а шаг у каждого потока свой: «не удалось завершить вход» на
    * установке пароля отправило бы искать проблему совсем не там.
@@ -73,6 +79,7 @@ export function useConfirmFlow({
   terminal,
   onDone,
   onRevoked,
+  onLeft,
   finishErrorKey = 'auth.errors.finish',
 }: UseConfirmFlowArgs) {
   const { t } = useTranslation();
@@ -252,6 +259,16 @@ export function useConfirmFlow({
     onRevoked();
   }, [snapshot, reset, onRevoked]);
 
+  /**
+   * Уход с экрана без отзыва: операция остаётся на сервере и ждёт — запроса тут нет вовсе, и этим
+   * `leave` отличается от `revoke`. Снимок всё равно гасим: экран закрыт, а собрать его заново
+   * умеет тот, кто к операции возвращает, — он читает её из профиля.
+   */
+  const leave = useCallback(() => {
+    reset();
+    onLeft?.();
+  }, [reset, onLeft]);
+
   return {
     snapshot,
     error: failure?.text ?? null,
@@ -270,6 +287,7 @@ export function useConfirmFlow({
     confirm,
     resend,
     revoke,
+    leave,
   };
 }
 

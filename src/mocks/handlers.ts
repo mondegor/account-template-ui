@@ -10,7 +10,9 @@ import {
 import { isoIn, matchHeaderTz } from './serverTime';
 import type {
   ConfirmMethod,
+  OperationType,
   PasswordStrength,
+  PendingOperation,
   SuccessAccess,
   UserAuth2fa,
   UserInfo,
@@ -142,6 +144,22 @@ const MOCK_TOTP_QR_FAIL = import.meta.env.VITE_MOCK_TOTP_QR_FAIL === '1';
  */
 const MOCK_TOTP_SECRET_FAIL = import.meta.env.VITE_MOCK_TOTP_SECRET_FAIL === '1';
 
+/**
+ * Новый адрес заняли, пока шла смена емаила: VITE_MOCK_EMAIL_CONFLICT=1 — применение второй операции
+ * (`apply-operation`) отвечает `EmailAlreadyExists`. Руками эту гонку не воспроизвести: адрес
+ * проверяется ещё при создании операции.
+ */
+const MOCK_EMAIL_CONFLICT = import.meta.env.VITE_MOCK_EMAIL_CONFLICT === '1';
+
+/**
+ * Зарезервированный занятый номер — пара к `taken@example.com`: `POST /v1/security/phone` отвечает
+ * на него `PhoneAlreadyExists`. Сравнение по цифрам, запись номера роли не играет.
+ */
+const TAKEN_PHONE = '+7 900 000 00 00';
+
+/** Срок второй операции смены емаила: она ждёт человека, пока тот доберётся до новой почты. */
+const EMAIL_CONFIRM_TTL_SEC = 72 * 60 * 60;
+
 /** Алфавиты, из которых мок собирает пароль и по которым же считает его надёжность. */
 const PASSWORD_CLASSES = [
   'abcdefghijkmnopqrstuvwxyz',
@@ -159,7 +177,16 @@ const GENERATED_PASSWORD_LENGTH = 16;
  * для него это тип, которого развёртывание не поддерживает.
  */
 type MockOperationKind =
-  'signin' | 'signup' | 'password' | 'totp' | 'recovery-codes' | 'disable2fa';
+  | 'signin'
+  | 'signup'
+  | 'password'
+  | 'totp'
+  | 'recovery-codes'
+  | 'disable2fa'
+  | 'email'
+  | 'email-recovery'
+  | 'email-confirm'
+  | 'phone';
 
 interface MockOperation {
   token: string;
@@ -185,6 +212,8 @@ interface MockOperation {
   createdAt: number;
   /** Цепочка пройдена целиком — операции остаётся только терминальное действие. */
   confirmed: boolean;
+  /** Новое значение, которое операция устанавливает: емаил или номер. */
+  value?: string;
   /** Мок-онли (MOCK_SESSION_LIMIT): лимит сессий срабатывает по операции ровно один раз. */
   sessionLimitHit?: boolean;
 }
@@ -428,8 +457,9 @@ function isResendable(method: ConfirmMethod): boolean {
 
 /**
  * Что вводить на текущем звене. Свой секрет у аварийного кода и у пароля — каждый в своём формате:
- * форма меряет звено по нему же и короткое значение до сервера не пустит. Остальные звенья мок
- * не различает: и код из сообщения, и код из TOTP-приложения он принимает один и тот же.
+ * форма меряет звено по нему же и короткое значение до сервера не пустит. Код TOTP — тот же, что
+ * принимает привязка генератора: приложение у человека одно, и выдавать ему два разных кода мок
+ * не должен. Коды из сообщений (EMAIL, PHONE) мок не различает — у них один общий код.
  */
 function expectedSecret(op: MockOperation): string {
   switch (currentMethod(op)) {
@@ -437,6 +467,8 @@ function expectedSecret(op: MockOperation): string {
       return MOCK_RECOVERY_CODE;
     case 'PASSWORD':
       return MOCK_PASSWORD;
+    case 'TOTP':
+      return MOCK_TOTP_CODE;
     default:
       return MOCK_CODE;
   }
@@ -575,6 +607,12 @@ function startSecurityOperation(
   kind: MockOperationKind,
   chain: ConfirmMethod[],
   message: string,
+  extra: {
+    value?: string;
+    expiresInSec?: number;
+    /** Кому уходит код первого звена, если не на текущий емаил (шаг 2 смены емаила). */
+    recipient?: string;
+  } = {},
 ): WaitingConfirmOperation {
   const op: MockOperation = {
     token: hex(64),
@@ -587,14 +625,105 @@ function startSecurityOperation(
     remainingAttempts: 3,
     remainingResends: 2,
     resendsInSec: 30,
-    expiresInSec: 600,
+    expiresInSec: extra.expiresInSec ?? 600,
     createdAt: Date.now(),
     confirmed: false,
+    value: extra.value,
   };
   operations.set(op.token, op);
   // eslint-disable-next-line no-console
-  console.info(`[MSW] ${currentMethod(op)} secret for ${op.login}: ${expectedSecret(op)}`);
+  console.info(
+    `[MSW] ${currentMethod(op)} secret for ${extra.recipient ?? op.login}: ${expectedSecret(op)}`,
+  );
   return waiting(op, message);
+}
+
+/** Цепочка security-операции: код на емаил и, если 2FA включена, её звено. */
+function emailAndFactor(): ConfirmMethod[] {
+  return auth2fa === 'NONE' ? ['EMAIL'] : ['EMAIL', factorLink()];
+}
+
+/** Отказ схемы нового емаила; `null` — адрес проходит. */
+function newEmailError(email: string): Response | null {
+  if (email.length < 7 || email.length > 64 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return fieldError('ValidateError/new_email', 'Enter an email like name@example.com');
+  }
+  return null;
+}
+
+function digitsOf(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+/**
+ * Номер проходит схему, если это строка 10..32 знаков из цифр, пробелов, скобок и дефисов с
+ * необязательным `+` впереди, а цифр в ней столько, сколько бывает в номере (10..15).
+ */
+function newPhoneError(phone: string): Response | null {
+  const digits = digitsOf(phone).length;
+  if (
+    phone.length < 10 ||
+    phone.length > 32 ||
+    !/^\+?[\d\s()-]+$/.test(phone) ||
+    digits < 10 ||
+    digits > 15
+  ) {
+    return fieldError('ValidateError/new_phone', 'Enter a valid phone number');
+  }
+  return null;
+}
+
+/**
+ * Записи пользователя по логину. Каждая сессия держит свою копию профиля, поэтому смена адреса или
+ * номера проходит по всем — иначе соседняя вкладка показывала бы старое значение.
+ */
+function usersByEmail(email: string): UserInfo[] {
+  return [...new Set(userByAccess.values())].filter((u) => u.email === email);
+}
+
+/** Тип операции в профиле по её виду; вход и регистрация профилю не принадлежат. */
+const PENDING_TYPES: Partial<Record<MockOperationKind, OperationType>> = {
+  email: 'CHANGE_EMAIL',
+  'email-recovery': 'CHANGE_EMAIL',
+  'email-confirm': 'CHANGE_EMAIL_CONFIRM',
+  phone: 'CHANGE_PHONE',
+  password: 'CHANGE_PASSWORD',
+  totp: 'CHANGE_TOTP',
+  'recovery-codes': 'REGENERATE_RECOVERY',
+  disable2fa: 'DISABLE_2FA',
+};
+
+/**
+ * Незакрытые операции пользователя — как их отдаёт профиль. У ждущей подтверждения — метод звена и
+ * счётчики по тем же правилам, что в waiting(); у подтверждённой их нет. Новое значение
+ * (`extra_value`) спека показывает только у смены адреса.
+ */
+function pendingOperations(email: string, tz: string): PendingOperation[] {
+  const list: PendingOperation[] = [];
+  for (const op of operations.values()) {
+    const type = PENDING_TYPES[op.kind];
+    if (!type || op.login !== email || expiresLeftSec(op) <= 0) continue;
+    const method = currentMethod(op);
+    list.push({
+      token: op.token,
+      type,
+      ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM'
+        ? { extra_value: op.value }
+        : {}),
+      expires_at: isoIn(new Date(op.createdAt + op.expiresInSec * 1000).toISOString(), tz),
+      status: op.confirmed ? 'CONFIRMED' : 'OPENED',
+      ...(op.confirmed
+        ? {}
+        : {
+            confirm_method: method,
+            remaining_attempts: op.remainingAttempts,
+            ...(isResendable(method)
+              ? { remaining_resends: op.remainingResends, resends_in: op.resendsInSec }
+              : {}),
+          }),
+    });
+  }
+  return list;
 }
 
 function buildUser(op: MockOperation): UserInfo {
@@ -810,6 +939,7 @@ function userIn(user: UserInfo, request: Request): UserInfo {
     // Аварийные коды существуют только при включённой 2FA — без неё поля в ответе нет вовсе
     // (отсутствие поля клиент трактует как «показывать нечего», а не как ноль).
     ...(auth2fa === 'NONE' ? {} : { recovery_codes_left: recoveryCodesLeft }),
+    pending_operations: pendingOperations(user.email, tz),
     realms: user.realms.map((r) => ({
       ...r,
       created_at: isoIn(r.created_at, tz),
@@ -1471,21 +1601,142 @@ export const handlers = [
     );
   }),
 
+  // --- Смена емаила, шаг 1: код на текущий адрес ---
+  http.post(`${BASE}/v1/security/email`, async ({ request }) => {
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
+    const body = (await request.json().catch(() => null)) as { new_email?: string } | null;
+    const email = (body?.new_email ?? '').trim();
+    const invalid = newEmailError(email);
+    if (invalid) return invalid;
+    if (email.toLowerCase() === 'taken@example.com') {
+      return fieldError(
+        'EmailAlreadyExists/new_email',
+        'This email is already used by another user',
+      );
+    }
+    return HttpResponse.json(
+      startSecurityOperation(
+        request,
+        'email',
+        emailAndFactor(),
+        'To change your email, enter the code sent to your current email',
+        { value: email },
+      ),
+    );
+  }),
+
+  // --- Смена емаила без доступа к нему: второй фактор и аварийный код, письма нет ---
+  http.post(`${BASE}/v1/security/email/recovery`, async ({ request }) => {
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
+    const body = (await request.json().catch(() => null)) as { new_email?: string } | null;
+    const email = (body?.new_email ?? '').trim();
+    const invalid = newEmailError(email);
+    if (invalid) return invalid;
+    if (email.toLowerCase() === 'taken@example.com') {
+      return fieldError(
+        'EmailAlreadyExists/new_email',
+        'This email is already used by another user',
+      );
+    }
+    if (auth2fa === 'NONE') {
+      return problem(409, 'Conflict', '2FA is off — change the email with a code sent to it');
+    }
+    return HttpResponse.json(
+      startSecurityOperation(
+        request,
+        'email-recovery',
+        [factorLink(), 'RECOVERY'],
+        'To change your email, confirm it with your 2FA method',
+        { value: email },
+      ),
+    );
+  }),
+
+  // --- Смена емаила, между шагами: код уходит на новый адрес, сам адрес пока прежний ---
+  http.post(`${BASE}/v1/security/apply-email`, async ({ request }) => {
+    const user = authUser(request);
+    if (!user) return problem(401, 'Unauthorized', 'Authorization required');
+    const body = (await request.json()) as { token?: string };
+    const found = confirmedOperation(body.token, ['email', 'email-recovery'], wrongOperationType());
+    if (found instanceof Response) return found;
+    operations.delete(found.token);
+    // Вторая операция у аккаунта одна: новая закрывает прежнюю.
+    for (const op of operations.values()) {
+      if (op.kind === 'email-confirm' && op.login === found.login) operations.delete(op.token);
+    }
+    // eslint-disable-next-line no-console
+    console.info(`[MSW] Notice to ${found.login}: an email change to ${found.value} was requested`);
+    return HttpResponse.json(
+      startSecurityOperation(
+        request,
+        'email-confirm',
+        ['EMAIL'],
+        'Enter the code sent to your new email',
+        { value: found.value, expiresInSec: EMAIL_CONFIRM_TTL_SEC, recipient: found.value },
+      ),
+    );
+  }),
+
+  // --- Установка/смена телефона: код на емаил, а не на номер ---
+  http.post(`${BASE}/v1/security/phone`, async ({ request }) => {
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
+    const body = (await request.json().catch(() => null)) as { new_phone?: string } | null;
+    const phone = (body?.new_phone ?? '').trim();
+    const invalid = newPhoneError(phone);
+    if (invalid) return invalid;
+    if (digitsOf(phone) === digitsOf(TAKEN_PHONE)) {
+      return fieldError(
+        'PhoneAlreadyExists/new_phone',
+        'This phone number is already used by another user',
+      );
+    }
+    return HttpResponse.json(
+      startSecurityOperation(
+        request,
+        'phone',
+        emailAndFactor(),
+        'To save the phone number, enter the code sent to your email',
+        { value: phone },
+      ),
+    );
+  }),
+
   // --- Универсальное завершение операции ---
   http.post(`${BASE}/v1/security/apply-operation`, async ({ request }) => {
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
     const body = (await request.json()) as { token?: string };
-    // Этим методом закрываются операции, у которых нет своего `apply-*`; у мока такая одна —
-    // отключение 2FA. Тип, которого развёртывание не поддерживает, спека относит к ошибке
-    // конфигурации сервера, а не к отказу по правам, — отсюда 500, а не 403.
+    // Этим методом закрываются операции, у которых нет своего `apply-*`: отключение 2FA, смена
+    // телефона и вторая операция смены емаила. Тип, которого развёртывание не поддерживает, спека
+    // относит к ошибке конфигурации сервера, а не к отказу по правам, — отсюда 500, а не 403.
     const found = confirmedOperation(
       body.token,
-      ['disable2fa'],
+      ['disable2fa', 'email-confirm', 'phone'],
       problem(500, 'Internal Server Error', 'An operation of this type is not supported'),
     );
     if (found instanceof Response) return found;
-    auth2fa = 'NONE';
     operations.delete(found.token);
+    if (found.kind === 'email-confirm') {
+      // Ошибка без поля: в запросе только токен.
+      if (MOCK_EMAIL_CONFLICT) {
+        return fieldError(
+          'EmailAlreadyExists',
+          'This email was taken while the change was being confirmed — start over',
+        );
+      }
+      const changed = found.value ?? found.login;
+      for (const user of usersByEmail(found.login)) user.email = changed;
+      // Операции аккаунта профиль ищет по логину: вместе с адресом переезжают и они, иначе
+      // начатая смена телефона пропала бы из профиля вслед за сменой емаила.
+      for (const op of operations.values()) if (op.login === found.login) op.login = changed;
+      // eslint-disable-next-line no-console
+      console.info(`[MSW] Notice to ${found.login}: the email was changed to ${found.value}`);
+    } else if (found.kind === 'phone') {
+      for (const user of usersByEmail(found.login)) user.phone = found.value;
+      // eslint-disable-next-line no-console
+      console.info(`[MSW] Notice to ${found.login}: the phone number was set to ${found.value}`);
+    } else {
+      auth2fa = 'NONE';
+    }
     return new HttpResponse(null, { status: 204 });
   }),
 ];

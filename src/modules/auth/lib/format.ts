@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatDate, formatDateTimeLong, toLocale } from '@core/i18n';
+import { formatDate, formatDateTimeBare, formatDateTimeLong, toLocale } from '@core/i18n';
 
 /** Форматирование дат профиля/сессий. Локаль — активного языка (ru → ru-RU, en → en-US). */
 
@@ -18,6 +18,16 @@ export function fmtLong(dt: string | undefined, locale: string, timeZone?: strin
   if (!dt) return '';
   const d = new Date(dt);
   return Number.isNaN(d.getTime()) ? dt : formatDateTimeLong(d, locale, timeZone);
+}
+
+/**
+ * Срок после предлога («до {{date}}»): дата словами и время без связки между ними; пустое → '',
+ * битое — как есть.
+ */
+export function fmtDeadline(dt: string | undefined, locale: string, timeZone?: string): string {
+  if (!dt) return '';
+  const d = new Date(dt);
+  return Number.isNaN(d.getTime()) ? dt : formatDateTimeBare(d, locale, timeZone);
 }
 
 /** Только дата; пустое → '' (прочерк ставит Row), битое — как есть. */

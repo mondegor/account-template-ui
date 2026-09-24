@@ -273,6 +273,10 @@ function TotpSetup({ token }: { token: string }) {
         </>
       ) : (
         <Box component="form" onSubmit={submit} noValidate>
+          {/* Сначала — что изменится: 2FA включает нажатие внизу, и сказать об этом нужно до него. */}
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+            {p('intro')}
+          </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
             {p('lead')}
           </Typography>

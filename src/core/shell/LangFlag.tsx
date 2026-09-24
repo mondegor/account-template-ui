@@ -10,10 +10,8 @@ import { Box } from '@mui/material';
  * нечем, кроме SVG. Для языка без флага возвращаем null — лучше пусто, чем чужой флаг.
  */
 export function LangFlag({ lang }: { lang: string }) {
-  // Уникальные id clipPath — иначе при двух флагах на странице (топбар + профиль) дубли id в DOM.
-  const rawId = useId();
-  const clipS = `${rawId}-s`;
-  const clipT = `${rawId}-t`;
+  // Уникальный id паттерна — иначе при двух флагах на странице (топбар + профиль) дубли id в DOM.
+  const starsId = `${useId()}-stars`;
   const sx = { width: 18, height: 12, borderRadius: '2px', display: 'block', flexShrink: 0 };
   if (lang === 'ru') {
     return (
@@ -29,26 +27,22 @@ export function LangFlag({ lang }: { lang: string }) {
   if (lang === 'en') {
     return (
       <FlagBox>
-        {/* Union Jack (Великобритания) — компактный стандартный путь. */}
-        <Box component="svg" viewBox="0 0 60 30" sx={sx}>
-          <clipPath id={clipS}>
-            <path d="M0,0 v30 h60 v-30 z" />
-          </clipPath>
-          <clipPath id={clipT}>
-            <path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z" />
-          </clipPath>
-          <g clipPath={`url(#${clipS})`}>
-            <path d="M0,0 v30 h60 v-30 z" fill="#012169" />
-            <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" strokeWidth="6" />
-            <path
-              d="M0,0 L60,30 M60,0 L0,30"
-              clipPath={`url(#${clipT})`}
-              stroke="#c8102e"
-              strokeWidth="4"
-            />
-            <path d="M30,0 v30 M0,15 h60" stroke="#fff" strokeWidth="10" />
-            <path d="M30,0 v30 M0,15 h60" stroke="#c8102e" strokeWidth="6" />
-          </g>
+        {/* Флаг США: пропорция 1.9:1 растянута на ту же плашку 3:2, что у остальных флагов.
+            Звёзды на крыже шириной ~7px неразличимы — вместо них сетка белых точек. */}
+        <Box component="svg" viewBox="0 0 19 10" preserveAspectRatio="none" sx={sx}>
+          <defs>
+            <pattern id={starsId} width="1.267" height="0.897" patternUnits="userSpaceOnUse">
+              <circle cx="0.633" cy="0.449" r="0.2" fill="#fff" />
+            </pattern>
+          </defs>
+          <rect width="19" height="10" fill="#b22234" />
+          <path
+            d="M0,1.154 h19 M0,2.692 h19 M0,4.231 h19 M0,5.769 h19 M0,7.308 h19 M0,8.846 h19"
+            stroke="#fff"
+            strokeWidth="0.769"
+          />
+          <rect width="7.6" height="5.385" fill="#3c3b6e" />
+          <rect width="7.6" height="5.385" fill={`url(#${starsId})`} />
         </Box>
       </FlagBox>
     );

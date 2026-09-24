@@ -112,6 +112,13 @@ describe('TotpSetupPage', () => {
     expect(getTotpQrCode).not.toHaveBeenCalled();
   });
 
+  /** Что изменится после подключения, сказано до кнопки, которая 2FA и включает. */
+  it('says what changes before anything is scanned', async () => {
+    renderPage();
+
+    expect(await screen.findByText(tr('auth.totp.intro'))).toBeInTheDocument();
+  });
+
   /**
    * Основной путь — отсканировать код. Секрет строкой стоит за ссылкой, и до нажатия запрос за ним
    * не уходит вовсе: показанный секрет это ещё один путь его утечки.

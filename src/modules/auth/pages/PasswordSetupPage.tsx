@@ -12,7 +12,7 @@ import { usePasswordStrength } from '../hooks/usePasswordStrength';
 import { useStartSecurityFlow } from '../hooks/useStartSecurityFlow';
 import { SecurityPage } from '../ui/SecurityPage';
 import { StrengthMeter } from '../ui/StrengthMeter';
-import { CheckIcon, CopyIcon, ShieldDotsIcon } from '../ui/icons';
+import { CheckIcon, CopyIcon, ShieldDotsIcon, WandIcon } from '../ui/icons';
 import type { PasswordStrength } from '../api/types';
 
 /**
@@ -235,8 +235,20 @@ export function PasswordSetupPage() {
                 type="button"
                 disabled={generate.isPending}
                 onClick={() => generate.mutate()}
-                sx={{ flexShrink: 0, fontSize: 12, verticalAlign: 'baseline', p: 0 }}
+                sx={{
+                  flexShrink: 0,
+                  display: 'inline-flex',
+                  // Базовую линию ссылки задаёт текст, иначе строка равнялась бы по низу иконки
+                  // и съезжала вверх относительно подсказки слева; иконка центрируется по тексту.
+                  alignItems: 'baseline',
+                  '& > svg': { alignSelf: 'center' },
+                  gap: 0.5,
+                  fontSize: 12,
+                  verticalAlign: 'baseline',
+                  p: 0,
+                }}
               >
+                <WandIcon size={16} />
                 {p('generate')}
               </Link>
             </Stack>

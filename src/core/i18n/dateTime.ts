@@ -34,6 +34,21 @@ export function formatDateTimeLong(d: Date, locale: string, timeZone?: string): 
   return formatter(cacheKey(locale, timeZone)).format(d).replace(/\sг\./g, '');
 }
 
+/**
+ * Та же дата-время, но без связки между датой и временем: «15 июля 2026 11:53» / «July 15, 2026
+ * 11:53 AM». Для подстановки после предлога срока («до {{date}}»): связка Intl («в», «at») рядом
+ * с предлогом читается криво. Связкой считается литерал между годом и часом — в ru это « г. в »,
+ * поэтому «г.» уходит вместе с ней.
+ */
+export function formatDateTimeBare(d: Date, locale: string, timeZone?: string): string {
+  const parts = formatter(cacheKey(locale, timeZone)).formatToParts(d);
+  const year = parts.findIndex((part) => part.type === 'year');
+  const hour = parts.findIndex((part) => part.type === 'hour');
+  return [...parts.slice(0, year + 1), { type: 'literal', value: ' ' }, ...parts.slice(hour)]
+    .map((part) => part.value)
+    .join('');
+}
+
 /** Только дата в коротком виде («15.07.2026» / «7/15/2026») — то же, что toLocaleDateString,
  *  но с кэшем форматтера: даты регистрации рендерятся на каждый минутный тик useNow. */
 const dateFormatter = memoByKey((key) => {

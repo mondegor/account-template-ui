@@ -440,7 +440,6 @@ export function SettingsPage() {
           <Typography variant="h5" sx={{ fontWeight: 600 }}>
             {t('auth.settings.title')}
           </Typography>
-          <SettingsForm user={data} />
           <EmailCard
             user={data}
             editing={editing === 'email'}
@@ -456,6 +455,7 @@ export function SettingsPage() {
             onClose={() => setEditing(null)}
             done={done === 'phone'}
           />
+          <SettingsForm user={data} />
           <TwoFaCard type={data.auth_2fa_type} recoveryCodesLeft={data.recovery_codes_left} />
         </Stack>
       )}

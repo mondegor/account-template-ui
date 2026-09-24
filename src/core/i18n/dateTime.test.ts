@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDateTimeLong } from './dateTime';
+import { formatDate, formatDateTimeBare, formatDateTimeLong } from './dateTime';
 
 const D = new Date('2026-07-15T08:53:00Z');
 
@@ -13,6 +13,13 @@ describe('formatDateTimeLong', () => {
 
   it('en: date in words', () => {
     expect(formatDateTimeLong(D, 'en-US')).toContain('July');
+  });
+});
+
+describe('formatDateTimeBare', () => {
+  it('drops the joiner between the date and the time', () => {
+    expect(formatDateTimeBare(D, 'ru-RU', 'Europe/Moscow')).toMatch(/2026 11:53$/);
+    expect(formatDateTimeBare(D, 'en-US', 'UTC')).toMatch(/^July 15, 2026 8:53\sAM$/);
   });
 });
 

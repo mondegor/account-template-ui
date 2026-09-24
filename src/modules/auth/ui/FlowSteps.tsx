@@ -35,11 +35,11 @@ export function FlowSteps({ steps }: { steps: FlowStep[] }) {
           component="li"
           key={step.label}
           aria-current={step.state === 'current' ? 'step' : undefined}
-          sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}
+          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}
         >
           {/* Черта между ступенями — оформление, её место в самом пункте: у списка нет «между». */}
           {i > 0 && (
-            <Box aria-hidden sx={{ width: 20, height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+            <Box aria-hidden sx={{ width: 12, height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
           )}
           <Box
             sx={{

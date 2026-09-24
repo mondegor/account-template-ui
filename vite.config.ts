@@ -3,7 +3,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // Тесты не читают .env: он настраивает dev-сервер под конкретного человека (реалм, VITE_MOCK_*),
+  // а тесты рассчитывают на значения по умолчанию из src/config и src/mocks.
+  envDir: mode === 'test' ? false : undefined,
   plugins: [react()],
   resolve: {
     alias: {
@@ -25,4 +28,4 @@ export default defineConfig({
     // ждут не рендер (напр. прогрев ESLint).
     testTimeout: 30000,
   },
-});
+}));

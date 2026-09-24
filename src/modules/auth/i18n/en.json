@@ -53,7 +53,7 @@
         "PHONE": "We sent a code to your phone. Enter it to continue.",
         "PASSWORD": "Enter your password to confirm.",
         "TOTP": "Enter the code from your authenticator app.",
-        "RECOVERY": "Enter one of your one-time recovery codes."
+        "RECOVERY": "Enter one of your single-use recovery codes."
       },
       "mode": {
         "PASSWORD": "Enter your password",
@@ -108,9 +108,9 @@
       "recoveryCodes": {
         "title": "Reissue recovery codes",
         "hint": {
-          "EMAIL": "We sent a code to your email — the reissue starts with it.",
-          "PASSWORD": "Enter your password: the reissue replaces the code set itself, so it asks for your 2FA method as well.",
-          "TOTP": "Enter the code from your authenticator app: the reissue replaces the code set itself, so it asks for your 2FA method as well."
+          "EMAIL": "We sent a code to your email — it confirms that you are the one reissuing the recovery codes.",
+          "PASSWORD": "Enter your 2FA password. Since the whole set of codes is being replaced, a recovery code cannot be used here.",
+          "TOTP": "Enter the 2FA code from your authenticator app. Since the whole set of codes is being replaced, a recovery code cannot be used here."
         },
         "deadEnd": "There is nothing left to confirm the reissue with. Start it again from the settings.",
         "awaitingFinish": "The confirmation was accepted, but the codes could not be issued. No need to confirm again — just retry.",
@@ -119,9 +119,9 @@
       "disable2fa": {
         "title": "Turn 2FA off",
         "hint": {
-          "EMAIL": "We sent a code to your email: once 2FA is off, the account rests on your mailbox alone, so you have to prove you own it.",
-          "PASSWORD": "Enter your password — or switch and enter one of your recovery codes.",
-          "TOTP": "Enter the code from your authenticator app — or switch and enter one of your recovery codes.",
+          "EMAIL": "We sent a code to your email — it confirms that you are the one turning 2FA off. If you have lost access to your email, change your email in the settings first.",
+          "PASSWORD": "Enter your 2FA password — or switch and enter one of your recovery codes.",
+          "TOTP": "Enter the 2FA code from your authenticator app — or switch and enter one of your recovery codes.",
           "RECOVERY": "Enter one of your single-use recovery codes."
         },
         "deadEnd": "There is nothing left to confirm turning 2FA off. Start it again from the settings.",
@@ -137,7 +137,7 @@
       "email": {
         "title": "Change email",
         "hint": {
-          "EMAIL": "We sent a code to your current email — it proves that you are the one changing it.",
+          "EMAIL": "We sent a code to your current email — it confirms that you are the one changing it.",
           "PASSWORD": "Enter your 2FA password — it confirms the email change in addition to the code we sent.",
           "TOTP": "Enter the 2FA code from your authenticator app — it confirms the email change in addition to the code we sent."
         },
@@ -146,10 +146,10 @@
         "invalidated": "This email change can no longer be completed. Start it again from the settings."
       },
       "emailRecovery": {
-        "title": "Change email without access to it",
+        "title": "Change email",
         "hint": {
-          "PASSWORD": "Enter your password. Nothing was sent to your current email — a recovery code comes next.",
-          "TOTP": "Enter the code from your authenticator app. Nothing was sent to your current email — a recovery code comes next.",
+          "PASSWORD": "Enter your 2FA password. Nothing was sent to your current email — a recovery code comes next.",
+          "TOTP": "Enter the 2FA code from your authenticator app. Nothing was sent to your current email — a recovery code comes next.",
           "RECOVERY": "Enter one of your single-use recovery codes — it replaces the code from your current email."
         },
         "deadEnd": "There is nothing left to confirm the email change. Start it again from the settings.",
@@ -168,7 +168,7 @@
       "phone": {
         "title": "Phone number",
         "hint": {
-          "EMAIL": "We sent a code to your email — it proves that you are the one setting the number {{value}}.",
+          "EMAIL": "We sent a code to your email — it confirms that you are the one setting the number {{value}}.",
           "PASSWORD": "Enter your 2FA password — it confirms the phone change in addition to the code we sent.",
           "TOTP": "Enter the 2FA code from your authenticator app — it confirms the phone change in addition to the code we sent."
         },
@@ -179,11 +179,11 @@
     },
     "password": {
       "title": "Set a password",
-      "lead": "The password becomes your 2FA method: after the code we send, signing in will ask for it as well. Next step — confirmation by a code.",
+      "lead": "After each emailed code — when you sign in to your account or confirm an operation — you will also be asked for this password.",
       "new": "New password",
       "newPlaceholder": "Come up with a password",
       "repeat": "Repeat the password",
-      "generate": "Generate a strong password",
+      "generate": "Generate a password",
       "lengthHint": "From {{min}} to {{max}} characters",
       "checking": "Checking the strength…",
       "unknown": "Strength unknown",
@@ -207,7 +207,8 @@
     },
     "totp": {
       "title": "Connect the app",
-      "lead": "Scan the code with an authenticator app (Google Authenticator, 1Password and the like) — or enter the secret by hand if you have nothing to scan with.",
+      "intro": "After each emailed code — when you sign in to your account or confirm an operation — you will also be asked for a code from the app.",
+      "lead": "Scan the code with an authenticator app (for example, Google Authenticator) — or enter the secret by hand if scanning is not possible.",
       "qrAlt": "QR code with the authenticator secret",
       "qrFailed": "The QR code did not load — add the authenticator by hand",
       "retry": "Retry",
@@ -232,8 +233,8 @@
     "codes": {
       "title": "Recovery codes",
       "warning": "Save the codes now: we will not show them again, and reloading the page loses them.",
-      "lead": "Each code works once. Use it instead of your password or authenticator code when you cannot reach them.",
-      "leadReissued": "The set has been reissued — the old codes no longer work. Each code works once and is used instead of your password or authenticator code when you cannot reach them.",
+      "lead": "Each code works once. Use it instead of your password or authenticator code when they are unavailable or lost.",
+      "leadReissued": "The set has been reissued — the old codes no longer work. Each code works once and is used instead of your password or authenticator code when they are unavailable or lost.",
       "copy": "Copy",
       "copied": "Copied",
       "download": "Download",
@@ -307,22 +308,22 @@
       "continue": "Continue",
       "email": {
         "title": "Email",
-        "sub": "Your email — and your login; authorization codes and operation confirmation codes arrive here, as do important service notices",
+        "sub": "Serves as your login; authorization and operation confirmation codes arrive here, as do important service notices",
         "new": "New email",
         "placeholder": "name@example.com",
-        "hint": "The confirmation code will go to your current email — {{email}}",
+        "hint": "The confirmation code will be sent to your current email — {{email}}",
         "same": "This is your current email",
         "noAccess": "No access to your current email?",
         "hasAccess": "I can access my current email",
         "recoveryTitle": "Change without a message to your current email",
-        "recoveryText": "Confirm it with your password or authenticator code and one recovery code.",
+        "recoveryText": "Confirm it with your 2FA password or authenticator code and one recovery code.",
         "recoveryHint": "Nothing is sent to your current email; the new one gets a code at the end",
         "changingTo": "changing to",
         "pendingChip": "Awaiting confirmation",
         "pendingConfirmedChip": "Awaiting completion",
         "pending": "To make the change take effect, enter the confirmation code sent to {{email}}.",
-        "pendingWhen": "Confirm before {{date}}. Until then, and after the deadline passes, sign-in and messages use your current email.",
-        "pendingConfirmedWhen": "Finish before {{date}}. Until then, and after the deadline passes, sign-in and messages use your current email.",
+        "pendingWhen": "Confirm before {{date}}. Until then, and after the deadline passes, your current email is still used for signing in and for notifications.",
+        "pendingConfirmedWhen": "Finish before {{date}}. Until then, and after the deadline passes, your current email is still used for signing in and for notifications.",
         "pendingConfirmed": "The code was accepted — finish the change to {{email}}.",
         "confirm": "Confirm",
         "cancelChange": "Cancel",
@@ -336,24 +337,24 @@
         "new": "New number",
         "field": "Phone number",
         "placeholder": "+7 999 888 77 66",
-        "hint": "The confirmation code will go to your email — {{email}}, not to the phone",
+        "hint": "The confirmation code will be sent to your email — {{email}}, not to the phone",
         "same": "This is your current number",
         "done": "Phone saved successfully"
       }
     },
     "twoFa": {
       "title": "Two-factor protection",
-      "on": "Enabled",
-      "off": "Disabled",
+      "on": "On",
+      "off": "Off",
       "lead": {
-        "NONE": "Signing in to your account is confirmed only by the authorization code we send to your email. 2FA adds one more step to it — a password or a code from an app.",
-        "PASSWORD": "Signing in to your account is confirmed by the authorization code and your password.",
-        "TOTP": "Signing in to your account is confirmed by the authorization code and a code from your authenticator app."
+        "NONE": "Signing in to your account is confirmed only by the authorization code we send to your email. 2FA adds one more step to it and to confirming operations — a password or a code from an app.",
+        "PASSWORD": "Sign-ins to your account and operations are confirmed by the authorization code and your password.",
+        "TOTP": "Sign-ins to your account and operations are confirmed by the authorization code and a code from your authenticator app."
       },
       "method": {
         "password": {
           "name": "Password",
-          "how": "Asked on every sign-in — after the authorization code",
+          "how": "A secret you set yourself and type at each confirmation",
           "plus": "Nothing to install: works on any device",
           "minus": "Never changes — once leaked, 2FA stops protecting",
           "cta": "Set up"
@@ -362,7 +363,7 @@
           "name": "Authenticator app",
           "how": "An app on your phone shows a code that changes every 30 seconds",
           "plus": "The code lives on your device only and burns out fast",
-          "minus": "Needs a phone with the app; lose it and you sign in with a recovery code",
+          "minus": "Needs a phone with the app",
           "cta": "Connect"
         }
       },
@@ -374,9 +375,8 @@
         "enough_other": "{{count}} recovery codes left"
       },
       "reissue": "Reissue",
-      "changeHint": "Changing the 2FA method — switching to the other one or setting a new password — is only possible after turning 2FA off. Turning it off is confirmed by the code we send and your current password (or a recovery code), and the next time you turn it on you get new recovery codes.",
-      "disable": "Turn 2FA off",
-      "disableShort": "Turn off"
+      "changeHint": "Changing the 2FA method — switching to the other one or setting a new password — is only possible after turning 2FA off. Turning it off is confirmed by the code we send and your 2FA password or authenticator code (or a recovery code), and the next time you turn it on you get new recovery codes.",
+      "disable": "Turn 2FA off"
     },
     "sessions": {
       "title": "Sessions",

@@ -18,7 +18,7 @@ import {
 } from '../api/authApi';
 import type { PendingOperation, UserInfo } from '../api/types';
 import { useStartSecurityFlow } from '../hooks/useStartSecurityFlow';
-import { fmtLong, useLocale } from '../lib/format';
+import { fmtDeadline, useLocale } from '../lib/format';
 import { pendingEmailChange, pendingToWaiting } from '../lib/pendingOperation';
 import { saveSecurityFlow } from '../lib/securityFlow';
 import { EMAIL_ANCHOR } from './contactAnchors';
@@ -315,7 +315,7 @@ function PendingChange({
   const busy = resume.isPending || cancel.isPending || finish.isPending;
   const error = resume.error ?? cancel.error;
   const confirmed = op.status === 'CONFIRMED';
-  const until = fmtLong(op.expires_at, locale, resolveTimeZone(user.tz));
+  const until = fmtDeadline(op.expires_at, locale, resolveTimeZone(user.tz));
 
   return (
     <Box

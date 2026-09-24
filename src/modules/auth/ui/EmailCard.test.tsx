@@ -15,7 +15,7 @@ import {
   startEmailChange,
   startEmailChangeByRecovery,
 } from '../api/authApi';
-import { fmtLong } from '../lib/format';
+import { fmtDeadline } from '../lib/format';
 import { loadSecurityFlow } from '../lib/securityFlow';
 import type { PendingOperation, UserInfo, WaitingConfirmOperation } from '../api/types';
 import { EmailCard } from './EmailCard';
@@ -67,8 +67,11 @@ const PENDING: PendingOperation = {
  * Срок операции на экране — не литерал: его собирает тот же помощник, что и карточка, из пояса и
  * локали профиля (`UTC`, `en-US` у фикстуры выше). Записать результат строкой значило бы проверять
  * не строку блока, а форматирование дат — у него свои тесты.
+ *
+ * Пробелы сводятся к обычному: Intl ставит перед AM узкий неразрывный (U+202F), а getByText
+ * нормализует пробелы только в тексте узла, не в искомой строке.
  */
-const UNTIL = fmtLong(PENDING.expires_at, 'en-US', 'UTC');
+const UNTIL = fmtDeadline(PENDING.expires_at, 'en-US', 'UTC').replace(/\s/g, ' ');
 
 /** Та же смена, уже подтверждённая: вводить нечего, карточка применяет её сама. */
 const CONFIRMED: PendingOperation = {

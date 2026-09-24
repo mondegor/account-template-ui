@@ -169,25 +169,10 @@ describe('TwoFaCard', () => {
     expect(
       within(totpTile()).queryByText(tr('auth.twoFa.method.totp.cta')),
     ).not.toBeInTheDocument();
-    // Затенённой плитке нечего и снимать: включён не её метод.
-    expect(
-      within(totpTile()).queryByRole('button', { name: tr('auth.twoFa.disableShort') }),
-    ).not.toBeInTheDocument();
-    // Включённый метод тоже никуда не ведёт: какой он сейчас, говорит чип в шапке.
+    // Включённый метод тоже никуда не ведёт: какой он сейчас, говорит чип в шапке, а снимает
+    // защиту кнопка внизу карточки.
     expect(within(passwordTile()).queryByRole('link')).not.toBeInTheDocument();
-  });
-
-  /** У включённого метода плитка предлагает его снять — тем же инициатором, что и кнопка внизу. */
-  it('starts the disable flow from the current method tile', async () => {
-    renderCard('PASSWORD', 8);
-
-    fireEvent.click(
-      within(passwordTile()).getByRole('button', { name: tr('auth.twoFa.disableShort') }),
-    );
-
-    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/security/confirm'));
-    expect(startDisable2fa).toHaveBeenCalled();
-    expect(loadSecurityFlow()?.kind).toBe('disable2fa');
+    expect(within(passwordTile()).queryByRole('button')).not.toBeInTheDocument();
   });
 
   /** Остаток кодов говорится ступенями: цифра сама по себе не сказала бы, пора ли тревожиться. */
@@ -213,10 +198,6 @@ describe('TwoFaCard', () => {
     expect(screen.queryByTestId('two-fa-codes')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: tr('auth.twoFa.disable') }),
-    ).not.toBeInTheDocument();
-    // Включённого метода нет — нет и плитки, которая звала бы его снять.
-    expect(
-      screen.queryByRole('button', { name: tr('auth.twoFa.disableShort') }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(tr('auth.twoFa.codesPromise'))).toBeInTheDocument();
   });

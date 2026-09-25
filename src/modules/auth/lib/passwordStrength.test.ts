@@ -7,11 +7,11 @@ const ALL: PasswordStrength[] = ['NOT_RATED', 'WEAK', 'MIDDLE', 'STRONG', 'THE_B
 
 describe('password strength', () => {
   /**
-   * Ворота — единственное, ради чего форма спрашивает оценку. Слабый пароль вторым фактором не
-   * защищает, а `NOT_RATED` значит, что оценки нет: открывать ворота нечем.
+   * Ворота — единственное, ради чего форма спрашивает оценку. Стоят они на пороге сервера по
+   * умолчанию: ниже него пароль всё равно отклонят, а `NOT_RATED` значит, что оценки нет.
    */
-  it('opens the gate from MIDDLE up', () => {
-    expect(ALL.filter(isPassingStrength)).toEqual(['MIDDLE', 'STRONG', 'THE_BEST']);
+  it('opens the gate from STRONG up', () => {
+    expect(ALL.filter(isPassingStrength)).toEqual(['STRONG', 'THE_BEST']);
   });
 
   /** Шкала растёт вместе с оценкой и не выходит за свои деления. */
@@ -23,11 +23,11 @@ describe('password strength', () => {
     expect(Math.min(...filled)).toBe(0);
   });
 
-  /** Цвет говорит про исход ворот: непрошедшее красное, порог жёлтый, дальше зелёное. */
+  /** Цвет говорит про исход ворот: непрошедшее красное, прошедшее зелёное. */
   it('colours the scale by the verdict', () => {
     expect(strengthTone('NOT_RATED')).toBe('none');
     expect(strengthTone('WEAK')).toBe('error');
-    expect(strengthTone('MIDDLE')).toBe('warning');
+    expect(strengthTone('MIDDLE')).toBe('error');
     expect(strengthTone('STRONG')).toBe('success');
     expect(strengthTone('THE_BEST')).toBe('success');
   });

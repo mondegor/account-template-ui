@@ -65,10 +65,8 @@ export interface UserRealm {
   updated_at: string;
 }
 
-/** Тип защищённой операции, ожидающей подтверждения либо применения. */
+/** Тип защищённой операции личного кабинета, ожидающей подтверждения либо применения. */
 export type OperationType =
-  | 'CREATE_USER'
-  | 'AUTHORIZE_USER'
   /** Смена емаила, шаг 1: подтверждение владения аккаунтом. */
   | 'CHANGE_EMAIL'
   /** Смена емаила, шаг 2: подтверждение владения новым адресом. */
@@ -94,7 +92,7 @@ export type OperationStatus = 'OPENED' | 'CONFIRMED';
 export interface PendingOperation {
   token: string;
   type: OperationType;
-  /** Значение для показа пользователю; приходит только у операций смены адреса. */
+  /** Значение для показа: новый емаил у смены адреса, новый телефон у `CHANGE_PHONE`. */
   extra_value?: string;
   expires_at: string;
   status: OperationStatus;

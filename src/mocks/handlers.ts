@@ -172,9 +172,8 @@ const PASSWORD_CLASSES = [
 const GENERATED_PASSWORD_LENGTH = 16;
 
 /**
- * Назначение операции. Завершающий метод сверяется с ним раньше, чем с подтверждённостью: свой
- * `apply-*` на чужой тип отвечает `403`, а универсальный `apply-operation` — `500`, потому что
- * для него это тип, которого развёртывание не поддерживает.
+ * Назначение операции. Завершающий метод сверяется с ним раньше, чем с подтверждённостью: и свой
+ * `apply-*`, и универсальный `apply-operation` на чужой тип отвечают `403`.
  */
 type MockOperationKind =
   | 'signin'
@@ -328,6 +327,9 @@ function passwordStrength(password: string): PasswordStrength {
   if (classes === 3 || password.length < 16) return 'STRONG';
   return 'THE_BEST';
 }
+
+/** Ступени, которые проходят порог установки пароля (по умолчанию у сервера — от STRONG). */
+const PASSING_STRENGTHS: readonly PasswordStrength[] = ['STRONG', 'THE_BEST'];
 
 function generatedPassword(): string {
   // По символу из каждого класса, остальное — вперемешку: так сгенерированное всегда THE_BEST.
@@ -541,6 +543,23 @@ function wrongOperationType(): Response {
   return problem(403, 'Forbidden', 'The token points to an operation of a different type');
 }
 
+/** Виды операций, из которых складывается смена емаила (обе операции цепочки). */
+const EMAIL_CHANGE_KINDS: readonly MockOperationKind[] = [
+  'email',
+  'email-recovery',
+  'email-confirm',
+];
+
+/**
+ * Включение и отключение 2FA закрывают начатую смену емаила: доказательства, собранные при прежнем
+ * состоянии второго фактора, больше не действуют.
+ */
+function closeEmailChange(login: string): void {
+  for (const op of operations.values()) {
+    if (op.login === login && EMAIL_CHANGE_KINDS.includes(op.kind)) operations.delete(op.token);
+  }
+}
+
 /**
  * Сопроводительный текст звена — по самому звену, а не по его месту в цепочке и не по потоку:
  * этим же текстом отвечают звенья security-операций, у которых свой только первый шаг.
@@ -696,7 +715,7 @@ const PENDING_TYPES: Partial<Record<MockOperationKind, OperationType>> = {
 /**
  * Незакрытые операции пользователя — как их отдаёт профиль. У ждущей подтверждения — метод звена и
  * счётчики по тем же правилам, что в waiting(); у подтверждённой их нет. Новое значение
- * (`extra_value`) спека показывает только у смены адреса.
+ * (`extra_value`) — у смены адреса и смены телефона.
  */
 function pendingOperations(email: string, tz: string): PendingOperation[] {
   const list: PendingOperation[] = [];
@@ -707,7 +726,7 @@ function pendingOperations(email: string, tz: string): PendingOperation[] {
     list.push({
       token: op.token,
       type,
-      ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM'
+      ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM' || type === 'CHANGE_PHONE'
         ? { extra_value: op.value }
         : {}),
       expires_at: isoIn(new Date(op.createdAt + op.expiresInSec * 1000).toISOString(), tz),
@@ -1335,7 +1354,8 @@ export const handlers = [
   http.delete(`${BASE}/v1/session`, async ({ request, cookies }) => {
     // Bearer обязателен (openapi: security bearerAuth, x-auth-scopes any-users) — в отличие от
     // PATCH /v1/session, который продлевает сессию как раз тогда, когда access уже протух.
-    if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
+    const caller = authUser(request);
+    if (!caller) return problem(401, 'Unauthorized', 'Authorization required');
     let refresh: string | undefined = cookies.RTID;
     if (!refresh) {
       const body = (await request.json().catch(() => null)) as { refresh_token?: string } | null;
@@ -1343,10 +1363,11 @@ export const handlers = [
     }
     if (!refresh) return fieldError('ValidateError/refresh_token', 'The refresh token is missing');
     // Метод идемпотентен: неизвестный токен и уже закрытая сессия молча игнорируются и тоже дают
-    // 204 — закрывать нечего, а цель вызова (сессии нет) уже достигнута. Куку гасим в обоих
-    // случаях: клиент до HttpOnly не дотянется, и протухший токен уезжал бы на каждом продлении.
+    // 204 — закрывать нечего, а цель вызова (сессии нет) уже достигнута. Токен чужой сессии
+    // обрабатывается так же, как неизвестный: ответ не раскрывает, что он существует. Куку гасим
+    // во всех случаях: клиент до HttpOnly не дотянется, и протухший токен уезжал бы на каждом продлении.
     const session = sessionsByRefresh.get(refresh);
-    if (session) dropSession(refresh, session);
+    if (session && session.user.email === caller.email) dropSession(refresh, session);
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': 'RTID=; Path=/; Max-Age=0' },
@@ -1383,14 +1404,12 @@ export const handlers = [
     const body = (await request.json().catch(() => null)) as { session_ids?: string[] } | null;
     const ids = body?.session_ids;
     // Всё это — проверка схемы, поэтому код один: спека относит к `ValidateError/session_ids` и
-    // размер списка, и формат элемента (8-символьный hex). Отдельный `SessionIDIsInvalid` она
-    // оставляет за элементом, который схему прошёл, а числом не разобрался, — воспроизвести это
-    // моком нечем: 8 hex-символов разбираются всегда.
+    // размер списка, и формат элемента (8 hex-символов в нижнем регистре).
     if (
       !Array.isArray(ids) ||
       ids.length === 0 ||
       ids.length > 64 ||
-      ids.some((id) => !/^[0-9a-f]{8}$/i.test(id))
+      ids.some((id) => !/^[0-9a-f]{8}$/.test(id))
     ) {
       return fieldError('ValidateError/session_ids', 'Provide from 1 to 64 session ids');
     }
@@ -1460,6 +1479,10 @@ export const handlers = [
     if (password.length < 8 || password.length > 32) {
       return fieldError('ValidateError/new_password', 'The password must be 8 to 32 characters');
     }
+    // Порог надёжности — STRONG, по той же оценке, что у calc-password-strength.
+    if (!PASSING_STRENGTHS.includes(passwordStrength(password))) {
+      return fieldError('PasswordIsTooWeak/new_password', 'The password is too weak');
+    }
     // Активный второй фактор не перезаписывается — сначала его нужно отключить.
     if (auth2fa !== 'NONE') {
       return problem(409, 'Conflict', '2FA is already on — turn it off first');
@@ -1485,6 +1508,7 @@ export const handlers = [
     }
     auth2fa = 'PASSWORD';
     operations.delete(found.token);
+    closeEmailChange(found.login);
     return HttpResponse.json({ recovery_codes: issueRecoveryCodes() });
   }),
 
@@ -1552,6 +1576,7 @@ export const handlers = [
     }
     auth2fa = 'TOTP';
     operations.delete(found.token);
+    closeEmailChange(found.login);
     return HttpResponse.json({ recovery_codes: issueRecoveryCodes() });
   }),
 
@@ -1706,12 +1731,11 @@ export const handlers = [
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
     const body = (await request.json()) as { token?: string };
     // Этим методом закрываются операции, у которых нет своего `apply-*`: отключение 2FA, смена
-    // телефона и вторая операция смены емаила. Тип, которого развёртывание не поддерживает, спека
-    // относит к ошибке конфигурации сервера, а не к отказу по правам, — отсюда 500, а не 403.
+    // телефона и вторая операция смены емаила. У остальных свои завершающие методы — на их токен 403.
     const found = confirmedOperation(
       body.token,
       ['disable2fa', 'email-confirm', 'phone'],
-      problem(500, 'Internal Server Error', 'An operation of this type is not supported'),
+      wrongOperationType(),
     );
     if (found instanceof Response) return found;
     operations.delete(found.token);
@@ -1736,6 +1760,7 @@ export const handlers = [
       console.info(`[MSW] Notice to ${found.login}: the phone number was set to ${found.value}`);
     } else {
       auth2fa = 'NONE';
+      closeEmailChange(found.login);
     }
     return new HttpResponse(null, { status: 204 });
   }),

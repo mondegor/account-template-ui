@@ -67,7 +67,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
   });
 
   it('setting a password turns 2FA on and issues recovery codes', async () => {
-    const op = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    const op = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     expect(op.confirm_method).toBe('EMAIL');
 
     const token = await confirmChain(op.token, [CODE]);
@@ -79,13 +79,19 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     expect(user.recovery_codes_left).toBe(10);
 
     // Активный второй фактор не перезаписывается: сначала его нужно отключить.
-    await expect(startPasswordSetup({ new_password: 'An0therPass!' })).rejects.toSatisfy(
+    await expect(startPasswordSetup({ new_password: 'An0therPass!42' })).rejects.toSatisfy(
       (e) => e instanceof ApiProblemError && e.status === 409,
     );
   });
 
+  it('a password below STRONG is refused under the field', async () => {
+    await expect(startPasswordSetup({ new_password: 'weakpass' })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'PasswordIsTooWeak/new_password',
+    );
+  });
+
   it('reissuing recovery codes asks for the email code and the second factor', async () => {
-    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
     const op = await startRecoveryCodesReissue();
@@ -124,7 +130,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
   });
 
   it('disabling 2FA takes a recovery code instead of the second factor', async () => {
-    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
     const op = await startDisable2fa();
@@ -137,7 +143,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
 
   /** Код одноразовый: принятый — он уходит из набора, и профиль сразу показывает остаток меньше. */
   it('an accepted recovery code leaves the set', async () => {
-    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
     // Отключение ещё не завершено, поэтому второй фактор на месте и остаток виден.
@@ -148,7 +154,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
   });
 
   it('reissuing recovery codes does NOT take a recovery code instead of the second factor', async () => {
-    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
     const op = await startRecoveryCodesReissue();
@@ -165,10 +171,9 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     await expect(applyPassword({ token })).rejects.toSatisfy(
       (e) => e instanceof ApiProblemError && e.status === 403,
     );
-    // Универсальный apply-operation тип totp не обслуживает вовсе: для него это ошибка
-    // конфигурации сервера, а не отказ по правам.
+    // Универсальный apply-operation тип totp не применяет: у него свой завершающий метод.
     await expect(applyOperation({ token })).rejects.toSatisfy(
-      (e) => e instanceof ApiProblemError && e.status === 500,
+      (e) => e instanceof ApiProblemError && e.status === 403,
     );
   });
 
@@ -245,8 +250,39 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     );
   });
 
+  it('turning 2FA on closes an email change in progress', async () => {
+    const op = await startEmailChange({ new_email: 'new@example.com' });
+    const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
+
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
+    await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
+
+    const pending = (await getUserInfo()).pending_operations ?? [];
+    expect(pending.some((o) => o.type === 'CHANGE_EMAIL_CONFIRM')).toBe(false);
+    await expect(confirmOperation({ token: second.token, secret: CODE })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
+    );
+  });
+
+  it('turning 2FA off closes an email change in progress', async () => {
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
+    await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
+
+    const op = await startEmailChange({ new_email: 'new@example.com' });
+    const second = await applyEmail({ token: await confirmChain(op.token, [CODE, PASSWORD]) });
+
+    const disable = await startDisable2fa();
+    await applyOperation({ token: await confirmChain(disable.token, [CODE, PASSWORD]) });
+
+    const pending = (await getUserInfo()).pending_operations ?? [];
+    expect(pending.some((o) => o.type === 'CHANGE_EMAIL_CONFIRM')).toBe(false);
+    await expect(confirmOperation({ token: second.token, secret: CODE })).rejects.toSatisfy(
+      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
+    );
+  });
+
   it('with 2FA on, the first step asks for the second factor too', async () => {
-    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
     const op = await startEmailChange({ new_email: 'new@example.com' });
@@ -259,7 +295,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
   });
 
   it('without access to the email: the second factor, a recovery code, then the new address', async () => {
-    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
     const op = await startEmailChangeByRecovery({ new_email: 'new@example.com' });
@@ -293,6 +329,15 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
 
     await applyOperation({ token: await confirmChain(op.token, [CODE]) });
     expect((await getUserInfo()).phone).toBe('+7 912 345 67 89');
+  });
+
+  it('a pending phone change shows the new number in the profile', async () => {
+    const op = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
+
+    const pending = (await getUserInfo()).pending_operations?.find(
+      (o) => o.type === 'CHANGE_PHONE',
+    );
+    expect(pending).toMatchObject({ token: op.token, extra_value: '+7 912 345 67 89' });
   });
 
   it('a taken or malformed phone is refused under the field', async () => {

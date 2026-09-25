@@ -42,7 +42,7 @@ async function enable2fa() {
   const op = await signin('user@example.com');
   await confirmOperation({ token: op.token, secret: '183947' });
   await openSession({ token: op.token });
-  const setup = await startPasswordSetup({ new_password: 'Str0ngPass!' });
+  const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
   await applyPassword({ token: await confirmChain(setup.token, ['183947']) });
 }
 

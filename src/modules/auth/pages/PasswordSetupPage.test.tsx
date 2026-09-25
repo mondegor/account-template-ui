@@ -166,12 +166,12 @@ describe('PasswordSetupPage', () => {
 
   /** С проходной оценки форма пропускает. */
   it('opens the gate from the passing strength up', async () => {
-    vi.mocked(calcPasswordStrength).mockResolvedValue('MIDDLE');
+    vi.mocked(calcPasswordStrength).mockResolvedValue('STRONG');
     renderPage();
 
     await fill(STRONG);
 
-    expect(screen.getByText(tr('auth.password.strength.MIDDLE'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.password.strength.STRONG'))).toBeInTheDocument();
     expect(submitButton()).toBeEnabled();
   });
 
@@ -425,28 +425,34 @@ describe('PasswordSetupPage', () => {
     expect(loadSecurityFlow()?.kind).toBe('password');
   });
 
-  /** Отказ по полю садится под поле: исправлять нужно именно набранное. */
-  it('puts the field rejection under the field', async () => {
-    vi.mocked(startPasswordSetup).mockRejectedValue(
-      new ApiFieldError([{ code: 'ValidateError/new_password', detail: REJECTED }], 400),
-    );
-    renderPage();
+  /**
+   * Отказ по полю садится под поле: исправлять нужно именно набранное. Это касается и порога
+   * надёжности — его задаёт приложение на сервере, и он может стоять выше ворот формы.
+   */
+  it.each(['ValidateError/new_password', 'PasswordIsTooWeak/new_password'])(
+    'puts the %s rejection under the field',
+    async (code) => {
+      vi.mocked(startPasswordSetup).mockRejectedValue(
+        new ApiFieldError([{ code, detail: REJECTED }], 400),
+      );
+      renderPage();
 
-    await fill(STRONG);
-    fireEvent.click(submitButton());
+      await fill(STRONG);
+      fireEvent.click(submitButton());
 
-    const message = await screen.findByText(REJECTED);
-    // Поле помечено и связано со строками под ним: иначе диктору досталось бы «неверно» без
-    // причины. Описаний два — границы поля и сам отказ, — и читаются они в том же порядке, в каком
-    // стоят на экране.
-    const field = screen.getByTestId('field-new_password');
-    expect(field).toHaveAttribute('aria-invalid', 'true');
-    const [hint, rejection] = (field.getAttribute('aria-describedby') ?? '')
-      .split(' ')
-      .map((id) => document.getElementById(id));
-    expect(hint).toHaveTextContent(tr('auth.password.lengthHint', { min: 8, max: 32 }));
-    expect(rejection).toContainElement(message);
-  });
+      const message = await screen.findByText(REJECTED);
+      // Поле помечено и связано со строками под ним: иначе диктору досталось бы «неверно» без
+      // причины. Описаний два — границы поля и сам отказ, — и читаются они в том же порядке, в каком
+      // стоят на экране.
+      const field = screen.getByTestId('field-new_password');
+      expect(field).toHaveAttribute('aria-invalid', 'true');
+      const [hint, rejection] = (field.getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .map((id) => document.getElementById(id));
+      expect(hint).toHaveTextContent(tr('auth.password.lengthHint', { min: 8, max: 32 }));
+      expect(rejection).toContainElement(message);
+    },
+  );
 
   /**
    * Генерация меняет значение так же, как набор руками, — и отказ, полученный на прежнее, обязан

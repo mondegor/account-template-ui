@@ -29,9 +29,9 @@ export function StrengthMeter({
   // Последняя показанная строка — та, что и схлопывается.
   const shown = useRef<ReactNode>(null);
 
-  const rated = state.kind === 'rated' ? state.strength : null;
-  const filled = rated ? strengthBars(rated) : 0;
-  const tone = rated ? strengthTone(rated) : 'none';
+  const rating = state.kind === 'rated' ? state : null;
+  const filled = rating ? strengthBars(rating.strength) : 0;
+  const tone = rating ? strengthTone(rating.acceptable) : 'none';
 
   const line =
     state.kind === 'short' ? null : state.kind === 'checking' ? (
@@ -56,7 +56,7 @@ export function StrengthMeter({
           variant="caption"
           sx={{ color: tone === 'none' ? 'text.secondary' : `${tone}.main` }}
         >
-          {rated ? p(`strength.${rated}`) : p('unknown')}
+          {rating ? p(`strength.${rating.strength}`) : p('unknown')}
         </Typography>
         {/* Повтор нужен только там, где спрашивать было у чего: оценку не получили, а форма без неё
             не пропускает. */}

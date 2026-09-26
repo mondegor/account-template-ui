@@ -198,11 +198,6 @@ interface MockOperation {
    * переходе к следующему он меняется, как и на настоящем сервере.
    */
   chain: ConfirmMethod[];
-  /**
-   * Второй фактор аккаунта на момент СОЗДАНИЯ операции. Цепочка звеньев фиксируется тогда же,
-   * поэтому по нему видно, отключили ли фактор уже после — см. secretAccepted.
-   */
-  twoFaAtCreate: UserAuth2fa;
   linkIndex: number;
   remainingAttempts: number;
   remainingResends: number;
@@ -328,7 +323,10 @@ function passwordStrength(password: string): PasswordStrength {
   return 'THE_BEST';
 }
 
-/** Ступени, которые проходят порог установки пароля (по умолчанию у сервера — от STRONG). */
+/**
+ * Ступени, которые проходят порог установки пароля. Порог — настройка приложения; мок держит его
+ * на STRONG и сообщает исход полем `acceptable` оценки.
+ */
 const PASSING_STRENGTHS: readonly PasswordStrength[] = ['STRONG', 'THE_BEST'];
 
 function generatedPassword(): string {
@@ -492,10 +490,6 @@ function expectedSecret(op: MockOperation): string {
 function secretAccepted(op: MockOperation, secret: string | undefined): boolean {
   if (secret === MOCK_RECOVERY_CODE && auth2fa !== 'NONE' && recoveryCodesLeft <= 0) return false;
   const onFactorLink = currentMethod(op) === 'PASSWORD' || currentMethod(op) === 'TOTP';
-  // Фактор отключили уже после создания операции: предъявить его больше нечем — ни им самим, ни
-  // аварийным кодом, набора которых у аккаунта без 2FA нет. Звено отвечает обычным «неверный код»:
-  // отдельный отказ выдал бы состояние 2FA аккаунта, а метод подтверждения гостевой.
-  if (onFactorLink && op.twoFaAtCreate !== 'NONE' && auth2fa === 'NONE') return false;
   if (secret === expectedSecret(op)) return true;
   const allowsSwap =
     (op.kind === 'signin' || op.kind === 'disable2fa') && !op.chain.includes('RECOVERY');
@@ -543,20 +537,18 @@ function wrongOperationType(): Response {
   return problem(403, 'Forbidden', 'The token points to an operation of a different type');
 }
 
-/** Виды операций, из которых складывается смена емаила (обе операции цепочки). */
-const EMAIL_CHANGE_KINDS: readonly MockOperationKind[] = [
-  'email',
-  'email-recovery',
-  'email-confirm',
-];
-
 /**
- * Включение и отключение 2FA закрывают начатую смену емаила: доказательства, собранные при прежнем
- * состоянии второго фактора, больше не действуют.
+ * Включение и отключение 2FA отзывают все незавершённые операции пользователя, начатый вход в том
+ * числе: их цепочки подтверждения построены при прежнем состоянии второго фактора. Операции
+ * кабинета ищем по логину; вход — любой: 2FA в моке одна на весь аккаунт, а логин входа —
+ * набранное значение (емаил в любом регистре или телефон), и с логином кабинета он не сверяется.
+ * Регистрация к аккаунту не относится и остаётся.
  */
-function closeEmailChange(login: string): void {
+function revokePendingOperations(login: string): void {
   for (const op of operations.values()) {
-    if (op.login === login && EMAIL_CHANGE_KINDS.includes(op.kind)) operations.delete(op.token);
+    if (op.kind === 'signin' || (op.kind !== 'signup' && op.login === login)) {
+      operations.delete(op.token);
+    }
   }
 }
 
@@ -639,7 +631,6 @@ function startSecurityOperation(
     login: authUser(request)?.email ?? '',
     kind,
     chain,
-    twoFaAtCreate: auth2fa,
     linkIndex: 0,
     remainingAttempts: 3,
     remainingResends: 2,
@@ -712,37 +703,45 @@ const PENDING_TYPES: Partial<Record<MockOperationKind, OperationType>> = {
   disable2fa: 'DISABLE_2FA',
 };
 
+/** Момент истечения операции, мс. */
+const deadlineOf = (op: MockOperation) => op.createdAt + op.expiresInSec * 1000;
+
 /**
- * Незакрытые операции пользователя — как их отдаёт профиль. У ждущей подтверждения — метод звена и
- * счётчики по тем же правилам, что в waiting(); у подтверждённой их нет. Новое значение
- * (`extra_value`) — у смены адреса и смены телефона.
+ * Незакрытые операции пользователя — как их отдаёт профиль: в порядке истечения, а если их нет,
+ * поля нет вовсе. У ждущей подтверждения — метод звена и счётчики по тем же правилам, что в
+ * waiting(); у подтверждённой их нет. Новое значение (`extra_value`) — у смены адреса и смены
+ * телефона.
  */
-function pendingOperations(email: string, tz: string): PendingOperation[] {
-  const list: PendingOperation[] = [];
-  for (const op of operations.values()) {
-    const type = PENDING_TYPES[op.kind];
-    if (!type || op.login !== email || expiresLeftSec(op) <= 0) continue;
-    const method = currentMethod(op);
-    list.push({
-      token: op.token,
-      type,
-      ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM' || type === 'CHANGE_PHONE'
-        ? { extra_value: op.value }
-        : {}),
-      expires_at: isoIn(new Date(op.createdAt + op.expiresInSec * 1000).toISOString(), tz),
-      status: op.confirmed ? 'CONFIRMED' : 'OPENED',
-      ...(op.confirmed
-        ? {}
-        : {
-            confirm_method: method,
-            remaining_attempts: op.remainingAttempts,
-            ...(isResendable(method)
-              ? { remaining_resends: op.remainingResends, resends_in: op.resendsInSec }
-              : {}),
-          }),
+function pendingOperations(email: string, tz: string): PendingOperation[] | undefined {
+  const list = [...operations.values()]
+    .filter((op) => op.login === email && expiresLeftSec(op) > 0)
+    .sort((a, b) => deadlineOf(a) - deadlineOf(b))
+    .flatMap((op): PendingOperation[] => {
+      const type = PENDING_TYPES[op.kind];
+      if (!type) return [];
+      const method = currentMethod(op);
+      return [
+        {
+          token: op.token,
+          type,
+          ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM' || type === 'CHANGE_PHONE'
+            ? { extra_value: op.value }
+            : {}),
+          expires_at: isoIn(new Date(deadlineOf(op)).toISOString(), tz),
+          status: op.confirmed ? 'CONFIRMED' : 'OPENED',
+          ...(op.confirmed
+            ? {}
+            : {
+                confirm_method: method,
+                remaining_attempts: op.remainingAttempts,
+                ...(isResendable(method)
+                  ? { remaining_resends: op.remainingResends, resends_in: op.resendsInSec }
+                  : {}),
+              }),
+        },
+      ];
     });
-  }
-  return list;
+  return list.length > 0 ? list : undefined;
 }
 
 function buildUser(op: MockOperation): UserInfo {
@@ -939,7 +938,7 @@ function sessionIn(s: UserSession, tz: string): UserSession {
     ...s,
     created_at: isoIn(s.created_at, tz),
     last_seen_at: isoIn(s.last_seen_at, tz),
-    expires_at: s.expires_at ? isoIn(s.expires_at, tz) : undefined,
+    expires_at: isoIn(s.expires_at, tz),
   };
 }
 
@@ -950,6 +949,7 @@ function sessionIn(s: UserSession, tz: string): UserSession {
  */
 function userIn(user: UserInfo, request: Request): UserInfo {
   const { tz } = responseSettings(request);
+  const pending = pendingOperations(user.email, tz);
   return {
     ...user,
     lang: profileSettings.lang,
@@ -958,7 +958,7 @@ function userIn(user: UserInfo, request: Request): UserInfo {
     // Аварийные коды существуют только при включённой 2FA — без неё поля в ответе нет вовсе
     // (отсутствие поля клиент трактует как «показывать нечего», а не как ноль).
     ...(auth2fa === 'NONE' ? {} : { recovery_codes_left: recoveryCodesLeft }),
-    pending_operations: pendingOperations(user.email, tz),
+    ...(pending ? { pending_operations: pending } : {}),
     realms: user.realms.map((r) => ({
       ...r,
       created_at: isoIn(r.created_at, tz),
@@ -1019,7 +1019,6 @@ export const handlers = [
       // При включённой 2FA за кодом с емаила идёт звено второго фактора (спека, шаг 4.1). Вместо
       // пароля/TOTP на нём принимается и аварийный код — выбор заранее не объявляется.
       chain: auth2fa === 'NONE' ? ['EMAIL'] : ['EMAIL', factorLink()],
-      twoFaAtCreate: auth2fa,
       linkIndex: 0,
       remainingAttempts: 3,
       remainingResends: 2, // намеренно немного для демо состояний «последняя отправка» / «тупик»
@@ -1053,7 +1052,6 @@ export const handlers = [
       login,
       kind: 'signin',
       chain: [factorLink(), 'RECOVERY'],
-      twoFaAtCreate: auth2fa,
       linkIndex: 0,
       remainingAttempts: 3,
       remainingResends: 0,
@@ -1093,7 +1091,8 @@ export const handlers = [
     if (password.length < 8 || password.length > 32) {
       return fieldError('ValidateError/password', 'The password must be 8 to 32 characters');
     }
-    return HttpResponse.json({ strength: passwordStrength(password) });
+    const strength = passwordStrength(password);
+    return HttpResponse.json({ strength, acceptable: PASSING_STRENGTHS.includes(strength) });
   }),
 
   // --- Генерация пароля (помощь на форме установки) ---
@@ -1132,7 +1131,6 @@ export const handlers = [
       login: email,
       kind: 'signup',
       chain: ['EMAIL'],
-      twoFaAtCreate: auth2fa,
       linkIndex: 0,
       remainingAttempts: 3,
       remainingResends: 2,
@@ -1479,7 +1477,7 @@ export const handlers = [
     if (password.length < 8 || password.length > 32) {
       return fieldError('ValidateError/new_password', 'The password must be 8 to 32 characters');
     }
-    // Порог надёжности — STRONG, по той же оценке, что у calc-password-strength.
+    // Порог надёжности — тот же, что сообщает `acceptable` у calc-password-strength.
     if (!PASSING_STRENGTHS.includes(passwordStrength(password))) {
       return fieldError('PasswordIsTooWeak/new_password', 'The password is too weak');
     }
@@ -1508,7 +1506,7 @@ export const handlers = [
     }
     auth2fa = 'PASSWORD';
     operations.delete(found.token);
-    closeEmailChange(found.login);
+    revokePendingOperations(found.login);
     return HttpResponse.json({ recovery_codes: issueRecoveryCodes() });
   }),
 
@@ -1576,7 +1574,7 @@ export const handlers = [
     }
     auth2fa = 'TOTP';
     operations.delete(found.token);
-    closeEmailChange(found.login);
+    revokePendingOperations(found.login);
     return HttpResponse.json({ recovery_codes: issueRecoveryCodes() });
   }),
 
@@ -1760,7 +1758,7 @@ export const handlers = [
       console.info(`[MSW] Notice to ${found.login}: the phone number was set to ${found.value}`);
     } else {
       auth2fa = 'NONE';
-      closeEmailChange(found.login);
+      revokePendingOperations(found.login);
     }
     return new HttpResponse(null, { status: 204 });
   }),

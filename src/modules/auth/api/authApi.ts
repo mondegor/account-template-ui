@@ -15,7 +15,6 @@ import type {
   LoginByTokenRequest,
   OpenSessionResult,
   OperationTokenRequest,
-  PasswordStrength,
   RecoveryCodes,
   SuccessAccess,
   TotpSecret,
@@ -87,12 +86,14 @@ export async function checkLogin(userLogin: string): Promise<boolean> {
  * Оценка надёжности пароля. Ручка гостевая: форма установки пароля спрашивает её на каждом наборе,
  * и вешать на неё продление сессии незачем — префикс `/v1/check/` из обновления 401 исключён.
  */
-export async function calcPasswordStrength(password: string): Promise<PasswordStrength> {
+export async function calcPasswordStrength(
+  password: string,
+): Promise<CalcPasswordStrengthResponse> {
   const res = await authClient.post<CalcPasswordStrengthResponse>(
     '/v1/check/calc-password-strength',
     { password },
   );
-  return res.data.strength;
+  return res.data;
 }
 
 /** Пароль, придуманный сервером, — помощь на форме установки. Тела у запроса нет. */

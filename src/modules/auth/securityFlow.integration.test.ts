@@ -84,7 +84,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     );
   });
 
-  it('a password below STRONG is refused under the field', async () => {
+  it('a password below the threshold is refused under the field', async () => {
     await expect(startPasswordSetup({ new_password: 'weakpass' })).rejects.toSatisfy(
       (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'PasswordIsTooWeak/new_password',
     );
@@ -250,35 +250,40 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     );
   });
 
-  it('turning 2FA on closes an email change in progress', async () => {
+  it('turning 2FA on revokes every pending operation, a started sign-in included', async () => {
     const op = await startEmailChange({ new_email: 'new@example.com' });
     const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
+    const phone = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
+    const login = await signin('user@example.com');
 
     const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
-    const pending = (await getUserInfo()).pending_operations ?? [];
-    expect(pending.some((o) => o.type === 'CHANGE_EMAIL_CONFIRM')).toBe(false);
-    await expect(confirmOperation({ token: second.token, secret: CODE })).rejects.toSatisfy(
-      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
-    );
+    expect((await getUserInfo()).pending_operations).toBeUndefined();
+    for (const token of [second.token, phone.token, login.token]) {
+      await expect(confirmOperation({ token, secret: CODE })).rejects.toSatisfy(
+        (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
+      );
+    }
   });
 
-  it('turning 2FA off closes an email change in progress', async () => {
+  it('turning 2FA off revokes every pending operation', async () => {
     const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
 
     const op = await startEmailChange({ new_email: 'new@example.com' });
     const second = await applyEmail({ token: await confirmChain(op.token, [CODE, PASSWORD]) });
+    const phone = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
 
     const disable = await startDisable2fa();
     await applyOperation({ token: await confirmChain(disable.token, [CODE, PASSWORD]) });
 
-    const pending = (await getUserInfo()).pending_operations ?? [];
-    expect(pending.some((o) => o.type === 'CHANGE_EMAIL_CONFIRM')).toBe(false);
-    await expect(confirmOperation({ token: second.token, secret: CODE })).rejects.toSatisfy(
-      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
-    );
+    expect((await getUserInfo()).pending_operations).toBeUndefined();
+    for (const token of [second.token, phone.token]) {
+      await expect(confirmOperation({ token, secret: CODE })).rejects.toSatisfy(
+        (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
+      );
+    }
   });
 
   it('with 2FA on, the first step asks for the second factor too', async () => {

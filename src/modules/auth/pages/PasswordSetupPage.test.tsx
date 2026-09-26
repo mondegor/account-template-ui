@@ -11,7 +11,11 @@ import { tr } from '../../../test/i18n';
 import { authTranslations } from '../i18n';
 import { calcPasswordStrength, generatePassword, startPasswordSetup } from '../api/authApi';
 import { loadSecurityFlow } from '../lib/securityFlow';
-import type { WaitingConfirmOperation } from '../api/types';
+import type {
+  CalcPasswordStrengthResponse,
+  PasswordStrength,
+  WaitingConfirmOperation,
+} from '../api/types';
 import { PasswordSetupPage } from './PasswordSetupPage';
 
 /**
@@ -30,6 +34,12 @@ const STRONG = 'L$QI.qA6eu7zG%7w';
 const WEAK = 'password12';
 const GENERATED = 'Xy7#kQ2mZp4!Rt9W';
 const REJECTED = 'Password does not meet the security requirements';
+
+/** Оценка сервера — фикстура теста: и ступень, и исход ворот решает развёртывание. */
+const rating = (strength: PasswordStrength, acceptable: boolean): CalcPasswordStrengthResponse => ({
+  strength,
+  acceptable,
+});
 
 /** Тело problem+json — фикстура теста; статус в нём и есть то, по чему форма выбирает ветку. */
 const problem = (status: number, detail: string) =>
@@ -95,7 +105,7 @@ beforeEach(() => {
   sessionStorage.clear();
   useOperationStore.getState().reset();
   useAuthStore.setState({ status: 'authenticated' });
-  vi.mocked(calcPasswordStrength).mockResolvedValue('THE_BEST');
+  vi.mocked(calcPasswordStrength).mockResolvedValue(rating('THE_BEST', true));
   vi.mocked(generatePassword).mockResolvedValue(GENERATED);
   vi.mocked(startPasswordSetup).mockResolvedValue(OPERATION);
   Object.defineProperty(navigator, 'clipboard', {
@@ -142,7 +152,7 @@ describe('PasswordSetupPage', () => {
    * в наборе, а обрезает лишнее поле молча. Шкала встаёт над подсказкой, а не вместо неё.
    */
   it('keeps the length hint next to the rating', async () => {
-    vi.mocked(calcPasswordStrength).mockResolvedValue('MIDDLE');
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('MIDDLE', false));
     renderPage();
 
     await fill(STRONG);
@@ -155,7 +165,7 @@ describe('PasswordSetupPage', () => {
 
   /** Ворота стоят на оценке: слабый пароль вторым фактором не защищает. */
   it('keeps the gate shut on a weak password', async () => {
-    vi.mocked(calcPasswordStrength).mockResolvedValue('WEAK');
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('WEAK', false));
     renderPage();
 
     await fill(WEAK);
@@ -166,7 +176,7 @@ describe('PasswordSetupPage', () => {
 
   /** С проходной оценки форма пропускает. */
   it('opens the gate from the passing strength up', async () => {
-    vi.mocked(calcPasswordStrength).mockResolvedValue('STRONG');
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('STRONG', true));
     renderPage();
 
     await fill(STRONG);
@@ -176,12 +186,56 @@ describe('PasswordSetupPage', () => {
   });
 
   /**
+   * Порог приёма знает только сервер: ступень, которую форма показывает, ворот не открывает — их
+   * открывает `acceptable`.
+   */
+  it('gates on acceptable, not on the strength level', async () => {
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('STRONG', false));
+    renderPage();
+
+    await fill(STRONG);
+
+    expect(screen.getByText(tr('auth.password.strength.STRONG'))).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+  });
+
+  /** И в обратную сторону: ступень ниже привычного порога ворота не держит, если сервер пропускает. */
+  it('opens the gate on acceptable whatever the strength level', async () => {
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('MIDDLE', true));
+    renderPage();
+
+    await fill(STRONG);
+
+    expect(screen.getByText(tr('auth.password.strength.MIDDLE'))).toBeInTheDocument();
+    expect(submitButton()).toBeEnabled();
+  });
+
+  /**
+   * `NOT_RATED` не пропускается, и цвет говорит ровно это: подпись того же тона, что у отклонённой
+   * ступени. Сравниваем подписи между собой — эталон цвета тут палитра, а не литерал.
+   */
+  it('colours an unrated password as a rejected one', async () => {
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('NOT_RATED', false));
+    renderPage();
+
+    await fill(STRONG);
+    const unrated = getComputedStyle(screen.getByText(tr('auth.password.strength.NOT_RATED')));
+    expect(submitButton()).toBeDisabled();
+
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('WEAK', false));
+    await fill(WEAK);
+    const weak = getComputedStyle(screen.getByText(tr('auth.password.strength.WEAK')));
+
+    expect(unrated.color).toBe(weak.color);
+  });
+
+  /**
    * Ответ применяется только к тому значению, ради которого его спрашивали: пока первый был в пути,
    * набрали другое, и его оценка обязана победить.
    */
   it('applies the rating of the last typed value', async () => {
     vi.mocked(calcPasswordStrength).mockImplementation((password) =>
-      Promise.resolve(password === STRONG ? 'THE_BEST' : 'WEAK'),
+      Promise.resolve(password === STRONG ? rating('THE_BEST', true) : rating('WEAK', false)),
     );
     renderPage();
 
@@ -207,7 +261,7 @@ describe('PasswordSetupPage', () => {
     expect(screen.getByTestId('strength-bars')).toBeInTheDocument();
     expect(submitButton()).toBeDisabled();
 
-    vi.mocked(calcPasswordStrength).mockResolvedValue('STRONG');
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('STRONG', true));
     fireEvent.click(screen.getByRole('button', { name: tr('auth.password.retry') }));
     await settle();
 
@@ -224,7 +278,7 @@ describe('PasswordSetupPage', () => {
     renderPage();
 
     await fill(STRONG);
-    vi.mocked(calcPasswordStrength).mockClear().mockResolvedValue('STRONG');
+    vi.mocked(calcPasswordStrength).mockClear().mockResolvedValue(rating('STRONG', true));
     fireEvent.click(screen.getByRole('button', { name: tr('auth.password.retry') }));
     await act(async () => {
       vi.advanceTimersByTime(0);
@@ -281,7 +335,7 @@ describe('PasswordSetupPage', () => {
    * руками спрашивают у сервера, как и всё остальное.
    */
   it('asks the server again once the generated value is edited', async () => {
-    vi.mocked(calcPasswordStrength).mockResolvedValue('WEAK');
+    vi.mocked(calcPasswordStrength).mockResolvedValue(rating('WEAK', false));
     renderPage();
 
     fireEvent.click(screen.getByRole('button', { name: tr('auth.password.generate') }));

@@ -227,11 +227,11 @@ describe('auth flow (signin → confirm → session → profile)', () => {
   });
 
   /**
-   * Второй фактор отключили из соседней вкладки, пока операция входа ждала его звена. Отдельного
-   * кода у этой ветки нет: звено отвечает обычным «неверный код», иначе по ответу гостевого метода
-   * читалось бы состояние 2FA аккаунта.
+   * Второй фактор отключили из соседней вкладки, пока операция входа ждала его звена. Смена 2FA
+   * отзывает все незавершённые операции пользователя, начатый вход тоже: его цепочка построена при
+   * прежнем состоянии 2FA, и вход начинают заново.
    */
-  it('2FA switched off after the operation was created comes back as a plain wrong code', async () => {
+  it('2FA switched off after the sign-in was started revokes the sign-in', async () => {
     await enable2fa();
     const pending = await signin('user@example.com');
     const factor = await confirmOperation({ token: pending.token, secret: '183947' });
@@ -241,8 +241,7 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     expect((await getUserInfo()).auth_2fa_type).toBe('NONE');
 
     await expect(confirmOperation({ token: factor!.token, secret: '183947' })).rejects.toSatisfy(
-      (e: unknown) =>
-        e instanceof ApiFieldError && e.fields[0]?.code === 'ConfirmCodeIsIncorrect/secret',
+      (e: unknown) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
     );
   });
 

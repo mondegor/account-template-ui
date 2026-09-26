@@ -12,13 +12,22 @@ import { calcPasswordStrength, generatePassword } from './authApi';
 describe('password check endpoints', () => {
   /** Обе ручки гостевые: ни сессии, ни токена им не нужно. */
   it('rates a password without a session', async () => {
-    expect(await calcPasswordStrength('L$QI.qA6eu7zG%7w')).toBe('THE_BEST');
+    expect(await calcPasswordStrength('L$QI.qA6eu7zG%7w')).toEqual({
+      strength: 'THE_BEST',
+      acceptable: true,
+    });
   });
 
-  /** Ступени различимы: иначе ворота формы стояли бы на значении, которого не бывает. */
+  /** Исходы различимы: иначе ворота формы стояли бы на значении, которого не бывает. */
   it('tells a weak password from a passing one', async () => {
-    expect(await calcPasswordStrength('password12')).toBe('WEAK');
-    expect(await calcPasswordStrength('Sunflower42')).toBe('MIDDLE');
+    expect(await calcPasswordStrength('password12')).toEqual({
+      strength: 'WEAK',
+      acceptable: false,
+    });
+    expect(await calcPasswordStrength('Sunflower42')).toEqual({
+      strength: 'MIDDLE',
+      acceptable: false,
+    });
   });
 
   /** Границы поля — те же, что у самого пароля: короткое значение отклоняется по полю запроса. */
@@ -34,6 +43,9 @@ describe('password check endpoints', () => {
 
     expect(password.length).toBeGreaterThanOrEqual(limits.password.min);
     expect(password.length).toBeLessThanOrEqual(limits.password.max);
-    expect(await calcPasswordStrength(password)).toBe('THE_BEST');
+    expect(await calcPasswordStrength(password)).toEqual({
+      strength: 'THE_BEST',
+      acceptable: true,
+    });
   });
 });

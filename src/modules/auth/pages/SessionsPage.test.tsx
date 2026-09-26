@@ -200,13 +200,6 @@ describe('SessionsPage', () => {
     );
   });
 
-  it('no expires_at (the field is optional): «expires» shows a dash', async () => {
-    vi.mocked(getUserSessions).mockResolvedValue([{ ...CURRENT, expires_at: undefined }]);
-    renderSessions();
-    await screen.findByText('This device');
-    expect(rowValue(tr('auth.sessions.expiresAt'), cardWith('This device'))?.textContent).toBe('—');
-  });
-
   it('a location with no data (missing field or empty string): a dash, the row stays', async () => {
     vi.mocked(getUserSessions).mockResolvedValue([
       CURRENT,

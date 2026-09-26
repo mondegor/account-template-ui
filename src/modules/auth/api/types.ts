@@ -148,7 +148,7 @@ export interface UserSession {
   location?: string;
   created_at: string;
   last_seen_at: string;
-  expires_at?: string;
+  expires_at: string;
   is_current: boolean;
 }
 
@@ -203,7 +203,7 @@ export interface TotpSecret {
 /**
  * Надёжность пароля глазами сервера (`Auth.Enum.PasswordStrength`). Считает её он, а не клиент:
  * правила у развёртывания свои, и своя оценка на экране расходилась бы с тем, что примет
- * `POST /v1/security/password`.
+ * `POST /v1/security/password`. Порог приёма клиенту тоже не известен — его сообщает `acceptable`.
  */
 export type PasswordStrength = 'NOT_RATED' | 'WEAK' | 'MIDDLE' | 'STRONG' | 'THE_BEST';
 
@@ -212,9 +212,13 @@ export interface CalcPasswordStrengthRequest {
   password: string;
 }
 
-/** Ответ POST /v1/check/calc-password-strength. */
+/**
+ * Ответ POST /v1/check/calc-password-strength. `acceptable` — примет ли такой пароль
+ * `POST /v1/security/password`: порог задаёт приложение, и ступень его не выдаёт.
+ */
 export interface CalcPasswordStrengthResponse {
   strength: PasswordStrength;
+  acceptable: boolean;
 }
 
 /**

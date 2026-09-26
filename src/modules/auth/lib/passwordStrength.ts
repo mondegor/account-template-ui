@@ -1,12 +1,12 @@
 import type { PasswordStrength } from '../api/types';
 
 /**
- * Что форма установки пароля знает про оценку сервера: сколько делений шкалы заполнено и пропускает
- * ли эта оценка дальше.
+ * Что форма установки пароля показывает из оценки сервера: сколько делений шкалы заполнено и каким
+ * цветом.
  *
- * Сама оценка считается на сервере — здесь только её показ и ворота. Ворота стоят на `STRONG` —
- * пороге сервера по умолчанию: пароль ниже него сервер всё равно отклонит, а `NOT_RATED` значит,
- * что оценки нет вовсе, и открывать ворота нечем.
+ * Сама оценка и её исход считаются на сервере — здесь только их показ. Порог приёма у приложения
+ * свой, и ступень его не выдаёт: пропустит ли пароль установка, говорит `acceptable` из того же
+ * ответа.
  */
 
 /** Заполненных делений шкалы из четырёх. У `NOT_RATED` шкала пустая: оценивать было нечем. */
@@ -18,8 +18,6 @@ const BARS: Record<PasswordStrength, number> = {
   THE_BEST: 4,
 };
 
-const PASSING: ReadonlySet<PasswordStrength> = new Set<PasswordStrength>(['STRONG', 'THE_BEST']);
-
 /** Всего делений на шкале — им же меряется ширина пустой шкалы, когда оценки нет. */
 export const STRENGTH_BARS = 4;
 
@@ -27,15 +25,11 @@ export function strengthBars(strength: PasswordStrength): number {
   return BARS[strength];
 }
 
-export function isPassingStrength(strength: PasswordStrength): boolean {
-  return PASSING.has(strength);
-}
-
 /**
  * Тон шкалы — исход ворот: цвет говорит «не пропустим / пропустим», а насколько именно хорошо,
- * показывают сами деления.
+ * показывают сами деления. Ступень на цвет не влияет, `NOT_RATED` в том числе: цвет обязан
+ * совпадать с тем, пропустит ли форма.
  */
-export function strengthTone(strength: PasswordStrength): 'error' | 'success' | 'none' {
-  if (strength === 'NOT_RATED') return 'none';
-  return isPassingStrength(strength) ? 'success' : 'error';
+export function strengthTone(acceptable: boolean): 'error' | 'success' {
+  return acceptable ? 'success' : 'error';
 }

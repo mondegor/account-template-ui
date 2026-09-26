@@ -64,12 +64,16 @@ describe('field limits match the openapi contract', () => {
     ).toBe(true);
   });
 
-  /** Число в якоре — количество знаков кода: `- 6-` из строки формата, где следом идёт «значный». */
-  it('confirm code 6/6 (EMAIL and PHONE links)', () => {
+  /**
+   * Спека объявляет для кода из сообщения диапазон `4..8`, а длину внутри него задаёт развёртывание.
+   * Наша длина — 6, и она обязана лежать в объявленном диапазоне.
+   */
+  it('confirm code 6/6 within 4..8 (EMAIL and PHONE links)', () => {
     expect(limits.confirmCode).toEqual({ min: 6, max: 6 });
-    const digits = `- ${limits.confirmCode.max}-`;
-    expect(secretFormatLine('EMAIL')).toContain(digits);
-    expect(secretFormatLine('PHONE')).toContain(digits);
+    expect(secretFormatLine('EMAIL')).toContain('4..8');
+    expect(secretFormatLine('PHONE')).toContain('4..8');
+    expect(limits.confirmCode.min).toBeGreaterThanOrEqual(4);
+    expect(limits.confirmCode.max).toBeLessThanOrEqual(8);
     // Код занимает поле secret, поэтому за его схемные границы выйти не может.
     expect(limits.confirmCode.min).toBeGreaterThanOrEqual(limits.secret.min);
     expect(limits.confirmCode.max).toBeLessThanOrEqual(limits.secret.max);

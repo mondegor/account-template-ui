@@ -7,20 +7,20 @@ import { UiBusyIcon, UiFieldMessage, UiTextField, uiFieldBlockSx } from '@ui';
 import { ApiFieldError, ApiProblemError, apiErrorText } from '@core/api';
 import { limits } from '@config';
 import { generatePassword, startPasswordSetup } from '../api/authApi';
-import { isPassingStrength } from '../lib/passwordStrength';
 import { usePasswordStrength } from '../hooks/usePasswordStrength';
 import { useStartSecurityFlow } from '../hooks/useStartSecurityFlow';
 import { SecurityPage } from '../ui/SecurityPage';
 import { StrengthMeter } from '../ui/StrengthMeter';
 import { CheckIcon, CopyIcon, ShieldDotsIcon, WandIcon } from '../ui/icons';
-import type { PasswordStrength } from '../api/types';
+import type { CalcPasswordStrengthResponse } from '../api/types';
 
 /**
  * Первый шаг включения 2FA по паролю: сам пароль. Дальше поток подхватывает общий экран
  * подтверждения — своих шагомеров форма не рисует.
  *
  * Ворота стоят на оценке сервера, а не на длине: длина от слабого пароля не спасает, а правила
- * надёжности принадлежат развёртыванию. Ниже проходного порога форма не пропускает.
+ * надёжности принадлежат развёртыванию. Пропускает форма по `acceptable` из оценки — порог знает
+ * только сервер.
  */
 
 /** Поля этой формы: под них садится 400, чей суффикс `code` совпал с именем поля запроса. */
@@ -35,10 +35,10 @@ const MESSAGE_ID = `${FIELD_ID}-error`;
 const COPIED_HOLD_MS = 3000;
 
 /**
- * Оценка сгенерированного пароля: по спеке генератор всегда выдаёт значение высшего уровня, поэтому
- * шкала ставит его сама, не спрашивая оценку у сервера.
+ * Оценка сгенерированного пароля: по спеке генератор всегда выдаёт значение высшего уровня, и порог
+ * установки оно проходит всегда, поэтому шкала ставит её сама, не спрашивая сервер.
  */
-const GENERATED_STRENGTH: PasswordStrength = 'THE_BEST';
+const GENERATED_RATING: CalcPasswordStrengthResponse = { strength: 'THE_BEST', acceptable: true };
 
 export function PasswordSetupPage() {
   const { t } = useTranslation();
@@ -80,7 +80,7 @@ export function PasswordSetupPage() {
       if (generateStale.current) return;
       // Оценка объявляется до того, как значение попадёт в поле: иначе шкала успела бы уйти
       // спрашивать сервер про то, что и так известно.
-      strength.assume(generated, GENERATED_STRENGTH);
+      strength.assume(generated, GENERATED_RATING);
       setPassword(generated);
       // Повтор заполняет человек — сгенерированное значение тут не отличается от придуманного.
       // Вынести пароль наружу и вернуть обратно — единственное, чем повтор здесь полезен;
@@ -129,8 +129,7 @@ export function PasswordSetupPage() {
 
   // Повтор молчит, пока в него не начали набирать: пустое поле это ещё не расхождение.
   const mismatch = repeat.length > 0 && repeat !== password;
-  const rated = strength.state.kind === 'rated' ? strength.state.strength : null;
-  const passing = rated !== null && isPassingStrength(rated);
+  const passing = strength.state.kind === 'rated' && strength.state.acceptable;
 
   // 400 приходит по полю (`ValidateError/new_password`) — садится под поле пароля. 409 — не отказ
   // по значению, а состояние аккаунта: второй фактор уже стоит, и заменить его без отключения

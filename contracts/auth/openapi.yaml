@@ -1940,6 +1940,7 @@ components:
           required:
             - token
             - confirm_method
+            - message
           properties:
             token:
               description: |-
@@ -2131,10 +2132,6 @@ components:
             в заголовке Set-Cookie (см. описание метода)
           type: string
           example: 02fb5463db25b91568a1801dc0974b1d50cb1f3bc817f2be3a4b357929cee704
-        message:
-          description: Человекочитаемое сообщение об успешном доступе, текст задаёт хост-приложение и зависит от сценария
-          type: string
-          example: Доступ к вашему аккаунту разрешён
     Auth.Request.Model.ContinueSession:
       type: object
       required:
@@ -2507,6 +2504,7 @@ components:
       required:
         - kty
         - use
+        - alg
       properties:
         kty:
           $ref: '#/components/schemas/Auth.Check.Enum.KeyType'

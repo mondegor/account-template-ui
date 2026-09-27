@@ -367,7 +367,7 @@
           "cta": "Connect"
         }
       },
-      "codesPromise": "Turning 2FA on issues recovery codes — a spare way in if the password or the phone is lost. They are shown exactly once.",
+      "enableHint": "Turning 2FA on cancels all unfinished confirmation operations. At the very end of the confirmation you get recovery codes — a spare way in if the password or the phone is lost; they are shown exactly once.",
       "codesLeft": {
         "empty": "No recovery codes left",
         "last": "One recovery code left",
@@ -375,7 +375,10 @@
         "enough_other": "{{count}} recovery codes left"
       },
       "reissue": "Reissue",
-      "changeHint": "Changing the 2FA method — switching to the other one or setting a new password — is only possible after turning 2FA off. Turning it off is confirmed by the code we send and your 2FA password or authenticator code (or a recovery code), and the next time you turn it on you get new recovery codes.",
+      "changeHint": {
+        "PASSWORD": "Changing the 2FA method — switching to the authenticator app or setting a new password — is only possible after turning 2FA off. Turning it off is confirmed by the code we send and your 2FA password (or a recovery code) and cancels all unfinished confirmation operations; the next time you turn it on you get new recovery codes.",
+        "TOTP": "Changing the 2FA method — switching to a password or reconnecting the authenticator app — is only possible after turning 2FA off. Turning it off is confirmed by the code we send and a code from the authenticator app (or a recovery code) and cancels all unfinished confirmation operations; the next time you turn it on you get new recovery codes."
+      },
       "disable": "Turn 2FA off"
     },
     "sessions": {

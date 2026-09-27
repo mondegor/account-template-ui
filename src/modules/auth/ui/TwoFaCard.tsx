@@ -174,7 +174,7 @@ export function TwoFaCard({
                 }
               />
             )}
-            <Note icon={<AlertCircleIcon size={16} />}>{p('changeHint')}</Note>
+            <Note icon={<AlertCircleIcon size={16} />}>{p(`changeHint.${type}`)}</Note>
             {/* Подвал читается сверху вниз и кончается действием там, где взгляд уже оказался. */}
             <Button
               variant="outlined"
@@ -193,8 +193,8 @@ export function TwoFaCard({
           </Stack>
         ) : (
           <Box sx={{ mt: 1.5 }}>
-            <Note icon={<LifeBuoyIcon size={16} />} plain>
-              {p('codesPromise')}
+            <Note icon={<AlertCircleIcon size={16} />} plain>
+              {p('enableHint')}
             </Note>
           </Box>
         )}

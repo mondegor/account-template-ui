@@ -30,6 +30,7 @@ const OPERATION: WaitingConfirmOperation = {
   remaining_resends: 1,
   resends_in: 0,
   expires_in: 600,
+  message: 'Enter the code we sent',
 };
 
 /** Тело problem+json — фикстура теста; статус в нём и есть то, что показывается плашкой. */
@@ -199,7 +200,18 @@ describe('TwoFaCard', () => {
     expect(
       screen.queryByRole('button', { name: tr('auth.twoFa.disable') }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(tr('auth.twoFa.codesPromise'))).toBeInTheDocument();
+    expect(screen.getByText(tr('auth.twoFa.enableHint'))).toBeInTheDocument();
+  });
+
+  /** Подсказка о смене метода говорит о текущем методе, а не о двух сразу. */
+  it.each([
+    ['PASSWORD', 'TOTP'],
+    ['TOTP', 'PASSWORD'],
+  ] as const)('with %s shows the change hint for that method only', (type, other) => {
+    renderCard(type, 8);
+
+    expect(screen.getByText(tr(`auth.twoFa.changeHint.${type}`))).toBeInTheDocument();
+    expect(screen.queryByText(tr(`auth.twoFa.changeHint.${other}`))).not.toBeInTheDocument();
   });
 
   /** Перевыпуск начинается тем же жестом, что и любой security-поток. */

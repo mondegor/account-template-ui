@@ -32,7 +32,7 @@ export interface WaitingConfirmOperation {
   remaining_resends?: number;
   resends_in?: number;
   expires_in: number;
-  message?: string;
+  message: string;
 }
 
 export interface LoginByTokenRequest {
@@ -44,7 +44,6 @@ export interface SuccessAccess {
   access_token: string;
   expires_in: number;
   refresh_token?: string;
-  message?: string;
 }
 
 export interface ConfirmOperationRequest {

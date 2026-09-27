@@ -255,6 +255,7 @@ describe('SecurityConfirmPage', () => {
       confirm_method: 'EMAIL' as const,
       token: 's'.repeat(64),
       expires_in: 72 * 3600,
+      message: 'Enter the code we sent',
     };
     vi.mocked(applyEmail).mockResolvedValue(NEW);
     saveSecurityFlow({ kind: 'email', value: 'new@example.com' });

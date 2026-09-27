@@ -232,6 +232,7 @@ describe('RecoveryCodesPage', () => {
       remaining_resends: 1,
       resends_in: 0,
       expires_in: 600,
+      message: 'Enter the code we sent',
     };
     vi.mocked(startRecoveryCodesReissue).mockResolvedValue(operation);
     renderPage();

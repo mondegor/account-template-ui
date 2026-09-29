@@ -11,7 +11,7 @@ describe('mmss', () => {
     expect(mmss(125, true)).toBe('02:05');
   });
 
-  /** Подтверждение нового адреса живёт ~72 часа: тысячи минут читать некому. */
+  /** Подтверждение нового адреса может жить сутками: тысячи минут читать некому. */
   it('an hour or more is shown with hours, minutes always padded', () => {
     expect(mmss(3600)).toBe('1:00:00');
     expect(mmss(72 * 3600 - 1, true)).toBe('71:59:59');

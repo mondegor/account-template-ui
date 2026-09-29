@@ -14,6 +14,7 @@ import {
   getTotpSecret,
   getUserInfo,
   openSession,
+  resendOperation,
   revokeOperation,
   signin,
   startDisable2fa,
@@ -191,12 +192,22 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
 
     const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
     expect(second.confirm_method).toBe('EMAIL');
-    // Подтверждение нового адреса ждёт человека долго — порядка трёх суток, а не минуты.
+    // Подтверждение нового адреса ждёт человека долго — сутками, а не минуты.
     expect(second.expires_in).toBeGreaterThan(24 * 60 * 60);
     expect((await getUserInfo()).email).toBe('user@example.com');
 
     await applyOperation({ token: await confirmChain(second.token, [CODE]) });
     expect((await getUserInfo()).email).toBe('new@example.com');
+  });
+
+  /** Долгий срок отсчитывается от создания операции: новый код его не продлевает и не сокращает. */
+  it('resending the code to the new address keeps its long lifetime', async () => {
+    const op = await startEmailChange({ new_email: 'new@example.com' });
+    const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
+
+    const resent = await resendOperation({ token: second.token });
+    expect(resent.expires_in).toBeGreaterThan(24 * 60 * 60);
+    expect(resent.expires_in).toBeLessThanOrEqual(second.expires_in);
   });
 
   /** По этой записи карточка настроек возвращает человека к вводу кода — без лишнего запроса. */
@@ -223,16 +234,18 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
 
   /** Профиль ищет операции по логину аккаунта, а смена емаила меняет и логин. */
   it('a finished email change keeps the other pending operations in the profile', async () => {
-    const phone = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
+    await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
+    const disable = await startDisable2fa();
 
     const op = await startEmailChange({ new_email: 'new@example.com' });
-    const second = await applyEmail({ token: await confirmChain(op.token, [CODE]) });
+    const second = await applyEmail({ token: await confirmChain(op.token, [CODE, PASSWORD]) });
     await applyOperation({ token: await confirmChain(second.token, [CODE]) });
 
     const user = await getUserInfo();
     expect(user.email).toBe('new@example.com');
-    expect(user.pending_operations?.find((o) => o.type === 'CHANGE_PHONE')?.token).toBe(
-      phone.token,
+    expect(user.pending_operations?.find((o) => o.type === 'DISABLE_2FA')?.token).toBe(
+      disable.token,
     );
   });
 
@@ -334,15 +347,6 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
 
     await applyOperation({ token: await confirmChain(op.token, [CODE]) });
     expect((await getUserInfo()).phone).toBe('+7 912 345 67 89');
-  });
-
-  it('a pending phone change shows the new number in the profile', async () => {
-    const op = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
-
-    const pending = (await getUserInfo()).pending_operations?.find(
-      (o) => o.type === 'CHANGE_PHONE',
-    );
-    expect(pending).toMatchObject({ token: op.token, extra_value: '+7 912 345 67 89' });
   });
 
   it('a taken or malformed phone is refused under the field', async () => {

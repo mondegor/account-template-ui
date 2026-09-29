@@ -70,10 +70,7 @@ export type OperationType =
   | 'CHANGE_EMAIL'
   /** Смена емаила, шаг 2: подтверждение владения новым адресом. */
   | 'CHANGE_EMAIL_CONFIRM'
-  | 'CHANGE_PHONE'
-  | 'CHANGE_PASSWORD'
-  | 'CHANGE_TOTP'
-  | 'REGENERATE_RECOVERY'
+  /** Отключение 2FA. */
   | 'DISABLE_2FA';
 
 /** `OPENED` — ждёт подтверждения кодом; `CONFIRMED` — ждёт применения завершающим методом. */
@@ -91,7 +88,7 @@ export type OperationStatus = 'OPENED' | 'CONFIRMED';
 export interface PendingOperation {
   token: string;
   type: OperationType;
-  /** Значение для показа: новый емаил у смены адреса, новый телефон у `CHANGE_PHONE`. */
+  /** Значение для показа: новый емаил у смены адреса; у остальных операций поля нет. */
   extra_value?: string;
   expires_at: string;
   status: OperationStatus;

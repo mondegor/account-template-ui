@@ -160,6 +160,9 @@ const TAKEN_PHONE = '+7 900 000 00 00';
 /** Срок второй операции смены емаила: она ждёт человека, пока тот доберётся до новой почты. */
 const EMAIL_CONFIRM_TTL_SEC = 72 * 60 * 60;
 
+/** Порог продления срока жизни операции (см. renewExpiry). */
+const FIXED_EXPIRY_THRESHOLD_SEC = 30 * 60;
+
 /** Алфавиты, из которых мок собирает пароль и по которым же считает его надёжность. */
 const PASSWORD_CLASSES = [
   'abcdefghijkmnopqrstuvwxyz',
@@ -570,11 +573,22 @@ function linkMessage(op: MockOperation): string {
 }
 
 /**
+ * Продление срока жизни операции на шаге подтверждения — переход к звену, повторная отправка кода,
+ * прохождение цепочки. Срок не больше порога отсчитывается заново, чтобы длинная цепочка успевала
+ * пройти; более долгий отсчитывается от создания операции и не продлевается.
+ */
+function renewExpiry(op: MockOperation): void {
+  if (op.expiresInSec <= FIXED_EXPIRY_THRESHOLD_SEC) op.createdAt = Date.now();
+}
+
+/**
  * Звено принято. Есть следующее — операция переезжает на НОВЫЙ токен (предыдущий по спеке сразу
  * перестаёт действовать) и получает свой счётчик попыток; вернули `true`, значит подтверждение
- * продолжается. Звеньев больше нет — цепочка пройдена, дальше только терминальный метод.
+ * продолжается. Звеньев больше нет — цепочка пройдена, дальше только терминальный метод. Срок
+ * жизни продлевается в обоих случаях (см. renewExpiry).
  */
 function advanceLink(op: MockOperation): boolean {
+  renewExpiry(op);
   if (op.linkIndex + 1 >= op.chain.length) {
     op.confirmed = true;
     return false;
@@ -691,15 +705,15 @@ function usersByEmail(email: string): UserInfo[] {
   return [...new Set(userByAccess.values())].filter((u) => u.email === email);
 }
 
-/** Тип операции в профиле по её виду; вход и регистрация профилю не принадлежат. */
+/**
+ * Тип операции в профиле по её виду. В профиль попадают только операции, где применим аварийный
+ * код, и долгоживущие; остальные (вход, регистрация, смена телефона, установка 2FA, перевыпуск
+ * кодов) профилю не видны.
+ */
 const PENDING_TYPES: Partial<Record<MockOperationKind, OperationType>> = {
   email: 'CHANGE_EMAIL',
   'email-recovery': 'CHANGE_EMAIL',
   'email-confirm': 'CHANGE_EMAIL_CONFIRM',
-  phone: 'CHANGE_PHONE',
-  password: 'CHANGE_PASSWORD',
-  totp: 'CHANGE_TOTP',
-  'recovery-codes': 'REGENERATE_RECOVERY',
   disable2fa: 'DISABLE_2FA',
 };
 
@@ -709,8 +723,7 @@ const deadlineOf = (op: MockOperation) => op.createdAt + op.expiresInSec * 1000;
 /**
  * Незакрытые операции пользователя — как их отдаёт профиль: в порядке истечения, а если их нет,
  * поля нет вовсе. У ждущей подтверждения — метод звена и счётчики по тем же правилам, что в
- * waiting(); у подтверждённой их нет. Новое значение (`extra_value`) — у смены адреса и смены
- * телефона.
+ * waiting(); у подтверждённой их нет. Новое значение (`extra_value`) — только у смены адреса.
  */
 function pendingOperations(email: string, tz: string): PendingOperation[] | undefined {
   const list = [...operations.values()]
@@ -724,7 +737,7 @@ function pendingOperations(email: string, tz: string): PendingOperation[] | unde
         {
           token: op.token,
           type,
-          ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM' || type === 'CHANGE_PHONE'
+          ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM'
             ? { extra_value: op.value }
             : {}),
           expires_at: isoIn(new Date(deadlineOf(op)).toISOString(), tz),
@@ -1203,9 +1216,7 @@ export const handlers = [
     }
     op.remainingResends -= 1;
     op.resendsInSec = 30;
-    // Новый код — новый срок жизни операции, иначе продлённым он был бы только на словах.
-    op.expiresInSec = 600;
-    op.createdAt = Date.now();
+    renewExpiry(op);
     op.remainingAttempts = 3;
     // eslint-disable-next-line no-console
     console.info(`[MSW] Resent code for ${op.login}: ${MOCK_CODE}`);

@@ -30,7 +30,7 @@ function user(pending?: PendingOperation[]): UserInfo {
 
 describe('pendingEmailChange', () => {
   it('finds the confirmation of the new address among other operations', () => {
-    const other: PendingOperation = { ...OPENED, token: 'b'.repeat(64), type: 'CHANGE_PHONE' };
+    const other: PendingOperation = { ...OPENED, token: 'b'.repeat(64), type: 'DISABLE_2FA' };
 
     expect(pendingEmailChange(user([other, OPENED]))).toBe(OPENED);
   });

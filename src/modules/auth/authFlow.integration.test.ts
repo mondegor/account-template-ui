@@ -132,6 +132,17 @@ describe('auth flow (signin → confirm → session → profile)', () => {
     );
   });
 
+  /** Короткий срок продлевается повторной отправкой: новый код получает полный срок, а не остаток. */
+  it('resending the code renews a short operation lifetime', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const op = await signin('user@example.com');
+
+    await vi.advanceTimersByTimeAsync(300_000);
+
+    const resent = await resendOperation({ token: op.token });
+    expect(resent.expires_in).toBeGreaterThan(op.expires_in - 300);
+  });
+
   it('signup creates an operation with confirm_method EMAIL and opens a session', async () => {
     const op = await signup('newuser@example.com');
     expect(op.token).toHaveLength(64);

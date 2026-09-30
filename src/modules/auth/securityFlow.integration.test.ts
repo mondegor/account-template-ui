@@ -232,21 +232,27 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     expect(left.some((o) => o.type === 'CHANGE_EMAIL_CONFIRM')).toBe(false);
   });
 
-  /** Профиль ищет операции по логину аккаунта, а смена емаила меняет и логин. */
-  it('a finished email change keeps the other pending operations in the profile', async () => {
+  /** Коды и уведомления незавершённых операций привязаны к прежнему адресу. */
+  it('a finished email change revokes every other pending operation, a started sign-in included', async () => {
     const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
     await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
-    const disable = await startDisable2fa();
 
     const op = await startEmailChange({ new_email: 'new@example.com' });
     const second = await applyEmail({ token: await confirmChain(op.token, [CODE, PASSWORD]) });
+    const disable = await startDisable2fa();
+    const phone = await startPhoneChange({ new_phone: '+7 912 345 67 89' });
+    const login = await signin('user@example.com');
+
     await applyOperation({ token: await confirmChain(second.token, [CODE]) });
 
     const user = await getUserInfo();
     expect(user.email).toBe('new@example.com');
-    expect(user.pending_operations?.find((o) => o.type === 'DISABLE_2FA')?.token).toBe(
-      disable.token,
-    );
+    expect(user.pending_operations).toBeUndefined();
+    for (const token of [disable.token, phone.token, login.token]) {
+      await expect(confirmOperation({ token, secret: CODE })).rejects.toSatisfy(
+        (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'OperationInvalid/token',
+      );
+    }
   });
 
   it('a new change closes the one still waiting for its code', async () => {

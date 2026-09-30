@@ -542,9 +542,10 @@ function wrongOperationType(): Response {
 
 /**
  * Включение и отключение 2FA отзывают все незавершённые операции пользователя, начатый вход в том
- * числе: их цепочки подтверждения построены при прежнем состоянии второго фактора. Операции
- * кабинета ищем по логину; вход — любой: 2FA в моке одна на весь аккаунт, а логин входа —
- * набранное значение (емаил в любом регистре или телефон), и с логином кабинета он не сверяется.
+ * числе: их цепочки подтверждения построены при прежнем состоянии второго фактора. Так же действует
+ * и применение смены емаила: коды подтверждения и уведомления операций привязаны к прежнему адресу.
+ * Операции кабинета ищем по логину; вход — любой: логин входа — набранное значение (емаил в любом
+ * регистре или телефон), и к аккаунту мок его не привязывает, так что отличить чужой вход не может.
  * Регистрация к аккаунту не относится и остаётся.
  */
 function revokePendingOperations(login: string): void {
@@ -706,15 +707,11 @@ function usersByEmail(email: string): UserInfo[] {
 }
 
 /**
- * Тип операции в профиле по её виду. В профиль попадают только операции, где применим аварийный
- * код, и долгоживущие; остальные (вход, регистрация, смена телефона, установка 2FA, перевыпуск
- * кодов) профилю не видны.
+ * Тип операции в профиле по её виду. В профиль попадает только шаг 2 смены емаила, остальное
+ * профилю не видно.
  */
 const PENDING_TYPES: Partial<Record<MockOperationKind, OperationType>> = {
-  email: 'CHANGE_EMAIL',
-  'email-recovery': 'CHANGE_EMAIL',
   'email-confirm': 'CHANGE_EMAIL_CONFIRM',
-  disable2fa: 'DISABLE_2FA',
 };
 
 /** Момент истечения операции, мс. */
@@ -723,7 +720,7 @@ const deadlineOf = (op: MockOperation) => op.createdAt + op.expiresInSec * 1000;
 /**
  * Незакрытые операции пользователя — как их отдаёт профиль: в порядке истечения, а если их нет,
  * поля нет вовсе. У ждущей подтверждения — метод звена и счётчики по тем же правилам, что в
- * waiting(); у подтверждённой их нет. Новое значение (`extra_value`) — только у смены адреса.
+ * waiting(); у подтверждённой их нет. Новое значение (`extra_value`) — новый емаил аккаунта.
  */
 function pendingOperations(email: string, tz: string): PendingOperation[] | undefined {
   const list = [...operations.values()]
@@ -737,9 +734,7 @@ function pendingOperations(email: string, tz: string): PendingOperation[] | unde
         {
           token: op.token,
           type,
-          ...(type === 'CHANGE_EMAIL' || type === 'CHANGE_EMAIL_CONFIRM'
-            ? { extra_value: op.value }
-            : {}),
+          extra_value: op.value,
           expires_at: isoIn(new Date(deadlineOf(op)).toISOString(), tz),
           status: op.confirmed ? 'CONFIRMED' : 'OPENED',
           ...(op.confirmed
@@ -1756,11 +1751,10 @@ export const handlers = [
           'This email was taken while the change was being confirmed — start over',
         );
       }
+      // Отзываем по прежнему логину — до смены адреса.
+      revokePendingOperations(found.login);
       const changed = found.value ?? found.login;
       for (const user of usersByEmail(found.login)) user.email = changed;
-      // Операции аккаунта профиль ищет по логину: вместе с адресом переезжают и они, иначе
-      // начатая смена телефона пропала бы из профиля вслед за сменой емаила.
-      for (const op of operations.values()) if (op.login === found.login) op.login = changed;
       // eslint-disable-next-line no-console
       console.info(`[MSW] Notice to ${found.login}: the email was changed to ${found.value}`);
     } else if (found.kind === 'phone') {

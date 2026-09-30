@@ -29,15 +29,8 @@ function user(pending?: PendingOperation[]): UserInfo {
 }
 
 describe('pendingEmailChange', () => {
-  it('finds the confirmation of the new address among other operations', () => {
-    const other: PendingOperation = { ...OPENED, token: 'b'.repeat(64), type: 'DISABLE_2FA' };
-
-    expect(pendingEmailChange(user([other, OPENED]))).toBe(OPENED);
-  });
-
-  /** Шаг 1 адресу ещё ничего не отправил: ждать там нечего, его закроет новая смена. */
-  it('the first step of the change does not count', () => {
-    expect(pendingEmailChange(user([{ ...OPENED, type: 'CHANGE_EMAIL' }]))).toBeUndefined();
+  it('finds the confirmation of the new address', () => {
+    expect(pendingEmailChange(user([OPENED]))).toBe(OPENED);
   });
 
   it('a profile without the list has nothing pending', () => {

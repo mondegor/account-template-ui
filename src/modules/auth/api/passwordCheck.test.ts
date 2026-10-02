@@ -14,7 +14,7 @@ describe('password check endpoints', () => {
   it('rates a password without a session', async () => {
     expect(await calcPasswordStrength('L$QI.qA6eu7zG%7w')).toEqual({
       strength: 'THE_BEST',
-      acceptable: true,
+      accept_status: 'ACCEPTED',
     });
   });
 
@@ -22,11 +22,22 @@ describe('password check endpoints', () => {
   it('tells a weak password from a passing one', async () => {
     expect(await calcPasswordStrength('password12')).toEqual({
       strength: 'WEAK',
-      acceptable: false,
+      accept_status: 'TOO_WEAK',
     });
     expect(await calcPasswordStrength('Sunflower42')).toEqual({
       strength: 'MIDDLE',
-      acceptable: false,
+      accept_status: 'TOO_WEAK',
+    });
+  });
+
+  /**
+   * Формат аварийного кода — отдельная причина отказа: ступень у такого пароля может быть высокой,
+   * а пройти он не пройдёт.
+   */
+  it('tells the recovery-code format from a weak password', async () => {
+    expect(await calcPasswordStrength('ABCD1234-EFGH5678')).toEqual({
+      strength: 'STRONG',
+      accept_status: 'RECOVERY_CODE_FORMAT',
     });
   });
 
@@ -45,7 +56,7 @@ describe('password check endpoints', () => {
     expect(password.length).toBeLessThanOrEqual(limits.password.max);
     expect(await calcPasswordStrength(password)).toEqual({
       strength: 'THE_BEST',
-      acceptable: true,
+      accept_status: 'ACCEPTED',
     });
   });
 });

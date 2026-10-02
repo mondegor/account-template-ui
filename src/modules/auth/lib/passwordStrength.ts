@@ -1,11 +1,11 @@
-import type { PasswordStrength } from '../api/types';
+import type { PasswordAcceptStatus, PasswordStrength } from '../api/types';
 
 /**
  * Что форма установки пароля показывает из оценки сервера: сколько делений шкалы заполнено и каким
  * цветом.
  *
  * Сама оценка и её исход считаются на сервере — здесь только их показ. Порог приёма у приложения
- * свой, и ступень его не выдаёт: пропустит ли пароль установка, говорит `acceptable` из того же
+ * свой, и ступень его не выдаёт: пропустит ли пароль установка, говорит `accept_status` из того же
  * ответа.
  */
 
@@ -30,6 +30,6 @@ export function strengthBars(strength: PasswordStrength): number {
  * показывают сами деления. Ступень на цвет не влияет, `NOT_RATED` в том числе: цвет обязан
  * совпадать с тем, пропустит ли форма.
  */
-export function strengthTone(acceptable: boolean): 'error' | 'success' {
-  return acceptable ? 'success' : 'error';
+export function strengthTone(status: PasswordAcceptStatus): 'error' | 'success' {
+  return status === 'ACCEPTED' ? 'success' : 'error';
 }

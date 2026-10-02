@@ -16,11 +16,12 @@ describe('password strength', () => {
   });
 
   /**
-   * Цвет говорит про исход ворот (`acceptable`), а не про ступень: непрошедшее красное, прошедшее
+   * Цвет говорит про исход ворот (`accept_status`), а не про ступень: непрошедшее красное, прошедшее
    * зелёное.
    */
   it('colours the scale by the verdict', () => {
-    expect(strengthTone(false)).toBe('error');
-    expect(strengthTone(true)).toBe('success');
+    expect(strengthTone('TOO_WEAK')).toBe('error');
+    expect(strengthTone('RECOVERY_CODE_FORMAT')).toBe('error');
+    expect(strengthTone('ACCEPTED')).toBe('success');
   });
 });

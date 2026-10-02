@@ -199,7 +199,7 @@ export interface TotpSecret {
 /**
  * Надёжность пароля глазами сервера (`Auth.Enum.PasswordStrength`). Считает её он, а не клиент:
  * правила у развёртывания свои, и своя оценка на экране расходилась бы с тем, что примет
- * `POST /v1/security/password`. Порог приёма клиенту тоже не известен — его сообщает `acceptable`.
+ * `POST /v1/security/password`. Порог приёма клиенту тоже не известен — исход сообщает `accept_status`.
  */
 export type PasswordStrength = 'NOT_RATED' | 'WEAK' | 'MIDDLE' | 'STRONG' | 'THE_BEST';
 
@@ -209,12 +209,19 @@ export interface CalcPasswordStrengthRequest {
 }
 
 /**
- * Ответ POST /v1/check/calc-password-strength. `acceptable` — примет ли такой пароль
- * `POST /v1/security/password`: порог задаёт приложение, и ступень его не выдаёт.
+ * Примет ли пароль `POST /v1/security/password` (`Auth.Check.Enum.PasswordAcceptStatus`), а если
+ * нет — почему: ниже порога приложения либо в формате аварийного кода. Вторая причина от ступени не
+ * зависит — усиление пароля в том же формате её не снимает.
+ */
+export type PasswordAcceptStatus = 'ACCEPTED' | 'TOO_WEAK' | 'RECOVERY_CODE_FORMAT';
+
+/**
+ * Ответ POST /v1/check/calc-password-strength. Ступень и исход независимы: пароль формата
+ * аварийного кода может получить высокую надёжность и всё равно не пройти.
  */
 export interface CalcPasswordStrengthResponse {
   strength: PasswordStrength;
-  acceptable: boolean;
+  accept_status: PasswordAcceptStatus;
 }
 
 /**

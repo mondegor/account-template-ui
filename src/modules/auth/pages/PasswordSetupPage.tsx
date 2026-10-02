@@ -19,7 +19,7 @@ import type { CalcPasswordStrengthResponse } from '../api/types';
  * подтверждения — своих шагомеров форма не рисует.
  *
  * Ворота стоят на оценке сервера, а не на длине: длина от слабого пароля не спасает, а правила
- * надёжности принадлежат развёртыванию. Пропускает форма по `acceptable` из оценки — порог знает
+ * надёжности принадлежат развёртыванию. Пропускает форма по `accept_status` из оценки — порог знает
  * только сервер.
  */
 
@@ -38,7 +38,10 @@ const COPIED_HOLD_MS = 3000;
  * Оценка сгенерированного пароля: по спеке генератор всегда выдаёт значение высшего уровня, и порог
  * установки оно проходит всегда, поэтому шкала ставит её сама, не спрашивая сервер.
  */
-const GENERATED_RATING: CalcPasswordStrengthResponse = { strength: 'THE_BEST', acceptable: true };
+const GENERATED_RATING: CalcPasswordStrengthResponse = {
+  strength: 'THE_BEST',
+  accept_status: 'ACCEPTED',
+};
 
 export function PasswordSetupPage() {
   const { t } = useTranslation();
@@ -129,7 +132,7 @@ export function PasswordSetupPage() {
 
   // Повтор молчит, пока в него не начали набирать: пустое поле это ещё не расхождение.
   const mismatch = repeat.length > 0 && repeat !== password;
-  const passing = strength.state.kind === 'rated' && strength.state.acceptable;
+  const passing = strength.state.kind === 'rated' && strength.state.accept_status === 'ACCEPTED';
 
   // 400 приходит по полю (`ValidateError/new_password`) — садится под поле пароля. 409 — не отказ
   // по значению, а состояние аккаунта: второй фактор уже стоит, и заменить его без отключения

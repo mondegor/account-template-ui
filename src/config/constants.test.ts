@@ -79,8 +79,8 @@ describe('field limits match the openapi contract', () => {
     expect(limits.confirmCode.max).toBeLessThanOrEqual(limits.secret.max);
   });
 
-  it('recovery code 8/32 (RECOVERY link)', () => {
-    expect(limits.recoveryCode).toEqual({ min: 8, max: 32 });
+  it('recovery code 11/32 (RECOVERY link)', () => {
+    expect(limits.recoveryCode).toEqual({ min: 11, max: 32 });
     expect(secretFormatLine('RECOVERY')).toContain(
       `${limits.recoveryCode.min}..${limits.recoveryCode.max}`,
     );

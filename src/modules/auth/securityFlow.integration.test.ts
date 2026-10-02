@@ -50,6 +50,17 @@ async function authenticate() {
   await openSession({ token: op.token });
 }
 
+/**
+ * Отказ аварийному коду не на своём месте: свой код ошибки, а попыток столько же, сколько было до
+ * него, — по спеке он их не расходует.
+ */
+function recoveryCodeNotAllowed(attempts: number) {
+  return (e: unknown) =>
+    e instanceof ApiFieldError &&
+    e.fields[0]?.code === 'RecoveryCodeNotAllowed/secret' &&
+    e.operationState?.remaining_attempts === attempts;
+}
+
 /** Проходит цепочку звеньев подряд и возвращает токен ПОСЛЕДНЕГО: у каждого звена он свой. */
 async function confirmChain(token: string, secrets: string[]): Promise<string> {
   let current = token;
@@ -88,6 +99,15 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
   it('a password below the threshold is refused under the field', async () => {
     await expect(startPasswordSetup({ new_password: 'weakpass' })).rejects.toSatisfy(
       (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'PasswordIsTooWeak/new_password',
+    );
+  });
+
+  /** Формат аварийного кода отклоняется своим кодом при любой надёжности. */
+  it('a password in the recovery-code format is refused under the field', async () => {
+    await expect(startPasswordSetup({ new_password: 'ABCD1234-EFGH5678' })).rejects.toSatisfy(
+      (e) =>
+        e instanceof ApiFieldError &&
+        e.fields[0]?.code === 'PasswordHasRecoveryCodeFormat/new_password',
     );
   });
 
@@ -161,7 +181,18 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     const op = await startRecoveryCodesReissue();
     const next = await confirmOperation({ token: op.token, secret: CODE });
     await expect(confirmOperation({ token: next!.token, secret: RECOVERY_CODE })).rejects.toSatisfy(
-      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'ConfirmCodeIsIncorrect/secret',
+      recoveryCodeNotAllowed(next!.remaining_attempts),
+    );
+  });
+
+  it('turning 2FA off does NOT take a recovery code instead of the emailed code', async () => {
+    const setup = await startPasswordSetup({ new_password: 'Str0ngPass!42' });
+    await applyPassword({ token: await confirmChain(setup.token, [CODE]) });
+
+    const op = await startDisable2fa();
+    expect(op.confirm_method).toBe('EMAIL');
+    await expect(confirmOperation({ token: op.token, secret: RECOVERY_CODE })).rejects.toSatisfy(
+      recoveryCodeNotAllowed(op.remaining_attempts),
     );
   });
 
@@ -314,7 +345,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
     expect(next?.confirm_method).toBe('PASSWORD');
     // Аварийный код вместо второго фактора смена емаила не принимает.
     await expect(confirmOperation({ token: next!.token, secret: RECOVERY_CODE })).rejects.toSatisfy(
-      (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'ConfirmCodeIsIncorrect/secret',
+      recoveryCodeNotAllowed(next!.remaining_attempts),
     );
   });
 

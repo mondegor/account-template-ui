@@ -28,7 +28,7 @@ export type PasswordStrengthState =
   | { kind: 'checking' }
   /** Оценку получить не удалось: шкала останется пустой, а рядом встанет повтор. */
   | { kind: 'failed' }
-  /** Оценка сервера: ступень для шкалы и `acceptable` — пропустит ли пароль установка. */
+  /** Оценка сервера: ступень для шкалы и `accept_status` — пропустит ли пароль установка. */
   | ({ kind: 'rated' } & CalcPasswordStrengthResponse);
 
 export function usePasswordStrength(password: string): {

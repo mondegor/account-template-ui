@@ -45,6 +45,11 @@ export interface SecretFormat {
    * и попытки сгорели бы на значении, которого никто не вводил.
    */
   trim: boolean;
+  /**
+   * Приводить ли набранное к верхнему регистру прямо в поле. Только у аварийного кода: сервер
+   * выдаёт его заглавными, и строчные, переписанные с бумажки, счёл бы неверными, списав попытку.
+   */
+  upperCase: boolean;
   autoComplete: string;
 }
 
@@ -54,6 +59,7 @@ export const SECRET_FORMAT: Record<SecretMode, SecretFormat> = {
     kind: 'digits',
     length: limits.confirmCode,
     trim: true,
+    upperCase: false,
     autoComplete: 'one-time-code',
   },
   TOTP: {
@@ -61,6 +67,7 @@ export const SECRET_FORMAT: Record<SecretMode, SecretFormat> = {
     kind: 'digits',
     length: limits.totpCode,
     trim: true,
+    upperCase: false,
     autoComplete: 'off',
   },
   PASSWORD: {
@@ -68,6 +75,7 @@ export const SECRET_FORMAT: Record<SecretMode, SecretFormat> = {
     kind: 'password',
     length: limits.password,
     trim: false,
+    upperCase: false,
     // Менеджер паролей — единственный способ вообще иметь длинный пароль, и в парольном режиме
     // поле однозначно парольное: подменить его аварийным кодом можно только явным переключением,
     // а там автозаполнения нет. Выключи его здесь — и это подталкивало бы к коротким паролям.
@@ -78,6 +86,7 @@ export const SECRET_FORMAT: Record<SecretMode, SecretFormat> = {
     kind: 'mono',
     length: limits.recoveryCode,
     trim: true,
+    upperCase: true,
     // Код одноразовый, сохранять его незачем.
     autoComplete: 'off',
   },

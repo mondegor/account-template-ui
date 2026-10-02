@@ -31,7 +31,14 @@ export function StrengthMeter({
 
   const rating = state.kind === 'rated' ? state : null;
   const filled = rating ? strengthBars(rating.strength) : 0;
-  const tone = rating ? strengthTone(rating.acceptable) : 'none';
+  const tone = rating ? strengthTone(rating.accept_status) : 'none';
+  // Формат аварийного кода не лечится усилением, и красная «надёжная» ступень про него ничего бы
+  // не сказала — вместо неё подпись называет саму причину. Деления остаются по ступени.
+  const caption = !rating
+    ? p('unknown')
+    : rating.accept_status === 'RECOVERY_CODE_FORMAT'
+      ? p('recoveryCodeFormat')
+      : p(`strength.${rating.strength}`);
 
   const line =
     state.kind === 'short' ? null : state.kind === 'checking' ? (
@@ -56,7 +63,7 @@ export function StrengthMeter({
           variant="caption"
           sx={{ color: tone === 'none' ? 'text.secondary' : `${tone}.main` }}
         >
-          {rating ? p(`strength.${rating.strength}`) : p('unknown')}
+          {caption}
         </Typography>
         {/* Повтор нужен только там, где спрашивать было у чего: оценку не получили, а форма без неё
             не пропускает. */}

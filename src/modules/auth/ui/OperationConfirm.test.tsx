@@ -339,9 +339,45 @@ describe('OperationConfirm: the secret field', () => {
   });
 
   /**
+   * Аварийный код выдаётся заглавными, а с бумажки его нередко набирают строчными. Поле поднимает
+   * регистр само — и при наборе, и при вставке: иначе сервер счёл бы такой код неверным.
+   */
+  it('upper-cases a recovery code as it is entered', () => {
+    const confirm = vi.fn();
+    render(<OperationConfirm flow={{ ...linkFlow('RECOVERY'), confirm }} />);
+
+    const field = screen.getByLabelText(tr('auth.field.recoveryCode'));
+    fireEvent.change(field, { target: { value: 'recovry1-code0011' } });
+    expect(field).toHaveValue('RECOVRY1-CODE0011');
+
+    fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.submit') }));
+    expect(confirm).toHaveBeenCalledWith('RECOVRY1-CODE0011');
+  });
+
+  /**
+   * Правка в середине кода не уводит курсор в конец: регистр меняется, а длина строки нет.
+   */
+  it('keeps the caret in place when upper-casing a recovery code', () => {
+    render(<OperationConfirm flow={linkFlow('RECOVERY')} />);
+
+    const field = screen.getByLabelText<HTMLInputElement>(tr('auth.field.recoveryCode'));
+    fireEvent.change(field, { target: { value: 'RECOVRY1-CODE0011' } });
+    // Набор в середине: значение и каретку браузер выставляет до события. Значение кладётся
+    // сеттером прототипа — так же, как это делает fireEvent, — иначе React не заметил бы правки.
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+      field,
+      'RECOVRY1-xCODE0011',
+    );
+    field.setSelectionRange(10, 10);
+    fireEvent.change(field);
+    expect(field).toHaveValue('RECOVRY1-XCODE0011');
+    expect(field.selectionStart).toBe(10);
+  });
+
+  /**
    * Пароль уходит как набран: символы в нём контракт ничем не ограничивает, поэтому пробел по краю —
-   * такая же его часть, как любая буква. Обрежь его, и попытки сгорели бы на значении, которого
-   * никто не вводил, — а их всего три.
+   * такая же его часть, как любая буква, и регистр тоже. Обрежь край или подними строчные, и
+   * попытки сгорели бы на значении, которого никто не вводил, — а их всего три.
    */
   it('sends the password exactly as typed', () => {
     const confirm = vi.fn();
@@ -349,10 +385,10 @@ describe('OperationConfirm: the secret field', () => {
     render(<OperationConfirm flow={passwordLink} />);
 
     fireEvent.change(screen.getByLabelText(tr('auth.field.password')), {
-      target: { value: ' secret pass ' },
+      target: { value: ' Secret Pass ' },
     });
     fireEvent.click(screen.getByRole('button', { name: tr('auth.confirm.submit') }));
-    expect(confirm).toHaveBeenCalledWith(' secret pass ');
+    expect(confirm).toHaveBeenCalledWith(' Secret Pass ');
   });
 
   /**

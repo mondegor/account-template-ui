@@ -187,6 +187,7 @@
       "lengthHint": "From {{min}} to {{max}} characters",
       "checking": "Checking the strength…",
       "unknown": "Strength unknown",
+      "recoveryCodeFormat": "Looks like a recovery code",
       "retry": "Check the strength again",
       "strength": {
         "NOT_RATED": "Password not rated",

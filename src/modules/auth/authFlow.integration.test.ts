@@ -107,6 +107,24 @@ describe('auth flow (signin → confirm → session → profile)', () => {
   });
 
   /**
+   * Открытие сессии подтверждает звено тем же правилом, что и `PATCH /v1/operation/confirm`:
+   * аварийный код вместо кода из письма отклоняется своим кодом, попытку не тратит, и операция
+   * остаётся годной — следующим запросом с верным кодом сессия открывается.
+   */
+  it('opening a session with a recovery code instead of the emailed one keeps the attempt', async () => {
+    const op = await signin('user@example.com');
+    await expect(openSession({ token: op.token, secret: 'RECOVRY1-CODE0011' })).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof ApiFieldError &&
+        e.operationState?.remaining_attempts === op.remaining_attempts &&
+        e.fields[0]?.code === 'RecoveryCodeNotAllowed/secret',
+    );
+
+    const result = await openSession({ token: op.token, secret: '183947' });
+    expect(result.kind).toBe('access');
+  });
+
+  /**
    * `expires_in` — ОСТАТОК срока, а не полный срок операции: клиент пересчитывает дедлайн от
    * каждого ответа, и полное значение отматывало бы таймер назад на каждом неверном коде. Тогда
    * операция умирала бы, пока на экране ещё остаются минуты.

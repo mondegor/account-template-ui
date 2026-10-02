@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box } from '@mui/material';
 import { UiCodeInput, UiFieldMessage, UiTextField, uiFieldBlockSx } from '@ui';
@@ -48,6 +48,26 @@ export function SecretInput({
   const message = errorText ?? noticeText;
   const ownId = useId();
   const messageId = `${ownId}-message`;
+  const fieldRef = useRef<HTMLInputElement>(null);
+
+  // Регистр поднимается в самом поле — и при наборе, и при вставке: оба приходят сюда целым
+  // значением. Новое значение кладётся в узел заранее, вместе с прежней кареткой: тогда React
+  // находит там уже то, что рисует, и не переписывает узел, а курсор не уезжает в конец строки.
+  // Длина при смене регистра не меняется, поэтому старая позиция годится как есть.
+  function change(next: string) {
+    const el = fieldRef.current;
+    if (!format.upperCase || !el) {
+      onChange(next);
+      return;
+    }
+    const upper = next.toUpperCase();
+    if (upper !== next) {
+      const { selectionStart, selectionEnd } = el;
+      el.value = upper;
+      el.setSelectionRange(selectionStart, selectionEnd);
+    }
+    onChange(upper);
+  }
 
   return format.kind === 'digits' ? (
     <Box sx={uiFieldBlockSx(message ? 'message' : 'quiet')}>
@@ -84,7 +104,8 @@ export function SecretInput({
       // рабочий на вид код — и его начнут набирать.
       placeholder={format.kind === 'mono' ? t('auth.field.recoveryCodeFormat') : undefined}
       value={value}
-      onChange={onChange}
+      onChange={change}
+      inputRef={fieldRef}
       collapseHelper
       error={error}
       helperText={message}

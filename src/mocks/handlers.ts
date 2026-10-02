@@ -11,6 +11,7 @@ import { isoIn, matchHeaderTz } from './serverTime';
 import type {
   ConfirmMethod,
   OperationType,
+  PasswordAcceptStatus,
   PasswordStrength,
   PendingOperation,
   SuccessAccess,
@@ -328,9 +329,28 @@ function passwordStrength(password: string): PasswordStrength {
 
 /**
  * Ступени, которые проходят порог установки пароля. Порог — настройка приложения; мок держит его
- * на STRONG и сообщает исход полем `acceptable` оценки.
+ * на STRONG и сообщает исход полем `accept_status` оценки.
  */
 const PASSING_STRENGTHS: readonly PasswordStrength[] = ['STRONG', 'THE_BEST'];
+
+/**
+ * Формат аварийного кода из спеки: латиница в верхнем регистре и цифры, ровно один дефис строго
+ * посередине (на позиции половины длины), от 11 символов.
+ */
+function isRecoveryCodeFormat(value: string): boolean {
+  if (value.length < 11) return false;
+  const sep = Math.floor(value.length / 2);
+  return [...value].every((c, i) => (i === sep ? c === '-' : /^[A-Z0-9]$/.test(c)));
+}
+
+/**
+ * Исход установки пароля — один на оценку и на саму установку. Формат аварийного кода проверяется
+ * раньше порога: его не снимает никакая надёжность.
+ */
+function acceptStatus(password: string): PasswordAcceptStatus {
+  if (isRecoveryCodeFormat(password)) return 'RECOVERY_CODE_FORMAT';
+  return PASSING_STRENGTHS.includes(passwordStrength(password)) ? 'ACCEPTED' : 'TOO_WEAK';
+}
 
 function generatedPassword(): string {
   // По символу из каждого класса, остальное — вперемешку: так сгенерированное всегда THE_BEST.
@@ -477,14 +497,42 @@ function expectedSecret(op: MockOperation): string {
   }
 }
 
+/** Деталь отказа `RecoveryCodeNotAllowed` — одна у подтверждения и у открытия сессии. */
+const RECOVERY_NOT_ALLOWED_DETAIL = 'A recovery code cannot be used at this step';
+
 /**
- * Принят ли предъявленный секрет текущим звеном. Обычно это ровно ожидаемое значение, но на звене
- * второго фактора спека разрешает ввести ВМЕСТО него аварийный код — и только там, где такая замена
- * объявлена: у входа и у отключения 2FA. Перевыпуск аварийных кодов, регистрация и установка
- * пароля/TOTP её не допускают — предъявленный там код отклоняется как неверный и не расходуется.
- *
- * Цепочка, где аварийный код стоит отдельным звеном, замену тоже исключает: иначе за один вход
- * ушло бы два кода, а спека разрешает не больше одного.
+ * Можно ли на текущем звене ввести аварийный код ВМЕСТО основного доказательства. Спека разрешает
+ * это только на звене второго фактора и только там, где такая замена объявлена: у входа и у
+ * отключения 2FA. Цепочка, где аварийный код стоит отдельным звеном, замену исключает: иначе за
+ * один вход ушло бы два кода, а спека разрешает не больше одного.
+ */
+function allowsRecoverySwap(op: MockOperation): boolean {
+  const onFactorLink = currentMethod(op) === 'PASSWORD' || currentMethod(op) === 'TOTP';
+  return (
+    onFactorLink &&
+    (op.kind === 'signin' || op.kind === 'disable2fa') &&
+    !op.chain.includes('RECOVERY')
+  );
+}
+
+/**
+ * Предъявлен аварийный код (узнаётся по одному формату) там, где он не принимается: звено не
+ * `RECOVERY` и подмены на нём нет. Такой отказ — `RecoveryCodeNotAllowed`, попытка на нём не
+ * расходуется. От состояния 2FA аккаунта он не зависит: смотрит только на ввод и на звено.
+ */
+function recoveryCodeNotAllowed(op: MockOperation, secret: string | undefined): boolean {
+  return (
+    secret !== undefined &&
+    isRecoveryCodeFormat(secret) &&
+    currentMethod(op) !== 'RECOVERY' &&
+    !allowsRecoverySwap(op)
+  );
+}
+
+/**
+ * Принят ли предъявленный секрет текущим звеном. Обычно это ровно ожидаемое значение, но там, где
+ * спека разрешает подмену (см. allowsRecoverySwap), годится и аварийный код. Где подмены нет, код
+ * сюда не доходит — его раньше отсекает recoveryCodeNotAllowed.
  *
  * Пустой набор аварийных кодов не подтверждает ничего: предъявленный код отклоняется как неверный,
  * иначе остаток в профиле не значил бы ничего. Считается это только там, где набор вообще есть: у
@@ -492,11 +540,8 @@ function expectedSecret(op: MockOperation): string {
  */
 function secretAccepted(op: MockOperation, secret: string | undefined): boolean {
   if (secret === MOCK_RECOVERY_CODE && auth2fa !== 'NONE' && recoveryCodesLeft <= 0) return false;
-  const onFactorLink = currentMethod(op) === 'PASSWORD' || currentMethod(op) === 'TOTP';
   if (secret === expectedSecret(op)) return true;
-  const allowsSwap =
-    (op.kind === 'signin' || op.kind === 'disable2fa') && !op.chain.includes('RECOVERY');
-  return onFactorLink && allowsSwap && secret === MOCK_RECOVERY_CODE;
+  return allowsRecoverySwap(op) && secret === MOCK_RECOVERY_CODE;
 }
 
 /**
@@ -1099,8 +1144,10 @@ export const handlers = [
     if (password.length < 8 || password.length > 32) {
       return fieldError('ValidateError/password', 'The password must be 8 to 32 characters');
     }
-    const strength = passwordStrength(password);
-    return HttpResponse.json({ strength, acceptable: PASSING_STRENGTHS.includes(strength) });
+    return HttpResponse.json({
+      strength: passwordStrength(password),
+      accept_status: acceptStatus(password),
+    });
   }),
 
   // --- Генерация пароля (помощь на форме установки) ---
@@ -1166,6 +1213,10 @@ export const handlers = [
     if (op.confirmed) return new HttpResponse(null, { status: 204 });
     if (op.remainingAttempts <= 0) {
       return operationError(op, 'NoAttemptsToConfirmOperation/secret', 'No attempts left');
+    }
+    // Аварийный код не на своём месте — отказ по формату, попытка не расходуется.
+    if (recoveryCodeNotAllowed(op, body.secret)) {
+      return operationError(op, 'RecoveryCodeNotAllowed/secret', RECOVERY_NOT_ALLOWED_DETAIL);
     }
 
     if (secretAccepted(op, body.secret)) {
@@ -1251,6 +1302,9 @@ export const handlers = [
       // и счётчик расходует так же — и так же перестаёт их принимать, когда счётчик исчерпан.
       if (op.remainingAttempts <= 0) {
         return operationError(op, 'NoAttemptsToConfirmOperation/secret', 'No attempts left');
+      }
+      if (recoveryCodeNotAllowed(op, body.secret)) {
+        return operationError(op, 'RecoveryCodeNotAllowed/secret', RECOVERY_NOT_ALLOWED_DETAIL);
       }
       if (!secretAccepted(op, body.secret)) {
         op.remainingAttempts -= 1;
@@ -1483,9 +1537,15 @@ export const handlers = [
     if (password.length < 8 || password.length > 32) {
       return fieldError('ValidateError/new_password', 'The password must be 8 to 32 characters');
     }
-    // Порог надёжности — тот же, что сообщает `acceptable` у calc-password-strength.
-    if (!PASSING_STRENGTHS.includes(passwordStrength(password))) {
-      return fieldError('PasswordIsTooWeak/new_password', 'The password is too weak');
+    // Исход — тот же, что сообщает `accept_status` у calc-password-strength.
+    switch (acceptStatus(password)) {
+      case 'RECOVERY_CODE_FORMAT':
+        return fieldError(
+          'PasswordHasRecoveryCodeFormat/new_password',
+          'The password must not look like a recovery code',
+        );
+      case 'TOO_WEAK':
+        return fieldError('PasswordIsTooWeak/new_password', 'The password is too weak');
     }
     // Активный второй фактор не перезаписывается — сначала его нужно отключить.
     if (auth2fa !== 'NONE') {

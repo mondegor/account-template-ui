@@ -176,6 +176,14 @@ const PASSWORD_CLASSES = [
 const GENERATED_PASSWORD_LENGTH = 16;
 
 /**
+ * Схемная проверка пароля, как у сервера: 10..32 символа, только печатные символы ASCII без
+ * пробела. Свою копию набора мок держит намеренно — он играет сервер, а не повторяет клиента.
+ */
+function isSchemaPassword(password: string): boolean {
+  return password.length >= 10 && password.length <= 32 && /^[\x21-\x7E]+$/.test(password);
+}
+
+/**
  * Назначение операции. Завершающий метод сверяется с ним раньше, чем с подтверждённостью: и свой
  * `apply-*`, и универсальный `apply-operation` на чужой тип отвечают `403`.
  */
@@ -1141,8 +1149,11 @@ export const handlers = [
     }
     const body = (await request.json()) as { password?: string };
     const password = body.password ?? '';
-    if (password.length < 8 || password.length > 32) {
-      return fieldError('ValidateError/password', 'The password must be 8 to 32 characters');
+    if (!isSchemaPassword(password)) {
+      return fieldError(
+        'ValidateError/password',
+        'The password must be 10 to 32 printable ASCII characters without spaces',
+      );
     }
     return HttpResponse.json({
       strength: passwordStrength(password),
@@ -1534,8 +1545,11 @@ export const handlers = [
     if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
     const body = (await request.json()) as { new_password?: string };
     const password = body.new_password ?? '';
-    if (password.length < 8 || password.length > 32) {
-      return fieldError('ValidateError/new_password', 'The password must be 8 to 32 characters');
+    if (!isSchemaPassword(password)) {
+      return fieldError(
+        'ValidateError/new_password',
+        'The password must be 10 to 32 printable ASCII characters without spaces',
+      );
     }
     // Исход — тот же, что сообщает `accept_status` у calc-password-strength.
     switch (acceptStatus(password)) {

@@ -28,6 +28,7 @@ const PASSWORD_FIELDS: ReadonlySet<string> = new Set(['new_password']);
 
 /** id поля пароля и id его строк: подпись, подсказку и сообщение рисует форма, связывать их ей же. */
 const FIELD_ID = 'new-password';
+const STRENGTH_ID = `${FIELD_ID}-strength`;
 const HINT_ID = `${FIELD_ID}-hint`;
 const MESSAGE_ID = `${FIELD_ID}-error`;
 
@@ -179,16 +180,46 @@ export function PasswordSetupPage() {
               // человек задал бы вторым фактором то, что у него уже есть.
               autoComplete="new-password"
               placeholder={p('newPlaceholder')}
+              // Генерация предлагает значение для поля целиком, поэтому стоит в его подписи: туда
+              // смотрят до набора, и придумывать самому не приходится.
+              labelAside={
+                <Link
+                  component="button"
+                  type="button"
+                  disabled={generate.isPending}
+                  onClick={() => generate.mutate()}
+                  sx={{
+                    flexShrink: 0,
+                    display: 'inline-flex',
+                    // Базовую линию ссылки задаёт текст, иначе строка равнялась бы по низу иконки
+                    // и съезжала вверх относительно подписи слева; иконка центрируется по тексту.
+                    alignItems: 'baseline',
+                    '& > svg': { alignSelf: 'center' },
+                    gap: 0.5,
+                    fontSize: 13,
+                    verticalAlign: 'baseline',
+                    p: 0,
+                  }}
+                >
+                  <WandIcon size={16} />
+                  {p('generate')}
+                </Link>
+              }
               value={password}
               onChange={change}
               maxLength={limits.password.max}
               // Своей строки у поля нет: под ним шкала, а подсказка и сообщения идут уже за ней —
               // поэтому строку MUI не резервируем, блок кончаем вплотную и связь с полем держим
-              // сами. Порядок id — тот же, что на экране.
+              // сами. Порядок id — тот же, что на экране; подписи шкалы, пока её нет, id просто не
+              // находит узла и пропускается.
               collapseHelper
               messageBelow
-              describedBy={fieldError ? `${HINT_ID} ${MESSAGE_ID}` : HINT_ID}
-              error={Boolean(fieldError)}
+              describedBy={
+                fieldError ? `${STRENGTH_ID} ${HINT_ID} ${MESSAGE_ID}` : `${STRENGTH_ID} ${HINT_ID}`
+              }
+              // Символ вне набора — отказ при любой длине, как и отказ сервера: поле помечено, а
+              // причину называет подпись шкалы, уже связанная с ним.
+              error={Boolean(fieldError) || strength.state.kind === 'badChars'}
               reveal={{
                 show: t('common.field.showPassword'),
                 hide: t('common.field.hidePassword'),
@@ -215,45 +246,19 @@ export function PasswordSetupPage() {
                 onClick: () => void copy(),
               }}
             />
-            <StrengthMeter state={strength.state} onRetry={strength.retry} />
-            {/* Границы поля повторяются словами и стоят под ним постоянно: поле их применяет молча,
-                обрезая лишнее, а появившаяся шкала встаёт над подсказкой, а не вместо неё.
-
-                Справа на той же строке — генерация: она предлагает полю значение, которое разом
-                удовлетворяет и границам, и оценке надёжности, поэтому и стоит рядом с ними, а не
-                над полем, где ещё не с чем сравнивать. */}
-            <Stack
-              direction="row"
-              spacing={2}
-              sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}
-            >
-              <UiFieldMessage
-                id={HINT_ID}
-                text={p('lengthHint', { min: limits.password.min, max: limits.password.max })}
-                align="start"
-              />
-              <Link
-                component="button"
-                type="button"
-                disabled={generate.isPending}
-                onClick={() => generate.mutate()}
-                sx={{
-                  flexShrink: 0,
-                  display: 'inline-flex',
-                  // Базовую линию ссылки задаёт текст, иначе строка равнялась бы по низу иконки
-                  // и съезжала вверх относительно подсказки слева; иконка центрируется по тексту.
-                  alignItems: 'baseline',
-                  '& > svg': { alignSelf: 'center' },
-                  gap: 0.5,
-                  fontSize: 12,
-                  verticalAlign: 'baseline',
-                  p: 0,
-                }}
-              >
-                <WandIcon size={16} />
-                {p('generate')}
-              </Link>
-            </Stack>
+            <StrengthMeter
+              state={strength.state}
+              onRetry={strength.retry}
+              captionId={STRENGTH_ID}
+            />
+            {/* Границы и набор символов повторяются словами и стоят под полем постоянно: длину
+                поле применяет молча, обрезая лишнее, а появившаяся шкала встаёт над подсказкой, а
+                не вместо неё. */}
+            <UiFieldMessage
+              id={HINT_ID}
+              text={p('formatHint', { min: limits.password.min, max: limits.password.max })}
+              align="start"
+            />
             <UiFieldMessage id={MESSAGE_ID} text={fieldError} tone="error" align="start" live />
             <UiFieldMessage text={helpFailure} tone="error" align="start" />
           </Box>

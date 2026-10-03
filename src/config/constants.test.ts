@@ -57,11 +57,16 @@ describe('field limits match the openapi contract', () => {
     );
   });
 
-  it('secret 4/32 (ConfirmOperation)', () => {
+  /**
+   * Парольное звено меряется рамкой `secret`, а не политикой установки: политика может меняться, а
+   * уже заданный пароль обязан вводиться.
+   */
+  it('secret 4/32 (ConfirmOperation and PASSWORD link)', () => {
     expect(limits.secret).toEqual({ min: 4, max: 32 });
     expect(
       hasMinMax(schemaBlock('Auth.Operation.Request.Model.ConfirmOperation'), 'secret', 4, 32),
     ).toBe(true);
+    expect(secretFormatLine('PASSWORD')).toContain(`${limits.secret.min}..${limits.secret.max}`);
   });
 
   /**
@@ -88,15 +93,18 @@ describe('field limits match the openapi contract', () => {
     expect(limits.recoveryCode.max).toBeLessThanOrEqual(limits.secret.max);
   });
 
-  /** Один и тот же размер объявлен дважды: у формы установки пароля и у парольного звена. */
-  it('new_password 8/32 (ChangePassword and PASSWORD link)', () => {
-    expect(limits.password).toEqual({ min: 8, max: 32 });
+  /**
+   * Один и тот же размер объявлен дважды: у формы установки пароля и у оценки его надёжности.
+   * Парольное звено им не меряется — см. `limits.password`.
+   */
+  it('new_password 10/32 (ChangePassword and CalcPasswordStrength)', () => {
+    expect(limits.password).toEqual({ min: 10, max: 32 });
     expect(
-      hasMinMax(schemaBlock('Auth.Security.Request.Model.ChangePassword'), 'new_password', 8, 32),
+      hasMinMax(schemaBlock('Auth.Security.Request.Model.ChangePassword'), 'new_password', 10, 32),
     ).toBe(true);
-    expect(secretFormatLine('PASSWORD')).toContain(
-      `${limits.password.min}..${limits.password.max}`,
-    );
+    expect(
+      hasMinMax(schemaBlock('Auth.Check.Request.Model.CalcPasswordStrength'), 'password', 10, 32),
+    ).toBe(true);
   });
 
   it('totp_code 6/6 (ApplyTotpGenerator and TOTP link)', () => {

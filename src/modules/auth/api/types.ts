@@ -163,7 +163,10 @@ export interface ChangePhoneRequest {
   new_phone: string;
 }
 
-/** Тело POST /v1/security/password: пароль устанавливается вторым фактором (границы 8..32). */
+/**
+ * Тело POST /v1/security/password: пароль устанавливается вторым фактором (границы 10..32, печатные
+ * символы ASCII без пробела).
+ */
 export interface ChangePasswordRequest {
   new_password: string;
 }
@@ -203,7 +206,7 @@ export interface TotpSecret {
  */
 export type PasswordStrength = 'NOT_RATED' | 'WEAK' | 'MIDDLE' | 'STRONG' | 'THE_BEST';
 
-/** Тело POST /v1/check/calc-password-strength (границы те же 8..32, что и у самого пароля). */
+/** Тело POST /v1/check/calc-password-strength (границы и набор символов те же, что у самого пароля). */
 export interface CalcPasswordStrengthRequest {
   password: string;
 }

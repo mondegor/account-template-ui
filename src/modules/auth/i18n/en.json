@@ -14,6 +14,7 @@
       "password": "Password",
       "recoveryCode": "Recovery code",
       "recoveryCodeFormat": "XXXXXXXX-XXXXXXXX",
+      "wrongLayout": "Check your keyboard layout",
       "emailChecking": "Checking availability…",
       "emailFree": "Email is available for registration",
       "emailTaken": "This email is already registered"
@@ -183,10 +184,11 @@
       "new": "New password",
       "newPlaceholder": "Come up with a password",
       "repeat": "Repeat the password",
-      "generate": "Generate a password",
-      "lengthHint": "From {{min}} to {{max}} characters",
+      "generate": "Generate",
+      "formatHint": "{{min}} to {{max}} characters: Latin letters, digits and symbols, no spaces",
       "checking": "Checking the strength…",
       "unknown": "Strength unknown",
+      "badChars": "Invalid characters",
       "recoveryCodeFormat": "Looks like a recovery code",
       "retry": "Check the strength again",
       "strength": {

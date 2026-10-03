@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PasswordStrength } from '../api/types';
-import { STRENGTH_BARS, strengthBars, strengthTone } from './passwordStrength';
+import { STRENGTH_BARS, hasPasswordCharset, strengthBars, strengthTone } from './passwordStrength';
 
 /** Все значения перечисления спеки — таблицы обязаны отвечать на каждое. */
 const ALL: PasswordStrength[] = ['NOT_RATED', 'WEAK', 'MIDDLE', 'STRONG', 'THE_BEST'];
@@ -23,5 +23,14 @@ describe('password strength', () => {
     expect(strengthTone('TOO_WEAK')).toBe('error');
     expect(strengthTone('RECOVERY_CODE_FORMAT')).toBe('error');
     expect(strengthTone('ACCEPTED')).toBe('success');
+  });
+
+  /** Набор — печатный ASCII без пробела: обе его границы входят, всё за ними — нет. */
+  it('accepts printable ASCII except space', () => {
+    expect(hasPasswordCharset('!Az09~{}"\\')).toBe(true);
+    expect(hasPasswordCharset('pass word')).toBe(false);
+    expect(hasPasswordCharset('tab\there')).toBe(false);
+    expect(hasPasswordCharset('caf\u00e9')).toBe(false);
+    expect(hasPasswordCharset('pass\u0434')).toBe(false);
   });
 });

@@ -144,9 +144,49 @@ describe('PasswordSetupPage', () => {
 
     expect(calcPasswordStrength).not.toHaveBeenCalled();
     expect(
-      screen.getByText(tr('auth.password.lengthHint', { min: 8, max: 32 })),
+      screen.getByText(tr('auth.password.formatHint', { min: 10, max: 32 })),
     ).toBeInTheDocument();
     expect(submitButton()).toBeDisabled();
+  });
+
+  /**
+   * Символ вне набора пароля метод отклоняет при любой длине, и повтор тут не поможет: оценку не
+   * спрашиваем, а под полем называем причину — с первого же символа, не дожидаясь минимума.
+   */
+  it.each([
+    ['a space', 'correct horse'],
+    ['a non-ASCII letter', 'P\u00e4sswort'],
+  ])('names the charset instead of asking for a rating on %s', async (_, value) => {
+    renderPage();
+
+    await fill(value);
+
+    expect(calcPasswordStrength).not.toHaveBeenCalled();
+    expect(screen.getByText(tr('auth.password.badChars'))).toBeInTheDocument();
+    expect(screen.getByTestId('field-new_password')).toHaveAttribute('aria-invalid', 'true');
+    // Причина — описание поля и объявляется регионом: набирающий вслепую её тоже услышит.
+    expect(screen.getByTestId('field-new_password')).toHaveAccessibleDescription(
+      expect.stringContaining(tr('auth.password.badChars')),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(tr('auth.password.badChars'));
+    expect(screen.queryByRole('button', { name: tr('auth.password.retry') })).toBeNull();
+    expect(submitButton()).toBeDisabled();
+  });
+
+  /**
+   * Ожидание встаёт на каждой паузе в наборе, и диктор, объявляй он его, перебивал бы человека
+   * пустой строкой: оно скрыто, а объявляется только итог.
+   */
+  it('announces the rating but not the wait for it', async () => {
+    renderPage();
+
+    fireEvent.change(screen.getByTestId('field-new_password'), { target: { value: STRONG } });
+
+    expect(screen.getByText(tr('auth.password.checking'))).toHaveAttribute('aria-hidden', 'true');
+
+    await settle();
+
+    expect(screen.getByRole('status')).toHaveTextContent(tr('auth.password.strength.THE_BEST'));
   });
 
   /**
@@ -161,7 +201,7 @@ describe('PasswordSetupPage', () => {
 
     expect(screen.getByText(tr('auth.password.strength.MIDDLE'))).toBeInTheDocument();
     expect(
-      screen.getByText(tr('auth.password.lengthHint', { min: 8, max: 32 })),
+      screen.getByText(tr('auth.password.formatHint', { min: 10, max: 32 })),
     ).toBeInTheDocument();
   });
 
@@ -280,8 +320,12 @@ describe('PasswordSetupPage', () => {
     expect(screen.getByTestId('strength-bars')).toBeInTheDocument();
     expect(submitButton()).toBeDisabled();
 
+    // Повтор — управление, а не итог: живой регион его не объявляет.
+    const retry = screen.getByRole('button', { name: tr('auth.password.retry') });
+    expect(screen.getByRole('status')).not.toContainElement(retry);
+
     vi.mocked(calcPasswordStrength).mockResolvedValue(rating('STRONG', 'ACCEPTED'));
-    fireEvent.click(screen.getByRole('button', { name: tr('auth.password.retry') }));
+    fireEvent.click(retry);
     await settle();
 
     expect(screen.getByText(tr('auth.password.strength.STRONG'))).toBeInTheDocument();
@@ -515,14 +559,15 @@ describe('PasswordSetupPage', () => {
 
       const message = await screen.findByText(REJECTED);
       // Поле помечено и связано со строками под ним: иначе диктору досталось бы «неверно» без
-      // причины. Описаний два — границы поля и сам отказ, — и читаются они в том же порядке, в каком
-      // стоят на экране.
+      // причины. Описаний три — оценка, границы поля и сам отказ, — и читаются они в том же
+      // порядке, в каком стоят на экране.
       const field = screen.getByTestId('field-new_password');
       expect(field).toHaveAttribute('aria-invalid', 'true');
-      const [hint, rejection] = (field.getAttribute('aria-describedby') ?? '')
+      const [meter, hint, rejection] = (field.getAttribute('aria-describedby') ?? '')
         .split(' ')
         .map((id) => document.getElementById(id));
-      expect(hint).toHaveTextContent(tr('auth.password.lengthHint', { min: 8, max: 32 }));
+      expect(meter).toHaveTextContent(tr('auth.password.strength.THE_BEST'));
+      expect(hint).toHaveTextContent(tr('auth.password.formatHint', { min: 10, max: 32 }));
       expect(rejection).toContainElement(message);
     },
   );

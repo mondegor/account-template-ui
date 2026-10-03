@@ -41,7 +41,7 @@ export interface SecretFormat {
    * не входит, а приезжает вставкой — из списка аварийных кодов или из сообщения. Уйди такой край
    * на сервер, тот ответил бы «неверный код» и списал попытку за то, чего человек не набирал.
    *
-   * У пароля ограничений на символы нет вовсе, и краевой пробел в нём — часть секрета: обрежь его,
+   * Пароль — любые символы ASCII, и краевой пробел в нём может быть частью секрета: обрежь его,
    * и попытки сгорели бы на значении, которого никто не вводил.
    */
   trim: boolean;
@@ -73,7 +73,9 @@ export const SECRET_FORMAT: Record<SecretMode, SecretFormat> = {
   PASSWORD: {
     label: 'auth.field.password',
     kind: 'password',
-    length: limits.password,
+    // Рамка поля `secret`, а не политика установки пароля: политика может меняться, а уже
+    // заданный пароль обязан вводиться.
+    length: limits.secret,
     trim: false,
     upperCase: false,
     // Менеджер паролей — единственный способ вообще иметь длинный пароль, и в парольном режиме
@@ -95,4 +97,12 @@ export const SECRET_FORMAT: Record<SecretMode, SecretFormat> = {
 /** Значение, каким оно уйдёт на сервер: по нему же меряется и включение кнопки. */
 export function secretValue(mode: SecretMode, value: string): string {
   return SECRET_FORMAT[mode].trim ? value.trim() : value;
+}
+
+/**
+ * Есть ли в значении символ вне ASCII. Пароль и аварийный код целиком лежат в ASCII, и такой
+ * символ почти всегда значит не ту раскладку клавиатуры — об этом поле и говорит, пока набирают.
+ */
+export function hasNonAscii(value: string): boolean {
+  return /[\u0080-\uFFFF]/.test(value);
 }

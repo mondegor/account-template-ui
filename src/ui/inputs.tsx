@@ -110,6 +110,11 @@ export interface UiTextFieldProps {
    */
   hideLabel?: boolean;
   /**
+   * Действие над полем в строке подписи, прижатое вправо: оно относится к полю целиком и стоит над
+   * ним, а не в общем потоке формы. Без видимой подписи не рисуется — строки для него нет.
+   */
+  labelAside?: ReactNode;
+  /**
    * Строка сообщения под полем не резервируется, а раскрывается по мере надобности
    * (`UiFieldMessage`). Для форм, где поле одно: пустой зазор между полем и кнопкой там ничем не
    * занят и виден как провал.
@@ -187,6 +192,7 @@ export interface UiTextFieldProps {
 export function UiTextField({
   label,
   hideLabel,
+  labelAside,
   collapseHelper,
   messageBelow,
   messageLive,
@@ -229,11 +235,27 @@ export function UiTextField({
           : undefined
       }
     >
-      {labelShown && (
-        <FormLabel htmlFor={fieldId} sx={{ display: 'block', fontSize: 13, mb: 0.5 }}>
-          {label}
-        </FormLabel>
-      )}
+      {labelShown &&
+        (labelAside ? (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: 2,
+              mb: 0.5,
+            }}
+          >
+            <FormLabel htmlFor={fieldId} sx={{ fontSize: 13 }}>
+              {label}
+            </FormLabel>
+            {labelAside}
+          </Box>
+        ) : (
+          <FormLabel htmlFor={fieldId} sx={{ display: 'block', fontSize: 13, mb: 0.5 }}>
+            {label}
+          </FormLabel>
+        ))}
       <TextField
         id={fieldId}
         type={reveal && shown ? 'text' : type}

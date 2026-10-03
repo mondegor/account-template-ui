@@ -4,6 +4,7 @@ import { Box, Divider, Link, Stack, Typography } from '@mui/material';
 import { UiAlert, UiButton, UiSmoothHeight } from '@ui';
 import type { ConfirmFlow } from '../hooks/useConfirmFlow';
 import {
+  hasNonAscii,
   isSwapMode,
   SECRET_FORMAT,
   secretValue,
@@ -377,7 +378,13 @@ export function OperationConfirm({
             type="submit"
             label={t(awaitingFinish ? 'auth.confirm.retryFinish' : 'auth.confirm.submit')}
             busy={flow.submitting}
-            disabled={!awaitingFinish && secret.length < SECRET_FORMAT[mode].length.min}
+            // Пароль и аварийный код целиком лежат в ASCII: символ вне него сервер не примет ни при
+            // каком вводе — отправка только сожгла бы попытку, а причину называет подсказка у поля.
+            disabled={
+              !awaitingFinish &&
+              (secret.length < SECRET_FORMAT[mode].length.min ||
+                (SECRET_FORMAT[mode].kind !== 'digits' && hasNonAscii(secret)))
+            }
           />
         )}
       </Box>

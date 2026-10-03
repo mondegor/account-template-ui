@@ -97,7 +97,7 @@ describe('security flows (initiator → confirmation chain → apply)', () => {
   });
 
   it('a password below the threshold is refused under the field', async () => {
-    await expect(startPasswordSetup({ new_password: 'weakpass' })).rejects.toSatisfy(
+    await expect(startPasswordSetup({ new_password: 'weakpasswd' })).rejects.toSatisfy(
       (e) => e instanceof ApiFieldError && e.fields[0]?.code === 'PasswordIsTooWeak/new_password',
     );
   });

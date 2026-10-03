@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { limits } from '@config';
 import { calcPasswordStrength } from '../api/authApi';
 import type { CalcPasswordStrengthResponse } from '../api/types';
+import { hasPasswordCharset } from '../lib/passwordStrength';
 
 /**
  * Живая оценка набираемого пароля. Считает её сервер, а хук отвечает за то, когда спрашивать и чей
@@ -22,6 +23,11 @@ import type { CalcPasswordStrengthResponse } from '../api/types';
 const CHECK_DEBOUNCE_MS = 700;
 
 export type PasswordStrengthState =
+  /**
+   * Символ вне набора пароля. Метод отвечает на такое значение 400 при любой длине, поэтому набор
+   * проверяется раньше длины: причину видно сразу, а не после набора минимума.
+   */
+  | { kind: 'badChars' }
   /** Короче минимума: метод на таком значении отвечает 400, и спрашивать его незачем. */
   | { kind: 'short' }
   /** Ответа ещё нет — пауза в наборе либо запрос в пути. */
@@ -52,6 +58,10 @@ export function usePasswordStrength(password: string): {
   const known = useRef<{ value: string; rating: CalcPasswordStrengthResponse }>(undefined);
 
   useEffect(() => {
+    if (!hasPasswordCharset(password)) {
+      setState({ kind: 'badChars' });
+      return;
+    }
     if (password.length < limits.password.min) {
       setState({ kind: 'short' });
       return;

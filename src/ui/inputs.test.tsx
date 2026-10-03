@@ -128,6 +128,40 @@ describe('UiTextField', () => {
   });
 
   /**
+   * Действие в строке подписи не отнимает у поля его имя: подпись по-прежнему связана с полем, а
+   * без видимой подписи строки нет — и действию стоять негде.
+   */
+  it('puts the aside next to the label', () => {
+    const aside = <button type="button">Generate</button>;
+    const { rerender } = render(
+      <UiTextField
+        name="password"
+        label="Password"
+        value=""
+        onChange={() => {}}
+        labelAside={aside}
+      />,
+    );
+
+    expect(screen.getByLabelText('Password')).toBe(screen.getByTestId('field-password'));
+    expect(screen.getByText('Password').parentElement).toContainElement(
+      screen.getByRole('button', { name: 'Generate' }),
+    );
+
+    rerender(
+      <UiTextField
+        name="password"
+        label="Password"
+        hideLabel
+        value=""
+        onChange={() => {}}
+        labelAside={aside}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Generate' })).toBeNull();
+  });
+
+  /**
    * Пароль набирают вслепую, и единственный способ проверить набранное — показать его. Доступное
    * имя кнопки меняется вместе с состоянием: иначе с экрана читателя оно врало бы про действие.
    */

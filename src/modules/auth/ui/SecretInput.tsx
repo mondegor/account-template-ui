@@ -2,7 +2,7 @@ import { useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box } from '@mui/material';
 import { UiCodeInput, UiFieldMessage, UiTextField, uiFieldBlockSx } from '@ui';
-import { SECRET_FORMAT, type SecretMode } from '../lib/secretFormat';
+import { SECRET_FORMAT, hasNonAscii, secretValue, type SecretMode } from '../lib/secretFormat';
 
 /**
  * Поле секрета: ряд клеток либо обычное поле — смотря какой формат сейчас набирают. Каждый формат
@@ -11,6 +11,10 @@ import { SECRET_FORMAT, type SecretMode } from '../lib/secretFormat';
  *
  * Что вводят, сказано сообщением над полем, поэтому название формата остаётся только доступным
  * именем.
+ *
+ * Символ вне ASCII в пароле или аварийном коде поле называет само, пока набирают: почти всегда это
+ * не та раскладка, а узнать об этом из отказа сервера — значит сжечь попытку. Отказ сервера старше
+ * подсказки: он про отправленное значение.
  *
  * Строка под полем объявляется диктором: отказ приходит ответом сервера, курсор после отправки
  * остаётся здесь же, и экран не меняется ничем другим — необъявленный отказ достался бы только
@@ -43,9 +47,15 @@ export function SecretInput({
 }) {
   const { t } = useTranslation();
   const format = SECRET_FORMAT[mode];
-  const error = !!errorText;
+  // Меряется то, что уйдёт на сервер, — как и у кнопки: неразрывный пробел по краю вставки
+  // обрезка снимает, и звать из-за него раскладку значило бы спорить с активной кнопкой.
+  const wrongLayout = format.kind !== 'digits' && hasNonAscii(secretValue(mode, value));
+  const error = !!errorText || wrongLayout;
   // Источник отказа один, так что и текст приходит один; порядок задан на случай, когда оба.
-  const message = errorText ?? noticeText;
+  // Раскладка идёт раньше notice: поле она красит, и строка под ним обязана назвать причину, а
+  // notice про прошлую попытку, тогда как раскладка — про набранное сейчас.
+  const message =
+    errorText ?? (wrongLayout ? t('auth.field.wrongLayout') : undefined) ?? noticeText;
   const ownId = useId();
   const messageId = `${ownId}-message`;
   const fieldRef = useRef<HTMLInputElement>(null);

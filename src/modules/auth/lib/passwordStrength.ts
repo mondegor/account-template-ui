@@ -33,3 +33,14 @@ export function strengthBars(strength: PasswordStrength): number {
 export function strengthTone(status: PasswordAcceptStatus): 'error' | 'success' {
   return status === 'ACCEPTED' ? 'success' : 'error';
 }
+
+const PASSWORD_CHARSET = /^[\x21-\x7E]*$/;
+
+/**
+ * Набор символов пароля по контракту: латинские буквы, цифры и спецсимволы — любые печатные символы
+ * ASCII, кроме пробела. Значение вне набора сервер отклоняет уже на оценке надёжности, поэтому
+ * спрашивать её незачем: причину называет сама форма. Чаще всего это не та раскладка.
+ */
+export function hasPasswordCharset(value: string): boolean {
+  return PASSWORD_CHARSET.test(value);
+}

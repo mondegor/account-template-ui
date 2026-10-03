@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { addTranslations, initI18n, setLanguage } from '@core/i18n';
 import { limits } from '@config';
 import type { OperationSnapshot } from '@core/operation';
@@ -405,8 +405,24 @@ describe('OperationConfirm: the secret field', () => {
   });
 
   /**
+   * Вставка из письма или мессенджера нередко приносит по краю неразрывный пробел. Он вне ASCII, но
+   * обрезка его снимает, и на сервер он не едет: поле не зовёт раскладку, кнопка активна.
+   */
+  it('ignores a non-breaking space trimmed off the edge of a recovery code', () => {
+    render(<OperationConfirm flow={linkFlow('RECOVERY')} />);
+    const field = screen.getByLabelText(tr('auth.field.recoveryCode'));
+
+    fireEvent.change(field, { target: { value: 'RECOVRY1-CODE0011 ' } });
+    expect(field).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.queryByText(tr('auth.field.wrongLayout'))).toBeNull();
+    expect(screen.getByRole('button', { name: tr('auth.confirm.submit') })).toBeEnabled();
+  });
+
+  /**
    * У каждого формата свои границы, и держит их явный выбор режима: аварийный код приезжает в
    * поле только вместе с переключением, поэтому гейт по паролю запасной путь входа не закрывает.
+   * Пароль меряется рамкой поля `secret`, а не политикой установки: политика может меняться, и уже
+   * заданный пароль короче её минимума обязан вводиться.
    */
   it('holds the submit until the password reaches its own minimum', () => {
     render(<OperationConfirm flow={active} />);
@@ -414,10 +430,54 @@ describe('OperationConfirm: the secret field', () => {
     const field = screen.getByLabelText(tr('auth.field.password'));
     const submit = screen.getByRole('button', { name: tr('auth.confirm.submit') });
 
-    fireEvent.change(field, { target: { value: 'S'.repeat(limits.password.min - 1) } });
+    fireEvent.change(field, { target: { value: 'S'.repeat(limits.secret.min - 1) } });
     expect(submit).toBeDisabled();
 
-    fireEvent.change(field, { target: { value: 'S'.repeat(limits.password.min) } });
+    fireEvent.change(field, { target: { value: 'S'.repeat(limits.secret.min) } });
+    expect(submit).toBeEnabled();
+
+    fireEvent.change(field, { target: { value: 'S'.repeat(limits.password.min - 1) } });
+    expect(submit).toBeEnabled();
+  });
+
+  /**
+   * Пароль и аварийный код лежат в ASCII, и символ за его пределами почти всегда значит не ту
+   * раскладку. Поле говорит об этом сразу, а не отказом сервера ценой попытки; убрали символ —
+   * подсказка ушла. Пробел и прочий ASCII подсказку не зовут.
+   */
+  it.each([
+    ['the password link', 'PASSWORD' as const, 'auth.field.password', 'Secret Pass!'],
+    ['the recovery link', 'RECOVERY' as const, 'auth.field.recoveryCode', 'RECOVRY1-CODE0011'],
+  ])('points at the keyboard layout on %s', async (_name, confirmMethod, label, ascii) => {
+    render(<OperationConfirm flow={linkFlow(confirmMethod)} />);
+    const field = screen.getByLabelText(tr(label));
+
+    fireEvent.change(field, { target: { value: `${ascii}\u0439` } });
+    expect(screen.getByText(tr('auth.field.wrongLayout'))).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.change(field, { target: { value: ascii } });
+    expect(field).toHaveAttribute('aria-invalid', 'false');
+    // Строка сворачивается плавно и уходит из разметки по концу перехода.
+    await waitFor(() => expect(screen.queryByText(tr('auth.field.wrongLayout'))).toBeNull());
+  });
+
+  /**
+   * Пароль и аварийный код вне ASCII сервер не примет ни при каком вводе — кнопка гаснет, пока
+   * символ в поле.
+   */
+  it.each([
+    ['the password link', 'PASSWORD' as const, 'auth.field.password', 'Secret Pass!'],
+    ['the recovery link', 'RECOVERY' as const, 'auth.field.recoveryCode', 'RECOVRY1-CODE0011'],
+  ])('holds the submit on a non-ASCII value on %s', (_name, confirmMethod, label, ascii) => {
+    render(<OperationConfirm flow={linkFlow(confirmMethod)} />);
+    const field = screen.getByLabelText(tr(label));
+    const submit = screen.getByRole('button', { name: tr('auth.confirm.submit') });
+
+    fireEvent.change(field, { target: { value: `${ascii}\u0439` } });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(field, { target: { value: ascii } });
     expect(submit).toBeEnabled();
   });
 

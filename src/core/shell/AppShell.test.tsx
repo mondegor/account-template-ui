@@ -54,6 +54,10 @@ describe('AppShell', () => {
     // Пункты обоих модулей (метки резолвятся через i18next).
     expect(screen.getByRole('link', { name: tr('auth.nav.profile') })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: tr('demo.nav.home') })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: tr('auth.nav.securityLog') })).toHaveAttribute(
+      'href',
+      '/security/log',
+    );
     expect(screen.getByTestId('content')).toBeInTheDocument();
   });
 

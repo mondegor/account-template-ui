@@ -59,3 +59,57 @@ const dateFormatter = memoByKey((key) => {
 export function formatDate(d: Date, locale: string, timeZone?: string): string {
   return dateFormatter(cacheKey(locale, timeZone)).format(d);
 }
+
+/** Только время, часы и минуты («11:53» / «11:53 AM») — строки ленты, сгруппированной по дням. */
+const timeFormatter = memoByKey((key) => {
+  const [locale, timeZone] = key.split('|');
+  return new Intl.DateTimeFormat(locale, { timeStyle: 'short', timeZone: timeZone || undefined });
+});
+
+export function formatTime(d: Date, locale: string, timeZone?: string): string {
+  return timeFormatter(cacheKey(locale, timeZone)).format(d);
+}
+
+/**
+ * День словами без дня недели: «8 октября» / «October 8», с `withYear` — «8 октября 2025» /
+ * «October 8, 2025» (без «г.», как у formatDateTimeLong). Заголовки дней ленты.
+ */
+const dayFormatter = memoByKey((key) => {
+  const [locale, timeZone, withYear] = key.split('|');
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: withYear ? 'numeric' : undefined,
+    timeZone: timeZone || undefined,
+  });
+});
+
+export function formatDayMonth(
+  d: Date,
+  locale: string,
+  timeZone?: string,
+  withYear = false,
+): string {
+  return dayFormatter(`${cacheKey(locale, timeZone)}|${withYear ? 'y' : ''}`)
+    .format(d)
+    .replace(/\sг\./g, '');
+}
+
+/**
+ * Календарный день момента в поясе отображения — `YYYY-MM-DD`. Ключ группировки ленты по дням:
+ * сравнивать дни нужно в поясе профиля, а не браузера, иначе событие под полночь уехало бы в
+ * соседний день. Локаль en-CA выбрана ради формата: она и есть ISO-дата.
+ */
+const dayKeyFormatter = memoByKey(
+  (timeZone) =>
+    new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: timeZone || undefined,
+    }),
+);
+
+export function calendarDay(d: Date, timeZone?: string): string {
+  return dayKeyFormatter(timeZone ?? '').format(d);
+}

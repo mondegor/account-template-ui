@@ -78,6 +78,19 @@ The classes' own `Error.message` values are English and diagnostic (the error is
 interceptor, which does not know the UI language) — they never reach the screen, only logs and
 devtools.
 
+## Dates and cursor lists
+
+Server dates arrive as RFC3339 with an offset, but the screen shows them in the **profile** time
+zone, not the browser's: a page checks `user.tz` once with `resolveTimeZone` and passes the result
+down (`undefined` = browser zone). Formatters live in `@core/i18n` (`dateTime.ts`, Intl cached per
+locale and zone) — add new ones there rather than calling `toLocale*String` in components. Grouping
+by day compares `calendarDay(d, timeZone)`, so an event near midnight lands on the profile's day.
+
+Cursor-paged endpoints (first page without `cursor`; a response carries `cursor` only while there
+is a next page) are read with `useInfiniteQuery` and a sentinel at the end of the list
+(`IntersectionObserver`; see `SecurityLogPage`). jsdom has no `IntersectionObserver`: tests stub it
+and fire the callback themselves.
+
 ## i18n
 
 No user-facing strings in code: shared text lives in `src/core/i18n/i18n.ts` (`common.*`), module

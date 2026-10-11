@@ -23,6 +23,13 @@ export {
 } from './timeZones';
 export type { TimeZone } from './timeZones';
 export { initI18n, addTranslations, i18next } from './i18n';
-export { formatDate, formatDateTimeBare, formatDateTimeLong } from './dateTime';
+export {
+  calendarDay,
+  formatDate,
+  formatDateTimeBare,
+  formatDateTimeLong,
+  formatDayMonth,
+  formatTime,
+} from './dateTime';
 export { formatRelativeTime } from './relativeTime';
 export type { RelativeTimeResult, RelativeTimeOptions } from './relativeTime';

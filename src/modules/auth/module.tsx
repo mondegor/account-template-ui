@@ -7,6 +7,7 @@ import { ConfirmPage } from './pages/ConfirmPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SessionsPage } from './pages/SessionsPage';
+import { SecurityLogPage } from './pages/SecurityLogPage';
 import { PasswordSetupPage } from './pages/PasswordSetupPage';
 import { TotpSetupPage } from './pages/TotpSetupPage';
 import { SecurityConfirmPage } from './pages/SecurityConfirmPage';
@@ -78,6 +79,14 @@ export const authModule: ModuleDefinition = {
         </ProtectedRoute>
       ),
     },
+    {
+      path: '/security/log',
+      element: (
+        <ProtectedRoute>
+          <SecurityLogPage />
+        </ProtectedRoute>
+      ),
+    },
     // Потоки защиты аккаунта. Подтверждение здесь своё, а не общее /confirm: те операции
     // авторизованные, закрывает их свой apply-*, и заканчиваются они в настройках, а не в кабинете.
     {
@@ -116,6 +125,7 @@ export const authModule: ModuleDefinition = {
   nav: [
     { id: 'auth.profile', label: 'auth.nav.profile', route: '/profile' },
     { id: 'auth.sessions', label: 'auth.nav.sessions', route: '/sessions' },
+    { id: 'auth.securityLog', label: 'auth.nav.securityLog', route: '/security/log' },
     { id: 'auth.settings', label: 'auth.nav.settings', route: '/settings' },
   ],
   schemas: {

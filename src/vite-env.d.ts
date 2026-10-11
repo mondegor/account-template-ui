@@ -16,6 +16,7 @@ interface ImportMetaEnv {
   readonly VITE_MOCK_TOTP_QR_FAIL?: string;
   readonly VITE_MOCK_TOTP_SECRET_FAIL?: string;
   readonly VITE_MOCK_EMAIL_CONFLICT?: string;
+  readonly VITE_MOCK_SECURITY_LOG?: string;
 }
 
 interface ImportMeta {

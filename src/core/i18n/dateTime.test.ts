@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDateTimeBare, formatDateTimeLong } from './dateTime';
+import {
+  calendarDay,
+  formatDate,
+  formatDateTimeBare,
+  formatDateTimeLong,
+  formatDayMonth,
+  formatTime,
+} from './dateTime';
 
 const D = new Date('2026-07-15T08:53:00Z');
 
@@ -55,5 +62,32 @@ describe('display time zone', () => {
     expect(formatDateTimeLong(D, 'ru-RU')).toBe(
       D.toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' }).replace(/\sг\./g, ''),
     );
+  });
+});
+
+describe('formatTime', () => {
+  it('hours and minutes only, by the clock of the given time zone', () => {
+    expect(formatTime(D, 'ru-RU', 'Europe/Moscow')).toBe('11:53');
+    expect(formatTime(D, 'en-US', 'UTC')).toMatch(/^8:53\sAM$/);
+  });
+});
+
+describe('formatDayMonth', () => {
+  it('day and month in words, the year only on request', () => {
+    expect(formatDayMonth(D, 'en-US', 'UTC')).toBe('July 15');
+    expect(formatDayMonth(D, 'en-US', 'UTC', true)).toBe('July 15, 2026');
+  });
+
+  it('ru: the trailing year abbreviation is stripped', () => {
+    // Срезаемый суффикс написан кириллицей потому, что он и есть предмет проверки.
+    expect(formatDayMonth(D, 'ru-RU', 'UTC', true)).not.toMatch(/\sг\./);
+  });
+});
+
+describe('calendarDay', () => {
+  it('is the calendar day in the given time zone, as YYYY-MM-DD', () => {
+    const lateEvening = new Date('2026-07-15T22:30:00Z');
+    expect(calendarDay(lateEvening, 'UTC')).toBe('2026-07-15');
+    expect(calendarDay(lateEvening, 'Asia/Tokyo')).toBe('2026-07-16');
   });
 });

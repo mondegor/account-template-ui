@@ -16,6 +16,7 @@ import type {
   OpenSessionResult,
   OperationTokenRequest,
   RecoveryCodes,
+  SecurityLog,
   SuccessAccess,
   TotpSecret,
   UserInfo,
@@ -204,6 +205,18 @@ export async function getUserSessions(realm?: string): Promise<UserSession[]> {
  */
 export async function closeUserSessions(sessionIds: string[]): Promise<void> {
   await authClient.post('/v1/sessions/close', { session_ids: sessionIds });
+}
+
+/**
+ * Страница журнала безопасности (GET /v1/security/log). Первая — без `cursor`, следующая — с
+ * `cursor` из предыдущего ответа. Без `limit` сервер отдаёт страницу по умолчанию (10).
+ */
+export async function getSecurityLog(params: {
+  cursor?: string;
+  limit?: number;
+}): Promise<SecurityLog> {
+  const res = await authClient.get<SecurityLog>('/v1/security/log', { params });
+  return res.data;
 }
 
 /**

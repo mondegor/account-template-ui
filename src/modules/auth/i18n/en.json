@@ -3,6 +3,7 @@
     "nav": {
       "profile": "Profile",
       "sessions": "Sessions",
+      "securityLog": "Security log",
       "settings": "Settings"
     },
     "field": {
@@ -407,6 +408,43 @@
       "expiresAt": "Expires",
       "justNow": "just now",
       "closeError": "Could not close the sessions. Please try again."
+    },
+    "securityLog": {
+      "title": "Security log",
+      "recentTitle": "Recent activity",
+      "allLink": "Security log",
+      "empty": "No events in the log",
+      "end": "That's every event within the log retention period",
+      "retry": "Retry",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "justNow": "just now",
+      "tokenReuseHint": "This happens when session data was copied from a device. If it wasn't you, review your open sessions.",
+      "tokenReuseLink": "Open sessions",
+      "event": {
+        "SIGNED_IN": "Signed in",
+        "AUTH_2FA_ENABLED": "Two-factor protection turned on",
+        "AUTH_2FA_DISABLED": "Two-factor protection turned off",
+        "RECOVERY_CODE_USED": "Recovery code used",
+        "RECOVERY_CODES_REGENERATED": "Recovery codes reissued",
+        "EMAIL_CHANGE_REQUESTED": "Email change requested",
+        "EMAIL_CHANGED": "Email changed",
+        "EMAIL_CHANGE_REVOKED": "Email change cancelled",
+        "PHONE_CHANGED": "Phone changed",
+        "SESSIONS_CLOSED": "Sessions closed",
+        "TOKEN_REUSE_DETECTED": "Session token reused"
+      },
+      "detail": {
+        "factor": "Second factor: {{factor}}",
+        "factorPASSWORD": "password",
+        "factorTOTP": "authenticator app",
+        "remaining": "Codes left: {{n}}",
+        "codesReplaced": "Previous codes no longer work",
+        "revoked": "Cancelled address: {{value}}",
+        "phoneSet": "Number set to {{value}}",
+        "sessionsClosed": "From the list of open sessions",
+        "tokenReuse": "The session was closed"
+      }
     },
     "errors": {
       "signup": "Sign up failed. Please try again later.",

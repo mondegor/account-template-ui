@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -15,12 +15,14 @@ import { registerBaseComponents } from '@core/renderer';
 import { registerModule, resetRegistry } from '@core/module-registry';
 import { resetComponents, resetSchemas } from '@core/schema';
 import { realmProvider, useAuthStore } from '@core/auth';
+import { ApiTransportError } from '@core/api';
 import { contractRegistry } from '@core/contracts';
 import { authModule } from '@modules/auth';
 import { cardWith, rowValue } from '../../../test/dom';
 import { tr } from '../../../test/i18n';
-import { getUserInfo } from '../api/authApi';
+import { getSecurityLog, getUserInfo } from '../api/authApi';
 import { ProfilePage } from './ProfilePage';
+import type { SecurityLogItem } from '../api/types';
 
 /**
  * ProfilePage не содержит хардкод-строк: подписи резолвятся из `auth.profile.*`, поэтому при
@@ -30,6 +32,7 @@ import { ProfilePage } from './ProfilePage';
 const PROFILE_TZ = 'Europe/Moscow';
 
 vi.mock('../api/authApi', () => ({
+  getSecurityLog: vi.fn(async () => ({ items: [] })),
   getUserInfo: vi.fn(async () => ({
     email: 'user@example.com',
     phone: '+7 900 000-00-00',
@@ -379,6 +382,7 @@ describe('ProfilePage (several realms)', () => {
       tr('auth.profile.personalInfo'),
       tr('deploy.realmLabel.account-template/standard'),
       tr('deploy.realmLabel.account-template/admin'),
+      tr('auth.securityLog.recentTitle'),
     ]);
 
     // Нейтральный заголовок — только когда кабинет один; сырое имя реалма наружу не течёт.
@@ -529,5 +533,90 @@ describe('ProfilePage (recovery codes left)', () => {
     // Заголовок и призыв те же, что и при полном запасе: остаток кодов трогает только свою строку.
     expect(screen.getByText(tr('auth.profile.twoFa.TOTP.hint'))).toBeInTheDocument();
     expect(screen.getByText(tr('auth.profile.twoFa.TOTP.cta'))).toBeInTheDocument();
+  });
+});
+
+describe('ProfilePage: recent security events', () => {
+  const ITEMS: SecurityLogItem[] = [
+    {
+      id: '3',
+      event_type: 'SIGNED_IN',
+      ip: '95.165.1.1',
+      app_name: 'Web, Firefox',
+      device_name: 'Work laptop',
+      created_at: '2026-07-01T09:55:00Z',
+    },
+    {
+      id: '2',
+      event_type: 'RECOVERY_CODE_USED',
+      remaining: 7,
+      ip: '95.165.1.1',
+      app_name: 'Web, Firefox',
+      device_name: 'Work laptop',
+      created_at: '2026-07-01T09:54:00Z',
+    },
+    {
+      id: '1',
+      event_type: 'EMAIL_CHANGED',
+      old_value: 'old@example.com',
+      new_value: 'user@example.com',
+      ip: '95.165.1.1',
+      app_name: 'Web, Chrome',
+      device_name: 'Home PC',
+      created_at: '2026-06-30T10:00:00Z',
+    },
+  ];
+  const card = () => cardWith(tr('auth.securityLog.recentTitle'));
+
+  it('asks for three events and shows them under the card heading', async () => {
+    await i18next.changeLanguage('en');
+    vi.mocked(getSecurityLog).mockResolvedValueOnce({ items: ITEMS, cursor: '1' });
+    renderProfile();
+
+    await screen.findByText(tr('auth.securityLog.recentTitle'));
+    expect(
+      await within(card()).findByText(tr('auth.securityLog.event.SIGNED_IN')),
+    ).toBeInTheDocument();
+    expect(getSecurityLog).toHaveBeenLastCalledWith({ limit: 3 });
+    const scope = within(card());
+    expect(scope.getByText(tr('auth.securityLog.event.RECOVERY_CODE_USED'))).toBeInTheDocument();
+    expect(scope.getByText(tr('auth.securityLog.detail.remaining', { n: 7 }))).toBeInTheDocument();
+    expect(scope.getByText('old@example.com → user@example.com')).toBeInTheDocument();
+  });
+
+  it('links to the full log', async () => {
+    await i18next.changeLanguage('en');
+    renderProfile();
+    await screen.findByText(tr('auth.securityLog.recentTitle'));
+
+    expect(
+      within(card()).getByRole('link', { name: tr('auth.securityLog.allLink') }),
+    ).toHaveAttribute('href', '/security/log');
+  });
+
+  it('an empty log says so', async () => {
+    await i18next.changeLanguage('en');
+    renderProfile();
+
+    await screen.findByText(tr('auth.securityLog.recentTitle'));
+    expect(await within(card()).findByText(tr('auth.securityLog.empty'))).toBeInTheDocument();
+  });
+
+  it('a failed log stays inside its card: the rest of the profile is shown, retry asks again', async () => {
+    await i18next.changeLanguage('en');
+    vi.mocked(getSecurityLog)
+      .mockRejectedValueOnce(new ApiTransportError())
+      .mockResolvedValueOnce({ items: ITEMS, cursor: '1' });
+    renderProfile();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(tr('common.error.network'));
+    expect(screen.getByText(tr('auth.profile.personalInfo'))).toBeInTheDocument();
+
+    fireEvent.click(within(alert).getByRole('button', { name: tr('auth.securityLog.retry') }));
+    expect(
+      await within(card()).findByText(tr('auth.securityLog.event.SIGNED_IN')),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

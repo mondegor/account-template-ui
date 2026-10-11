@@ -148,6 +148,49 @@ export interface UserSession {
   is_current: boolean;
 }
 
+/** Тип события журнала безопасности (Auth.Enum.SecurityEvent). */
+export type SecurityEventType =
+  | 'SIGNED_IN'
+  | 'AUTH_2FA_ENABLED'
+  | 'AUTH_2FA_DISABLED'
+  | 'RECOVERY_CODE_USED'
+  | 'RECOVERY_CODES_REGENERATED'
+  | 'EMAIL_CHANGE_REQUESTED'
+  | 'EMAIL_CHANGED'
+  | 'EMAIL_CHANGE_REVOKED'
+  | 'PHONE_CHANGED'
+  | 'SESSIONS_CLOSED'
+  | 'TOKEN_REUSE_DETECTED';
+
+/**
+ * Событие журнала безопасности. `app_name`/`device_name` — пустая строка, если не определены;
+ * `location` — только если вычислено. Дополнительные поля есть лишь у своих типов событий:
+ * `old_value`/`new_value` — у смены емаила и телефона, `factor` — у AUTH_2FA_ENABLED,
+ * `remaining` — у RECOVERY_CODE_USED.
+ */
+export interface SecurityLogItem {
+  id: string;
+  event_type: SecurityEventType;
+  ip: string;
+  location?: string;
+  app_name: string;
+  device_name: string;
+  old_value?: string;
+  new_value?: string;
+  factor?: Exclude<UserAuth2fa, 'NONE'>;
+  remaining?: number;
+  created_at: string;
+}
+
+/**
+ * Страница журнала, от свежих событий к старым. `cursor` — позиция следующей страницы; его нет,
+ * если следующей страницы нет: это и есть признак конца журнала.
+ */
+export interface SecurityLog {
+  items: SecurityLogItem[];
+  cursor?: string;
+}
+
 /** Результат открытия сессии: либо ещё одно подтверждение (200), либо токены (201). */
 export type OpenSessionResult =
   | { kind: 'waiting'; operation: WaitingConfirmOperation }

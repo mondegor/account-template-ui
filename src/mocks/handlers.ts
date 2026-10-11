@@ -14,6 +14,7 @@ import type {
   PasswordAcceptStatus,
   PasswordStrength,
   PendingOperation,
+  SecurityLogItem,
   SuccessAccess,
   UserAuth2fa,
   UserInfo,
@@ -153,6 +154,13 @@ const MOCK_TOTP_SECRET_FAIL = import.meta.env.VITE_MOCK_TOTP_SECRET_FAIL === '1'
 const MOCK_EMAIL_CONFLICT = import.meta.env.VITE_MOCK_EMAIL_CONFLICT === '1';
 
 /**
+ * Мок-онли: режим журнала безопасности. `empty` — журнал пуст (все записи вышли за срок хранения);
+ * `fail-next` — любая страница после первой отвечает `500`, так руками видна ошибка догрузки
+ * в ленте, где загруженное остаётся на месте. Иначе — обычный журнал из нескольких страниц.
+ */
+const MOCK_SECURITY_LOG = import.meta.env.VITE_MOCK_SECURITY_LOG;
+
+/**
  * Зарезервированный занятый номер — пара к `taken@example.com`: `POST /v1/security/phone` отвечает
  * на него `PhoneAlreadyExists`. Сравнение по цифрам, запись номера роли не играет.
  */
@@ -237,6 +245,8 @@ const sessionsByRefresh = new Map<string, MockSession>();
 const userByAccess = new Map<string, UserInfo>();
 /** Открытые сессии по реалмам; сид создаётся лениво — при первом обращении к реалму. */
 const sessionsByRealm = new Map<string, UserSession[]>();
+/** Журнал безопасности, от свежих событий к старым; сид создаётся лениво — при первом запросе. */
+let securityLog: SecurityLogItem[] | null = null;
 
 /**
  * Язык и пояс живут в ДВУХ местах, как у бэка, — иначе окно рассинхрона в моке не выразить.
@@ -297,6 +307,7 @@ export function resetMockState(): void {
   userByAccess.clear();
   sessionsByRefresh.clear();
   sessionsByRealm.clear();
+  securityLog = null;
 }
 
 /**
@@ -924,6 +935,106 @@ function realmSessions(realm: string): UserSession[] {
   return list;
 }
 
+type SecurityLogSeed = Omit<SecurityLogItem, 'id' | 'created_at'>;
+
+const LOG_WEB: Pick<SecurityLogItem, 'ip' | 'location' | 'app_name' | 'device_name'> = {
+  ip: '95.165.1.1',
+  location: 'Moscow, Russia',
+  app_name: 'Web, Firefox',
+  device_name: 'Work laptop',
+};
+const LOG_MOBILE: Pick<SecurityLogItem, 'ip' | 'location' | 'app_name' | 'device_name'> = {
+  ip: '31.173.80.7',
+  location: 'Saint Petersburg, Russia',
+  app_name: 'Mobile, iOS',
+  device_name: 'iPhone 14',
+};
+
+/**
+ * Один «круг» событий всех типов, от свежих к старым. Здесь же редкие ветки строки: без
+ * `location` и с пустыми `app_name`/`device_name` (бэк их не определил), смена телефона без
+ * прежнего номера.
+ */
+const SECURITY_LOG_ROUND: SecurityLogSeed[] = [
+  { event_type: 'SIGNED_IN', ...LOG_WEB },
+  { event_type: 'RECOVERY_CODE_USED', remaining: 7, ...LOG_WEB },
+  {
+    event_type: 'EMAIL_CHANGED',
+    old_value: 'old-user@example.com',
+    new_value: 'user@example.com',
+    ...LOG_WEB,
+  },
+  {
+    event_type: 'EMAIL_CHANGE_REQUESTED',
+    old_value: 'old-user@example.com',
+    new_value: 'user@example.com',
+    ...LOG_WEB,
+  },
+  { event_type: 'SESSIONS_CLOSED', ...LOG_MOBILE, location: undefined },
+  {
+    event_type: 'TOKEN_REUSE_DETECTED',
+    ip: '45.12.88.201',
+    location: 'Amsterdam, Netherlands',
+    app_name: '',
+    device_name: '',
+  },
+  { event_type: 'AUTH_2FA_ENABLED', factor: 'TOTP', ...LOG_WEB },
+  { event_type: 'RECOVERY_CODES_REGENERATED', ...LOG_WEB },
+  { event_type: 'PHONE_CHANGED', new_value: '+7 999 888 77 66', ...LOG_MOBILE },
+  { event_type: 'AUTH_2FA_DISABLED', ...LOG_WEB },
+  { event_type: 'EMAIL_CHANGE_REVOKED', new_value: 'typo-user@exmaple.com', ...LOG_WEB },
+  { event_type: 'SIGNED_IN', ...LOG_MOBILE },
+  { event_type: 'AUTH_2FA_ENABLED', factor: 'PASSWORD', ...LOG_WEB },
+  {
+    event_type: 'PHONE_CHANGED',
+    old_value: '+7 912 345 67 89',
+    new_value: '+7 999 888 77 66',
+    ...LOG_MOBILE,
+  },
+];
+
+/** Сколько записей в журнале: хватает на четыре страницы по умолчанию, последняя неполная. */
+const SECURITY_LOG_SIZE = 35;
+const SECURITY_LOG_DEFAULT_LIMIT = 10;
+const SECURITY_LOG_MAX_LIMIT = 100;
+
+/**
+ * Журнал из повторяющихся кругов, шаг между событиями растёт — лента ложится на несколько дней.
+ * `id` убывает от свежих к старым, как последовательность записей на сервере.
+ */
+function seedSecurityLog(): SecurityLogItem[] {
+  if (MOCK_SECURITY_LOG === 'empty') return [];
+  let minutes = 5;
+  return Array.from({ length: SECURITY_LOG_SIZE }, (_, i) => {
+    const seed = SECURITY_LOG_ROUND[i % SECURITY_LOG_ROUND.length]!;
+    const item: SecurityLogItem = {
+      id: String(40300 - i),
+      created_at: ago(minutes),
+      ...seed,
+    };
+    minutes += 37 + i * 23;
+    return item;
+  });
+}
+
+function userSecurityLog(): SecurityLogItem[] {
+  securityLog ??= seedSecurityLog();
+  return securityLog;
+}
+
+/**
+ * Размер страницы по спеке: без параметра или `0` — по умолчанию, больше максимума — максимум;
+ * в этих случаях `cursor` учитывается. Неразбираемый (не число, отрицательное) — `null`: тогда
+ * отдаётся первая страница размера по умолчанию, а `cursor` не учитывается.
+ */
+function securityLogLimit(raw: string | null): number | null {
+  if (raw === null) return SECURITY_LOG_DEFAULT_LIMIT;
+  if (!/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  if (n === 0) return SECURITY_LOG_DEFAULT_LIMIT;
+  return Math.min(n, SECURITY_LOG_MAX_LIMIT);
+}
+
 function bearer(request: Request): string {
   const auth = request.headers.get('Authorization') ?? '';
   return auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -1440,6 +1551,30 @@ export const handlers = [
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': 'RTID=; Path=/; Max-Age=0' },
+    });
+  }),
+
+  // --- Журнал безопасности ---
+  http.get(`${BASE}/v1/security/log`, ({ request }) => {
+    if (!authUser(request)) return problem(401, 'Unauthorized', 'Authorization required');
+    const query = new URL(request.url).searchParams;
+    const cursor = query.get('cursor');
+    if (cursor !== null && MOCK_SECURITY_LOG === 'fail-next') {
+      return problem(500, 'Internal Server Error', 'Security log is temporarily unavailable');
+    }
+    const parsedLimit = securityLogLimit(query.get('limit'));
+    const limit = parsedLimit ?? SECURITY_LOG_DEFAULT_LIMIT;
+    const log = userSecurityLog();
+    // Курсор — id последней записи прошлой страницы; неизвестный курсор — первая страница.
+    const at = parsedLimit !== null && cursor !== null ? log.findIndex((e) => e.id === cursor) : -1;
+    const start = at + 1;
+    const page = log.slice(start, start + limit);
+    const hasNext = start + limit < log.length;
+    const { tz } = responseSettings(request);
+    return HttpResponse.json({
+      items: page.map((e) => ({ ...e, created_at: isoIn(e.created_at, tz) })),
+      // Курсор есть, только пока есть следующая страница: его отсутствие — признак конца журнала.
+      ...(hasNext && { cursor: page[page.length - 1]!.id }),
     });
   }),
 
